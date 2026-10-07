@@ -2226,12 +2226,12 @@
     pumpify "^2.0.1"
     stream-events "^1.0.5"
 
-"@google-cloud/monitoring@^4.0.0":
-  version "4.1.0"
-  resolved "https://registry.yarnpkg.com/@google-cloud/monitoring/-/monitoring-4.1.0.tgz#193f4d2a2bd9eb1f80220ac7070809fc266434fd"
-  integrity sha512-LNEHl4bu4HrCS17BMABeV9C+BFupqW02Pgpeu2mncHYkvQdYMr/huseqKhO/RmPqzEkU11fApysRPpv6SWyZRQ==
+"@google-cloud/monitoring@^6.1.1":
+  version "6.1.1"
+  resolved "https://registry.yarnpkg.com/@google-cloud/monitoring/-/monitoring-6.1.1.tgz#093b280a41107741f9d8b023f4dfae4685e65581"
+  integrity sha512-4JT0T+apm+9A15J024jCvRwUIHUZWpu9SuSjtJEkSFGeYYhZLMyeF+L/jeScelTc6g5N6RkQdRKWsHhoDUpXAQ==
   dependencies:
-    google-gax "^4.0.3"
+    google-gax "^6.0.0"
 
 "@google-cloud/opentelemetry-cloud-trace-exporter@^2.0.0":
   version "2.4.1"
@@ -16793,10 +16793,10 @@ google-gax@^5.0.0:
     retry-request "^8.0.2"
     rimraf "^5.0.1"
 
-google-gax@^6.0.1:
-  version "6.10.0"
-  resolved "https://registry.yarnpkg.com/google-gax/-/google-gax-6.10.0.tgz#47359203bd7a53440acda511e6e0a6f0fc3d57bf"
-  integrity sha512-P9+6mNoC97uSUj55MptrxNj9muoDwc05mcY49R8jyg3kqzkPK+uWHApLuAHsNPKh3dtk1M1IuVZIto8e/fvpQA==
+google-gax@^6.0.0, google-gax@^6.0.1:
+  version "6.11.0"
+  resolved "https://registry.yarnpkg.com/google-gax/-/google-gax-6.11.0.tgz#5758493448174dfd0aa1a9134ed971d44f348a8d"
+  integrity sha512-ggXlbsrLC5xVkNrSd3izNqWnY4xLf3tTnANRWqx8sVCKL/lNgPWIktaQZxc2lW/wK30vNINWFTvoTP/kUH8xuA==
   dependencies:
     "@grpc/grpc-js" "^1.12.6"
     "@grpc/proto-loader" "^0.8.0"
