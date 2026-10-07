@@ -22,5 +22,7 @@ RUN yarn install
 ADD /packages/db ./packages/db
 ADD /packages/db/setup.sh ./packages/db/setup.sh
 RUN yarn workspace @omnivore/db build
+# migrate.js reads its SQL files from build/migrations, which tsc doesn't copy
+RUN cp -r packages/db/migrations packages/db/build/migrations
 
 CMD ["yarn", "workspace", "@omnivore/db", "migrate"]
