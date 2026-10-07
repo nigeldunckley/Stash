@@ -109,7 +109,12 @@ export function ssrFetcher(
   variables?: unknown,
   requiresAuth = true
 ): Promise<unknown> {
-  const graphQLClient = new GraphQLClient(gqlEndpoint, {
+  // On the server the build-time endpoint can be relative (self-hosted
+  // image), so call the API over the internal network when it's known.
+  const endpoint = process.env.INTERNAL_API_URL
+    ? `${process.env.INTERNAL_API_URL}/graphql`
+    : gqlEndpoint
+  const graphQLClient = new GraphQLClient(endpoint, {
     credentials: 'include',
     mode: 'cors',
   })
