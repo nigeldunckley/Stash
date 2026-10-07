@@ -3,6 +3,7 @@
 #   sudo ./install.sh read.example.com     first install
 #   sudo ./install.sh lock                 turn off new sign-ups
 #   sudo ./install.sh update               pull new images and restart
+#   sudo ./install.sh proxy [port]         run behind an existing web server
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -66,13 +67,26 @@ case "${1:-}" in
     compose up -d --force-recreate api web
     echo "Sign-ups are now closed."
     ;;
+  proxy)
+    port=${2:-8088}
+    sed -i '/^COMPOSE_FILE=/d; /^CADDY_SITE=/d; /^STASH_PORT=/d' .env
+    {
+      echo "COMPOSE_FILE=docker-compose.yml:docker-compose.proxy.yml"
+      echo "CADDY_SITE=:80"
+      echo "STASH_PORT=${port}"
+    } >> .env
+    compose up -d --remove-orphans
+    echo
+    echo "Stash is listening on http://127.0.0.1:${port}."
+    echo "Point your existing web server's $(grep '^DOMAIN=' .env | cut -d= -f2) site at it."
+    ;;
   update)
     git -C .. pull --ff-only
     compose pull
     compose up -d --build
     ;;
   ""|-h|--help)
-    sed -n 2,5p "$0"
+    sed -n 2,6p "$0"
     exit 1
     ;;
   *)

@@ -1,6 +1,7 @@
 # Routes mirror self-hosting/nginx/nginx.conf. Caddy fetches and renews
-# the Let's Encrypt certificate for {$DOMAIN} on its own.
-{$DOMAIN} {
+# the Let's Encrypt certificate for {$DOMAIN} on its own. Behind another
+# web server (install.sh proxy) CADDY_SITE is :80 and that server does HTTPS.
+{$CADDY_SITE} {
 	encode zstd gzip
 	request_body {
 		max_size 100MB
