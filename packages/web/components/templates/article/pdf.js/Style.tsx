@@ -11,7 +11,7 @@ export const ToolbarIconButton = styled('div', {
 })
 
 export const ToolbarButton = styled('button', {
-  fontFamily: 'Inter',
+  fontFamily: '$inter',
   fontWeight: 'normal',
   color: '$grayTextContrast',
   width: '26px',

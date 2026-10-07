@@ -5,7 +5,7 @@ import { SettingsLayout } from '../../../components/templates/SettingsLayout'
 export default function ReadwisePage(): JSX.Element {
   return (
     <>
-      <PageMetaData title="Readwise - Omnivore" path="/integrations/webhooks" />
+      <PageMetaData title="Readwise - Stash" path="/integrations/webhooks" />
       <SettingsLayout>
         <Webhooks />
       </SettingsLayout>

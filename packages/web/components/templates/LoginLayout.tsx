@@ -1,4 +1,3 @@
-import { getImageProps } from 'next/image'
 import {
   Box,
   HStack,
@@ -8,7 +7,7 @@ import {
 import { LoginForm } from './LoginForm'
 import type { LoginFormProps } from './LoginForm'
 import { OmnivoreNameLogo } from '../elements/images/OmnivoreNameLogo'
-import featureFullWidthImage from '../../public/static/images/login/login-feature-image-full.png'
+import { theme } from '../tokens/stitches.config'
 
 export function LoginLayout(props: LoginFormProps): JSX.Element {
   return (
@@ -23,8 +22,8 @@ export function LoginLayout(props: LoginFormProps): JSX.Element {
           position: 'absolute',
           top: 0,
           left: 0,
-          p: '0px 15px 0px 15px',
-          height: '68px',
+          p: '0px 28px',
+          height: '76px',
           minHeight: '68px',
           display: 'flex',
           alignItems: 'center',
@@ -34,7 +33,11 @@ export function LoginLayout(props: LoginFormProps): JSX.Element {
           width: '100%',
         }}
       >
-        <OmnivoreNameLogo color="#898989" href="/login" />
+        <OmnivoreNameLogo
+          showTitle={true}
+          href="/login"
+          color={theme.colors.thTextContrast.toString()}
+        />
       </Box>
     </>
   )
@@ -49,8 +52,7 @@ function MobileLoginLayout(props: LoginFormProps) {
         css={{
           width: '100%',
           flexGrow: 1,
-          color: '#898989',
-          background: '#2A2A2A',
+          background: '$thBackground',
         }}
       >
         <LoginForm {...props} />
@@ -68,8 +70,7 @@ function MediumLoginLayout(props: LoginFormProps) {
         width: '100vw',
         height: '100vh',
         overflowY: 'clip',
-        color: '#898989',
-        background: '#2A2A2A',
+        background: '$thBackground',
       }}
     >
       <Box
@@ -81,44 +82,50 @@ function MediumLoginLayout(props: LoginFormProps) {
       >
         <LoginForm {...props} />
       </Box>
-      <OmnivoreIllustration />
+      <StashPanel />
     </HStack>
   )
 }
 
-const srcSetToImageSet = (srcFallback: string, srcSet?: string): string => {
-  if (!srcSet) return `url(${srcFallback})`
-
-  return `image-set( ${srcSet
-    .split(', ')
-    .map((subSrc) => {
-      const [src, resolution] = subSrc.split(' ')
-      return `url("${decodeURIComponent(src)}") ${resolution}`
-    })
-    .join(',')}
-)`
-}
-
-function OmnivoreIllustration() {
-  const { props: fullWidthImgProps } = getImageProps({
-    src: featureFullWidthImage,
-    alt: '',
-  })
-
+function StashPanel() {
   return (
-    <Box
+    <VStack
+      alignment="start"
+      distribution="between"
       css={{
         width: '100%',
-        height: '100%',
-        marginLeft: 'auto',
-        backgroundSize: 'cover',
-        backgroundRepeat: 'no-repeat',
-        backgroundPosition: 'left',
-        backgroundImage: srcSetToImageSet(
-          fullWidthImgProps.src,
-          fullWidthImgProps.srcSet
-        ),
+        height: 'calc(100% - 24px)',
+        margin: '12px',
+        padding: '48px',
+        borderRadius: '18px',
+        bg: '#FF4F00',
+        color: '#09090B',
       }}
-    />
+    >
+      <Box
+        css={{
+          fontFamily: '$mono',
+          fontSize: '12px',
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+        }}
+      >
+        Read later, properly
+      </Box>
+      <Box
+        css={{
+          fontFamily: '$display',
+          fontSize: '72px',
+          fontWeight: 600,
+          lineHeight: 0.98,
+          letterSpacing: '-0.05em',
+          '@lgDown': { fontSize: '52px' },
+        }}
+      >
+        Save it now.
+        <br />
+        Read it well.
+      </Box>
+    </VStack>
   )
 }

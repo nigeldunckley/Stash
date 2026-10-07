@@ -115,7 +115,7 @@ const ActionsWrapper = styled(Box, {
   alignItems: 'center',
   bg: 'transparent',
   cursor: 'pointer',
-  fontFamily: 'inter',
+  fontFamily: '$inter',
   fontSize: '$2',
   lineHeight: '1.25',
   color: '$grayText',

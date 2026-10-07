@@ -44,8 +44,8 @@ const asyncStoragePersister = createAsyncStoragePersister({
 
 TopBarProgress.config({
   barColors: {
-    '0': '#FFD234',
-    '1.0': '#FFD234',
+    '0': '#FF4F00',
+    '1.0': '#FF4F00',
   },
   shadowBlur: 0,
   barThickness: 2,

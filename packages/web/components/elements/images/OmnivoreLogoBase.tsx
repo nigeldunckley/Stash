@@ -38,7 +38,7 @@ export function OmnivoreLogoBase(props: OmnivoreLogoBaseProps): JSX.Element {
         }
       }}
       tabIndex={-1}
-      aria-label="Omnivore logo"
+      aria-label="Stash home"
     >
       {props.children}
     </Box>

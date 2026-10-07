@@ -31,13 +31,14 @@ const HorizontalDivider = styled(SpanBox, {
 })
 
 const FONT_FAMILIES = [
+  'Newsreader',
+  'Geist',
   'Inter',
   'System Default',
   'Merriweather',
   'Lora',
   'Open Sans',
   'Roboto',
-  'Newsreader',
   'Lexend',
   'Montserrat',
   'Crimson Text',
@@ -332,7 +333,7 @@ function BasicSettings(props: SettingsProps): JSX.Element {
             },
           }}
           onClick={() => {
-            readerSettings.setFontFamily('Inter')
+            readerSettings.setFontFamily('Newsreader')
             readerSettings.setMarginWidth(290)
             readerSettings.setLineHeight(150)
             readerSettings.actionHandler('resetReaderSettings')

@@ -18,7 +18,7 @@ const LoginForm = (): JSX.Element => {
   return (
     <VStack css={{ width: '100%', minWidth: '320px', gap: '16px', pb: '16px' }}>
       <VStack css={{ width: '100%', gap: '5px' }}>
-        <FormLabel css={{ color: '#D9D9D9' }}>Email</FormLabel>
+        <FormLabel css={{ color: '$thTextContrast', fontWeight: 600, letterSpacing: '-0.02em' }}>Email</FormLabel>
         <BorderedFormInput
           autoFocus={true}
           key="email"
@@ -26,7 +26,11 @@ const LoginForm = (): JSX.Element => {
           name="email"
           value={email}
           placeholder="Email"
-          css={{ backgroundColor: '#2A2A2A', color: 'white', border: 'unset' }}
+          css={{
+            backgroundColor: '$thBackground',
+            color: '$thTextContrast',
+            border: '1px solid $thBorderColor',
+          }}
           onChange={(e) => {
             e.preventDefault()
             setEmail(e.target.value)
@@ -35,14 +39,18 @@ const LoginForm = (): JSX.Element => {
       </VStack>
 
       <VStack css={{ width: '100%', gap: '5px' }}>
-        <FormLabel css={{ color: '#D9D9D9' }}>Password</FormLabel>
+        <FormLabel css={{ color: '$thTextContrast', fontWeight: 600, letterSpacing: '-0.02em' }}>Password</FormLabel>
         <BorderedFormInput
           key="password"
           type="password"
           name="password"
           value={password}
           placeholder="Password"
-          css={{ bg: '#2A2A2A', color: 'white', border: 'unset' }}
+          css={{
+            bg: '$thBackground',
+            color: '$thTextContrast',
+            border: '1px solid $thBorderColor',
+          }}
           onChange={(e) => setPassword(e.target.value)}
         />
       </VStack>
@@ -74,13 +82,13 @@ export function EmailLogin(): JSX.Element {
           minWidth: '340px',
           width: '70vw',
           maxWidth: '576px',
-          borderRadius: '8px',
-          background: '#343434',
-          border: '1px solid #6A6968',
-          boxShadow: '0px 4px 4px 0px rgba(0, 0, 0, 0.15)',
+          borderRadius: '14px',
+          background: '$thBackground',
+          border: '1px solid $thBorderColor',
+          boxShadow: '$cardBoxShadow',
         }}
       >
-        <StyledText style="subHeadline" css={{ color: '#D9D9D9' }}>
+        <StyledText style="subHeadline" css={{ color: '$thTextContrast', fontWeight: 600, letterSpacing: '-0.02em' }}>
           Login
         </StyledText>
 

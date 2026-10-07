@@ -54,14 +54,16 @@ export function ReaderSavedInfo(props: ReaderSavedInfoProps): JSX.Element {
       <StyledText
         css={{
           wordBreak: 'break-word',
-          fontSize: '15',
+          fontSize: '12px',
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
           color: '$thTextSubtle2',
-          fontFamily: '$inter',
+          fontFamily: '$mono',
         }}
       >
         {formattedLongDate(props.rawDisplayDate)}{' '}
         {props.wordsCount ?? 0 > 0
-          ? `  • ${Math.max(
+          ? `  /  ${Math.max(
               1,
               Math.round((props.wordsCount ?? 0) / 235)
             )} min read`

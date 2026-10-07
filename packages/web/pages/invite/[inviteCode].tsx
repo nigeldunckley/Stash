@@ -64,7 +64,7 @@ export default function InvitePage(): JSX.Element {
   )
 
   return <>
-    <PageMetaData title="Accept Invite - Omnivore" path="/invite" />
+    <PageMetaData title="Accept Invite - Stash" path="/invite" />
     <ProfileLayout>
       <VStack
         alignment="center"

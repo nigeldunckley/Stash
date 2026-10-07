@@ -212,7 +212,7 @@ function EditItemModal(props: EditItemModalProps): JSX.Element {
     mt: '1px',
     borderRadius: '5px',
     border: '1px solid $thBorderColor',
-    fontFamily: 'Inter',
+    fontFamily: '$inter',
     fontWeight: '500',
     fontSize: '16px',
     height: '38px',

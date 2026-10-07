@@ -1,7 +1,6 @@
 import { HStack, SpanBox } from '../../elements/LayoutPrimitives'
 import { SplitButton } from '../../elements/SplitButton'
 import { PrimaryDropdown } from '../PrimaryDropdown'
-import { LIBRARY_LEFT_MENU_WIDTH } from './LibraryMenu'
 
 type NavMenuFooterProps = {
   showFullThemeSection?: boolean
@@ -14,11 +13,13 @@ export const NavMenuFooter = (props: NavMenuFooterProps): JSX.Element => {
       css={{
         gap: '10px',
         height: '65px',
-        position: 'fixed',
-        bottom: '0%',
+        position: 'sticky',
+        bottom: '0px',
+        mt: 'auto',
         alignItems: 'center',
-        bg: '$thNavMenuFooter',
-        width: LIBRARY_LEFT_MENU_WIDTH,
+        bg: '$thLeftMenuBackground',
+        borderTop: '1px solid $thBorderSubtle',
+        width: '100%',
         overflowY: 'auto',
         overflowX: 'hidden',
         '&::-webkit-scrollbar': {

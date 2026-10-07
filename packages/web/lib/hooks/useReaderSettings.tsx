@@ -4,7 +4,7 @@ import { applyStoredTheme } from '../themeUpdater'
 import { usePersistedState } from './usePersistedState'
 import { TextDirection } from '../networking/library_items/useLibraryItems'
 
-const DEFAULT_FONT = 'Inter'
+const DEFAULT_FONT = 'Newsreader'
 
 export type ReaderSettings = {
   fontSize: number

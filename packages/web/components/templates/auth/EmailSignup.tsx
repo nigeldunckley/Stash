@@ -38,7 +38,7 @@ const SignUpForm = (): JSX.Element => {
   return (
     <VStack css={{ width: '100%', minWidth: '320px', gap: '16px', pb: '16px' }}>
       <SpanBox css={{ width: '100%' }}>
-        <FormLabel className="required" css={{ color: '#D9D9D9' }}>
+        <FormLabel className="required" css={{ color: '$thTextContrast', fontWeight: 600, letterSpacing: '-0.02em' }}>
           Email
         </FormLabel>
         <BorderedFormInput
@@ -48,7 +48,11 @@ const SignUpForm = (): JSX.Element => {
           name="email"
           defaultValue={email}
           placeholder="Email"
-          css={{ backgroundColor: '#2A2A2A', color: 'white', border: 'unset' }}
+          css={{
+            backgroundColor: '$thBackground',
+            color: '$thTextContrast',
+            border: '1px solid $thBorderColor',
+          }}
           onChange={(e) => {
             e.preventDefault()
             setEmail(e.target.value)
@@ -57,7 +61,7 @@ const SignUpForm = (): JSX.Element => {
         />
       </SpanBox>
       <SpanBox css={{ width: '100%' }}>
-        <FormLabel className="required" css={{ color: '#D9D9D9' }}>
+        <FormLabel className="required" css={{ color: '$thTextContrast', fontWeight: 600, letterSpacing: '-0.02em' }}>
           Password
         </FormLabel>
         <BorderedFormInput
@@ -66,13 +70,17 @@ const SignUpForm = (): JSX.Element => {
           name="password"
           defaultValue={password}
           placeholder="Password"
-          css={{ backgroundColor: '#2A2A2A', color: 'white', border: 'unset' }}
+          css={{
+            backgroundColor: '$thBackground',
+            color: '$thTextContrast',
+            border: '1px solid $thBorderColor',
+          }}
           onChange={(e) => setPassword(e.target.value)}
           required
         />
       </SpanBox>
       <SpanBox css={{ width: '100%' }}>
-        <FormLabel className="required" css={{ color: '#D9D9D9' }}>
+        <FormLabel className="required" css={{ color: '$thTextContrast', fontWeight: 600, letterSpacing: '-0.02em' }}>
           Full Name
         </FormLabel>
         <BorderedFormInput
@@ -81,13 +89,17 @@ const SignUpForm = (): JSX.Element => {
           name="name"
           defaultValue={fullname}
           placeholder="Full Name"
-          css={{ backgroundColor: '#2A2A2A', color: 'white', border: 'unset' }}
+          css={{
+            backgroundColor: '$thBackground',
+            color: '$thTextContrast',
+            border: '1px solid $thBorderColor',
+          }}
           onChange={(e) => setFullname(e.target.value)}
           required
         />
       </SpanBox>
       <SpanBox css={{ width: '100%' }}>
-        <FormLabel className="required" css={{ color: '#D9D9D9' }}>
+        <FormLabel className="required" css={{ color: '$thTextContrast', fontWeight: 600, letterSpacing: '-0.02em' }}>
           Username
         </FormLabel>
         <BorderedFormInput
@@ -96,7 +108,11 @@ const SignUpForm = (): JSX.Element => {
           name="username"
           defaultValue={username}
           placeholder="Username"
-          css={{ backgroundColor: '#2A2A2A', color: 'white', border: 'unset' }}
+          css={{
+            backgroundColor: '$thBackground',
+            color: '$thTextContrast',
+            border: '1px solid $thBorderColor',
+          }}
           onChange={handleUsernameChange}
           required
         />
@@ -154,13 +170,13 @@ export function EmailSignup(): JSX.Element {
             minWidth: '340px',
             width: '70vw',
             maxWidth: '576px',
-            borderRadius: '8px',
-            background: '#343434',
-            border: '1px solid #6A6968',
-            boxShadow: '0px 4px 4px 0px rgba(0, 0, 0, 0.15)',
+            borderRadius: '14px',
+            background: '$thBackground',
+            border: '1px solid $thBorderColor',
+            boxShadow: '$cardBoxShadow',
           }}
         >
-          <StyledText style="subHeadline" css={{ color: '#D9D9D9' }}>
+          <StyledText style="subHeadline" css={{ color: '$thTextContrast', fontWeight: 600, letterSpacing: '-0.02em' }}>
             Sign Up
           </StyledText>
 

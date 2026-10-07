@@ -16,8 +16,8 @@ export function AuthLayout(props: ProfileLayoutProps): JSX.Element {
         distribution="center"
         css={{
           height: '100vh',
-          color: '#898989',
-          background: '#2A2A2A',
+          color: '$thTextSubtle2',
+          background: '$thBackground2',
         }}
       >
         {props.children}
@@ -46,7 +46,8 @@ export function AuthLayout(props: ProfileLayoutProps): JSX.Element {
           }}
         >
           <OmnivoreNameLogo
-            color="#898989"
+            showTitle={true}
+            color={theme.colors.thTextContrast.toString()}
             href={props.logoDestination ?? '/login'}
           />
         </HStack>
