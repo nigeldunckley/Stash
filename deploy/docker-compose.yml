@@ -80,6 +80,8 @@ services:
     image: "${WEB_IMAGE:-ghcr.io/omnivore-app/sh-web:latest}"
     container_name: reader-web
     env_file: .env
+    environment:
+      - INTERNAL_API_URL=http://api:8080/api
     depends_on:
       api:
         condition: service_healthy
