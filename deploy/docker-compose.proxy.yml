@@ -1,0 +1,7 @@
+# Used when another web server on this machine already owns ports 80/443
+# (see `install.sh proxy`). Stash then listens on localhost only, and the
+# existing server forwards Stash's domain to it and handles HTTPS.
+services:
+  caddy:
+    ports: !override
+      - "127.0.0.1:${STASH_PORT:-8088}:80"
