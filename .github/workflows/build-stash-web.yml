@@ -9,10 +9,16 @@ on:
       - main
     paths:
       - 'packages/web/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.dockerignore'
       - '.github/workflows/build-stash-web.yml'
   pull_request:
     paths:
       - 'packages/web/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.dockerignore'
       - '.github/workflows/build-stash-web.yml'
   workflow_dispatch:
 
