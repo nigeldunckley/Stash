@@ -1,5 +1,5 @@
 import { ArticleData, Label, SavePageData, SetLinkArchivedData } from './types'
-import { getStorageItem, setStorage } from './utils'
+import { DEFAULT_STASH_URL, getStorageItem, setStorage } from './utils'
 import { v4 as uuidv4 } from 'uuid'
 import { nanoid } from 'nanoid'
 
@@ -17,8 +17,7 @@ const gqlRequest = async (query: string) => {
 
   try {
     const apiUrl= (await getStorageItem('omnivoreApiUrl')) as string | undefined
-      ?? process.env.OMNIVORE_GRAPHQL_URL
-      ?? ''
+      ?? DEFAULT_STASH_URL
 
     console.log(apiUrl)
     const response = await fetch(`${apiUrl}/api/graphql`, {
