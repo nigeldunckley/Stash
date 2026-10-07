@@ -40,7 +40,7 @@
     "allotment": "^1.20.2",
     "antd": "6.6.2",
     "axios": "^1.19.0",
-    "cookie": "0.7.0",
+    "cookie": "2.0.1",
     "csv-file-validator": "^2.1.0",
     "dayjs": "^1.11.7",
     "diff-match-patch": "^1.0.5",
