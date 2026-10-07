@@ -71,3 +71,6 @@ data.json
 *.apk
 
 tsconfig.tsbuildinfo
+
+# Deployment secrets
+deploy/.env

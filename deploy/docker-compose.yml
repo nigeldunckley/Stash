@@ -1,0 +1,153 @@
+# Production stack for a single-user server behind Caddy (automatic HTTPS).
+# Only Caddy publishes ports; every other service is reachable on the
+# internal network only.
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  caddy:
+    <<: *restart
+    image: caddy:2
+    container_name: reader-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+
+  postgres:
+    <<: *restart
+    image: "ankane/pgvector:v0.5.1"
+    container_name: reader-postgres
+    user: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    env_file: .env
+
+  migrate:
+    build:
+      context: ../
+      dockerfile: ./packages/db/Dockerfile
+    container_name: reader-migrate
+    command: '/bin/sh ./packages/db/setup.sh'
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *restart
+    image: "${API_IMAGE:-ghcr.io/omnivore-app/sh-backend:latest}"
+    container_name: reader-api
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 0.0.0.0 8080 || exit 1"]
+      interval: 15s
+      timeout: 90s
+      retries: 6
+    env_file: .env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  queue-processor:
+    <<: *restart
+    image: "${QUEUE_IMAGE:-ghcr.io/omnivore-app/sh-queue-processor:latest}"
+    container_name: reader-queue-processor
+    env_file: .env
+    depends_on:
+      api:
+        condition: service_started
+
+  web:
+    <<: *restart
+    image: "${WEB_IMAGE:-ghcr.io/omnivore-app/sh-web:latest}"
+    container_name: reader-web
+    env_file: .env
+    depends_on:
+      api:
+        condition: service_healthy
+
+  image-proxy:
+    <<: *restart
+    image: "ghcr.io/omnivore-app/sh-image-proxy:latest"
+    container_name: reader-image-proxy
+    env_file: .env
+
+  content-fetch:
+    <<: *restart
+    image: "${CONTENT_FETCH_IMAGE:-ghcr.io/omnivore-app/sh-content-fetch:latest}"
+    container_name: reader-content-fetch
+    environment:
+      - USE_FIREFOX=true
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  redis:
+    <<: *restart
+    image: "redis:7.2.4"
+    container_name: reader-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+    volumes:
+      - redis_data:/data
+
+  # MinIO no longer publishes images to Docker Hub, so storage uses RustFS,
+  # an S3-compatible drop-in. The service keeps the "minio" name the
+  # Caddyfile and .env refer to.
+  minio:
+    <<: *restart
+    image: rustfs/rustfs:latest
+    container_name: reader-storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/health || exit 1"]
+      interval: 5s
+    environment:
+      - RUSTFS_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - RUSTFS_SECRET_KEY=${MINIO_SECRET_KEY}
+      - RUSTFS_CONSOLE_ENABLE=false
+    volumes:
+      - minio_data:/data
+
+  createbuckets:
+    image: amazon/aws-cli:latest
+    environment:
+      - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_KEY}
+      - AWS_DEFAULT_REGION=us-east-1
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        aws --endpoint-url http://minio:9000 s3 mb s3://omnivore || true
+        aws --endpoint-url http://minio:9000 s3api put-bucket-policy --bucket omnivore --policy '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":["s3:GetObject"],"Resource":["arn:aws:s3:::omnivore/*"]}]}'
+
+volumes:
+  pgdata:
+  redis_data:
+  minio_data:
+  caddy_data:
+  caddy_config:

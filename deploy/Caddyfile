@@ -1,0 +1,32 @@
+# Routes mirror self-hosting/nginx/nginx.conf. Caddy fetches and renews
+# the Let's Encrypt certificate for {$DOMAIN} on its own.
+{$DOMAIN} {
+	encode zstd gzip
+	request_body {
+		max_size 100MB
+	}
+
+	# Auth and save are served by the web app, not the API
+	handle /api/client/auth* {
+		reverse_proxy web:8080
+	}
+	handle /api/save* {
+		reverse_proxy web:8080
+	}
+
+	handle /api* {
+		reverse_proxy api:8080
+	}
+
+	handle_path /bucket/* {
+		reverse_proxy minio:9000
+	}
+
+	handle_path /images/* {
+		reverse_proxy image-proxy:8080
+	}
+
+	handle {
+		reverse_proxy web:8080
+	}
+}
