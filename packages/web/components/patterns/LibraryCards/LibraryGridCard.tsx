@@ -68,14 +68,20 @@ export function LibraryGridCard(props: LinkedItemCardProps): JSX.Element {
         maxWidth: '400px',
         height: '100%',
         minHeight: '270px',
-        borderRadius: '5px',
+        borderRadius: '12px',
+        bg: '$thBackground',
         borderWidth: '1px',
         borderStyle: 'none',
         overflow: 'hidden',
         cursor: 'pointer',
         border: props.legacyLayout
           ? 'unset'
-          : '1px solid $thLeftMenuBackground',
+          : '1px solid $thBorderColor',
+        transition: 'box-shadow 150ms, border-color 150ms',
+        '&:hover': {
+          borderColor: '$grayBorderHover',
+          boxShadow: '$cardBoxShadow',
+        },
         '@media (max-width: 930px)': {
           width: 'calc(100% - 30px)',
         },
@@ -167,7 +173,7 @@ const GridImage = (props: GridImageProps): JSX.Element => {
       )}
       {displayFallback ? (
         <GridFallbackImage
-          title={props.title ?? 'Omnivore Fallback'}
+          title={props.title ?? 'Stash'}
           width="100%"
           height="150px"
           fontSize="16px"

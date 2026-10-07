@@ -5,7 +5,7 @@ import { EmailSignup } from '../../components/templates/auth/EmailSignup'
 export default function EmailRegistrationPage(): JSX.Element {
   return (
     <AuthLayout>
-      <PageMetaData title="Sign up with Email - Omnivore" path="/auth-signup" />
+      <PageMetaData title="Sign up with Email - Stash" path="/auth-signup" />
       <EmailSignup />
     </AuthLayout>
   )

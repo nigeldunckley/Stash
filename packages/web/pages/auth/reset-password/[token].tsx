@@ -5,7 +5,7 @@ import { EmailResetPassword } from '../../../components/templates/auth/EmailRese
 export default function EmailRegistrationPage(): JSX.Element {
   return (
     <>
-      <PageMetaData title="Reset your password - Omnivore" path="/auth-forgot-password" />
+      <PageMetaData title="Reset your password - Stash" path="/auth-forgot-password" />
       <ProfileLayout>
         <EmailResetPassword />
       </ProfileLayout>

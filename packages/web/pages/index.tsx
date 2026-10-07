@@ -22,7 +22,7 @@ export default function LandingPage(): JSX.Element {
     return (
       <>
         <PageMetaData
-          title="Omnivore"
+          title="Stash"
           path="/"
           ogImage="/static/images/og-homepage-03.png"
           description="Omnivore is the free, open source, read-it-later app for serious readers."
@@ -35,7 +35,7 @@ export default function LandingPage(): JSX.Element {
   return (
     <>
       <PageMetaData
-        title="Omnivore"
+        title="Stash"
         path="/"
         ogImage="/static/images/og-homepage-03.png"
         description="Omnivore is the free, open source, read-it-later app for serious readers."

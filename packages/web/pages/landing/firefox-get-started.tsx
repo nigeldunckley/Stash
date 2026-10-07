@@ -17,7 +17,7 @@ export default function LandingPage(): JSX.Element {
       }}
     >
       <PageMetaData
-        title="Omnivore"
+        title="Stash"
         path="/landing/firefox-get-started"
         ogImage="/static/images/og-homepage-03.png"
         description="Omnivore is the free, open source, read-it-later app for serious readers."

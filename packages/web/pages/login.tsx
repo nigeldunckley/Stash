@@ -31,7 +31,7 @@ export default function Login(): JSX.Element {
   return (
     <>
       <PageMetaData
-        title="Welcome to Omnivore"
+        title="Welcome to Stash"
         path="/login"
         ogImage="/static/images/og-homepage-03.png"
       />

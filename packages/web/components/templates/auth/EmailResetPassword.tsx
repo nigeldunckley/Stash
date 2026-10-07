@@ -43,17 +43,17 @@ export function EmailResetPassword(): JSX.Element {
           minWidth: '340px',
           width: '70vw',
           maxWidth: '576px',
-          borderRadius: '8px',
-          background: '#343434',
-          border: '1px solid #6A6968',
-          boxShadow: '0px 4px 4px 0px rgba(0, 0, 0, 0.15)',
+          borderRadius: '14px',
+          background: '$thBackground',
+          border: '1px solid $thBorderColor',
+          boxShadow: '$cardBoxShadow',
         }}
       >
         <VStack
           css={{ width: '100%', minWidth: '320px', gap: '16px', pb: '16px' }}
         >
           <VStack css={{ width: '100%', gap: '5px' }}>
-            <FormLabel className="required" css={{ color: '#D9D9D9' }}>
+            <FormLabel className="required" css={{ color: '$thTextContrast', fontWeight: 600, letterSpacing: '-0.02em' }}>
               Enter new password
             </FormLabel>
             <BorderedFormInput
@@ -63,8 +63,8 @@ export function EmailResetPassword(): JSX.Element {
               value={password}
               placeholder="Password"
               css={{
-                backgroundColor: '#2A2A2A',
-                color: 'white',
+                backgroundColor: '$thBackground',
+                color: '$thTextContrast',
                 border: 'unset',
               }}
               onChange={(e) => {
@@ -72,7 +72,7 @@ export function EmailResetPassword(): JSX.Element {
                 setPassword(e.target.value)
               }}
             />
-            <FormLabel css={{ fontSize: '12px', color: '#D9D9D9' }}>
+            <FormLabel css={{ fontSize: '12px', color: '$thTextContrast' }}>
               (Password must be at least 8 chars)
             </FormLabel>
 

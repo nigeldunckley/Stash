@@ -8,7 +8,7 @@ export const StyledTextArea = styled('textarea', {
   background: 'unset',
   color: '$grayText',
   fontSize: '$3',
-  fontFamily: 'inter',
+  fontFamily: '$inter',
   lineHeight: '1.35',
   '&::placeholder': {
     opacity: 0.7,

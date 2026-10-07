@@ -5,7 +5,7 @@ import { EmailLogin } from '../../components/templates/auth/EmailLogin'
 export default function EmailLoginPage(): JSX.Element {
   return (
     <AuthLayout>
-      <PageMetaData title="Login - Omnivore" path="/email-login" />
+      <PageMetaData title="Login - Stash" path="/email-login" />
       <EmailLogin />
       <div data-testid="email-login-page-tag" />
     </AuthLayout>

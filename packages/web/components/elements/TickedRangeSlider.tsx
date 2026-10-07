@@ -30,7 +30,7 @@ const StyledSlider = styled(Slider, {
     height: '15px',
     borderRadius: '50%',
     border: '2px solid $thTextSubtle2',
-    backgroundColor: '#FFD234',
+    backgroundColor: '#FF4F00',
     boxShadow: '0px 0px 20px rgba(19, 56, 77, 0.2)',
   },
 })

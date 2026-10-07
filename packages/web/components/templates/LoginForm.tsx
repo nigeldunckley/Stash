@@ -2,13 +2,8 @@ import Link from 'next/link'
 import { StyledText, StyledTextSpan } from '../elements/StyledText'
 import { VStack, Box, SpanBox } from '../elements/LayoutPrimitives'
 import { styled } from '../tokens/stitches.config'
-import {
-  googleID,
-  gauthRedirectURI,
-  appleAuthRedirectURI,
-} from '../../lib/appConfig'
-import { AppleIdButton } from './auth/AppleIdButton'
-import { useEffect, useRef } from 'react'
+import { googleID, gauthRedirectURI } from '../../lib/appConfig'
+import { useEffect } from 'react'
 
 export type LoginFormProps = {
   errorMessage?: string
@@ -16,12 +11,44 @@ export type LoginFormProps = {
 
 export function LoginForm(props: LoginFormProps): JSX.Element {
   const StyledTextHeadline = styled('h1', {
+    fontFamily: '$display',
     fontStyle: 'normal',
-    fontWeight: '700',
-    fontSize: '45px',
-    lineHeight: '53px',
-    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: '48px',
+    lineHeight: '1.02',
+    letterSpacing: '-0.04em',
+    color: '$thTextContrast',
     m: '0px',
+    '@mdDown': { fontSize: '36px' },
+  })
+
+  const ActionLink = styled('a', {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '44px',
+    px: '20px',
+    borderRadius: '10px',
+    fontFamily: '$display',
+    fontSize: '15px',
+    fontWeight: 500,
+    textDecoration: 'none',
+    cursor: 'pointer',
+    variants: {
+      kind: {
+        primary: {
+          bg: '$thTextContrast',
+          color: '$thBackground',
+          '&:hover': { opacity: 0.85 },
+        },
+        secondary: {
+          bg: '$thBackground',
+          color: '$thTextContrast',
+          border: '1px solid $thBorderColor',
+          '&:hover': { borderColor: '$grayBorderHover' },
+        },
+      },
+    },
   })
 
   return (
@@ -29,89 +56,67 @@ export function LoginForm(props: LoginFormProps): JSX.Element {
       alignment="start"
       distribution="center"
       css={{
-        gap: '8px',
-        maxWidth: '593px',
+        gap: '14px',
+        maxWidth: '440px',
         '@mdDown': {
           maxWidth: '85%',
         },
       }}
     >
-      <StyledTextHeadline>
-        Read-it-later for serious readers.
-      </StyledTextHeadline>
       <StyledText
         css={{
-          fontStyle: 'normal',
-          fontWeight: '400',
-          fontSize: '18px',
-          lineHeight: '120%',
+          fontFamily: '$mono',
+          fontSize: '12px',
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: '$thTextSubtle2',
           m: '0px',
-          color: '#898989',
         }}
       >
-        Save articles and read them later in our distraction-free reader.
+        Welcome back
       </StyledText>
-      <Link passHref href="/about" style={{ textDecoration: 'none' }}>
-        <StyledText
-          css={{
-            fontStyle: 'normal',
-            fontWeight: '400',
-            fontSize: '18px',
-            lineHeight: '120%',
-            m: '0px',
-            color: '#898989',
+      <StyledTextHeadline>Sign in to your Stash.</StyledTextHeadline>
+      <StyledText
+        css={{
+          fontWeight: '400',
+          fontSize: '17px',
+          lineHeight: '150%',
+          m: '0px',
+          color: '$thTextSubtle2',
+        }}
+      >
+        Your saved articles, feeds and highlights, kept on your own server.
+      </StyledText>
+
+      <SpanBox css={{ height: '12px' }} />
+
+      {props.errorMessage && (
+        <StyledText style="error" css={{ m: '0px' }}>
+          {props.errorMessage}
+        </StyledText>
+      )}
+
+      <Box css={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+        <Link href="/auth/email-login" passHref legacyBehavior>
+          <ActionLink kind="primary">Continue with email</ActionLink>
+        </Link>
+        <Link href="/auth/email-signup" passHref legacyBehavior>
+          <ActionLink kind="secondary">Create account</ActionLink>
+        </Link>
+      </Box>
+
+      {googleID && (
+        <Box
+          style={{
+            cursor: 'pointer',
+            display: 'inline-flex',
+            height: '40px',
+            marginTop: '8px',
           }}
         >
-          Learn More -&gt;
-        </StyledText>
-      </Link>
-
-      <SpanBox css={{ height: '24px' }} />
-
-      <VStack alignment="start" distribution="center">
-        {googleID && (
-          <Box
-            style={{
-              cursor: 'pointer',
-              display: 'inline-flex',
-              height: '40px',
-            }}
-          >
-            <GoogleAuthButton />
-          </Box>
-        )}
-
-        <Box style={{ height: '16px' }}></Box>
-
-        {appleAuthRedirectURI && (
-          <Box
-            style={{
-              cursor: 'pointer',
-              display: 'inline-flex',
-              width: '210px',
-              height: '40px',
-            }}
-          >
-            <AppleIdButton
-              clientId="app.omnivore"
-              scope="name email"
-              state="web:login"
-              redirectURI={appleAuthRedirectURI}
-              responseMode="form_post"
-              responseType="code id_token"
-            />
-          </Box>
-        )}
-        <Link href="/auth/email-login" passHref legacyBehavior>
-          <StyledTextSpan
-            style="actionLink"
-            css={{ color: '#EDEDED', pt: '12px' }}
-          >
-            Continue with Email
-          </StyledTextSpan>
-        </Link>
-      </VStack>
-      <TermAndConditionsFooter />
+          <GoogleAuthButton />
+        </Box>
+      )}
     </VStack>
   )
 }
@@ -166,7 +171,7 @@ export function TermAndConditionsFooter(): JSX.Element {
         color: '$omnivoreLightGray',
       }}
     >
-      By signing up, you agree to Omnivore’s{' '}
+      By signing up, you agree to the{' '}
       <Link href="/terms" passHref legacyBehavior>
         <StyledTextSpan
           style="captionLink"

@@ -383,7 +383,7 @@ function MenuPanel(props: MenuPanelProps): JSX.Element {
       <HStack css={{ width: '100%' }} distribution="start" alignment="center">
         <StyledText
           css={{
-            fontFamily: 'Inter',
+            fontFamily: '$inter',
             fontWeight: '600',
             fontSize: '16px',
             lineHeight: '125%',

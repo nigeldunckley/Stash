@@ -2,29 +2,32 @@ import { ReactNode, useCallback, useRef, useState } from 'react'
 import { StyledText } from '../../elements/StyledText'
 import { Box, HStack, SpanBox, VStack } from '../../elements/LayoutPrimitives'
 import { Button } from '../../elements/Button'
-import { DotsThree } from '@phosphor-icons/react'
+import {
+  Archive,
+  Books,
+  Compass,
+  DotsThree,
+  Highlighter,
+  House,
+  Rss,
+  Trash,
+} from '@phosphor-icons/react'
 import { theme } from '../../tokens/stitches.config'
 import { usePersistedState } from '../../../lib/hooks/usePersistedState'
 import { NavMenuFooter } from './Footer'
-import { FollowingIcon } from '../../elements/icons/FollowingIcon'
-import { HomeIcon } from '../../elements/icons/HomeIcon'
-import { LibraryIcon } from '../../elements/icons/LibraryIcon'
-import { HighlightsIcon } from '../../elements/icons/HighlightsIcon'
+import { StashMark } from '../../elements/images/OmnivoreNameLogo'
 import { Dropdown, DropdownOption } from '../../elements/DropdownElements'
 import { useRouter } from 'next/router'
 import { NavigationSection } from '../NavigationLayout'
 import { TreeApi } from 'react-arborist'
 import React from 'react'
-import { ArchiveSectionIcon } from '../../elements/icons/ArchiveSectionIcon'
 import { NavMoreButtonDownIcon } from '../../elements/icons/NavMoreButtonDown'
 import { NavMoreButtonUpIcon } from '../../elements/icons/NavMoreButtonUp'
-import { TrashSectionIcon } from '../../elements/icons/TrashSectionIcon'
 import {
   Shortcut,
   useResetShortcuts,
 } from '../../../lib/networking/shortcuts/useShortcuts'
 import { ShortcutsTree } from '../ShortcutsTree'
-import { DiscoverIcon } from '../../elements/icons/DiscoverIcon'
 
 export const LIBRARY_LEFT_MENU_WIDTH = '275px'
 
@@ -43,26 +46,28 @@ export function NavigationMenu(props: NavigationMenuProps): JSX.Element {
     <>
       <Box
         css={{
-          left: '0px',
-          top: '0px',
+          // Stash floats the menu as a panel inset from the window edges
+          left: '12px',
+          top: '12px',
+          bottom: '12px',
           position: 'fixed',
-          height: '100%',
-          width: LIBRARY_LEFT_MENU_WIDTH,
+          display: 'flex',
+          flexDirection: 'column',
+          '& > *': { flexShrink: 0 },
+          width: `calc(${LIBRARY_LEFT_MENU_WIDTH} - 24px)`,
           bg: '$thLeftMenuBackground',
+          border: '1px solid $thBorderColor',
+          borderRadius: '14px',
+          boxShadow: '$cardBoxShadow',
           overflowY: 'auto',
           overflowX: 'hidden',
           '&::-webkit-scrollbar': {
             display: 'none',
           },
           '@mdDown': {
-            transition: 'left 100ms, visibility 100ms',
-            top: '0',
-            left: props.showMenu && !dismissed ? '0' : '-280px',
+            transition: 'left 120ms, visibility 120ms',
+            left: props.showMenu && !dismissed ? '12px' : '-300px',
             visibility: props.showMenu && !dismissed ? 'visible' : 'hidden',
-            boxShadow:
-              props.showMenu && !dismissed
-                ? `0px 4px 4px 0px rgba(0, 0, 0, 0.15)`
-                : 'unset',
           },
           zIndex: 5,
         }}
@@ -80,22 +85,38 @@ export function NavigationMenu(props: NavigationMenuProps): JSX.Element {
         {/* This gives a header when scrolling so the menu button is visible still */}
         <Box
           css={{
-            position: 'fixed',
-            width: LIBRARY_LEFT_MENU_WIDTH,
+            position: 'sticky',
+            width: '100%',
             top: '0',
-            left: '0',
             height: '60px',
+            mb: '-60px',
             bg: '$thLeftMenuBackground',
             zIndex: '100',
             visibility: props.showMenu && !dismissed ? 'visible' : 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '9px',
+            pl: '50px',
           }}
-        ></Box>
+        >
+          <StashMark size={22} />
+          <SpanBox
+            css={{
+              fontFamily: '$display',
+              fontSize: '17px',
+              fontWeight: 600,
+              letterSpacing: '-0.02em',
+              color: '$thTextContrast',
+            }}
+          >
+            Stash
+          </SpanBox>
+        </Box>
         <Box css={{ width: '100%', height: '60px' }}></Box>
 
         <LibraryNav {...props} />
         <Shortcuts {...props} />
         <NavMenuFooter {...props} showFullThemeSection={true} />
-        <Box css={{ height: '250px ' }} />
       </Box>
     </>
   )
@@ -115,7 +136,7 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         mt: '10px',
         gap: '5px',
         width: '100%',
-        borderBottom: '1px solid $thBorderColor',
+        borderBottom: '1px solid $thBorderSubtle',
         px: '0px',
         pb: '15px',
       }}
@@ -127,7 +148,7 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         text="Home"
         section="home"
         isSelected={props.section == 'home'}
-        icon={<HomeIcon color={theme.colors.thLibraryMenuPrimary.toString()} />}
+        icon={<House size={18} />}
       />
       <NavButton
         {...props}
@@ -135,7 +156,7 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         section="library"
         isSelected={props.section == 'library'}
         icon={
-          <LibraryIcon color={theme.colors.thLibraryMenuPrimary.toString()} />
+          <Books size={18} />
         }
       />
       <NavButton
@@ -144,16 +165,16 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         section="l/discover"
         isSelected={props.section == 'discover'}
         icon={
-          <DiscoverIcon color={theme.colors.thLibraryMenuPrimary.toString()} />
+          <Compass size={18} />
         }
       />
       <NavButton
         {...props}
-        text="Subscriptions"
+        text="Feeds"
         section="subscriptions"
         isSelected={props.section == 'subscriptions'}
         icon={
-          <FollowingIcon color={theme.colors.thLibraryMenuPrimary.toString()} />
+          <Rss size={18} />
         }
       />
       <NavButton
@@ -162,9 +183,7 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         section="highlights"
         isSelected={props.section == 'highlights'}
         icon={
-          <HighlightsIcon
-            color={theme.colors.thLibraryMenuPrimary.toString()}
-          />
+          <Highlighter size={18} />
         }
       />
 
@@ -174,9 +193,7 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         section="archive"
         isSelected={props.section == 'archive'}
         icon={
-          <ArchiveSectionIcon
-            color={theme.colors.thLibraryMenuPrimary.toString()}
-          />
+          <Archive size={18} />
         }
       />
       <NavButton
@@ -185,9 +202,7 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         section="trash"
         isSelected={props.section == 'trash'}
         icon={
-          <TrashSectionIcon
-            color={theme.colors.thLibraryMenuPrimary.toString()}
-          />
+          <Trash size={18} />
         }
       />
     </VStack>
@@ -304,25 +319,26 @@ function NavButton(props: NavButtonProps): JSX.Element {
       alignment="center"
       distribution="start"
       css={{
-        mb: '2px',
+        mb: '1px',
+        mx: '10px',
         gap: '10px',
         display: 'flex',
-        width: '100%',
-        maxWidth: '100%',
-        height: '34px',
-        px: '20px',
+        width: 'calc(100% - 20px)',
+        maxWidth: 'calc(100% - 20px)',
+        height: '36px',
+        px: '10px',
 
         backgroundColor: props.isSelected
           ? '$thLibrarySelectionColor'
           : 'unset',
-        fontSize: '15px',
-        fontWeight: 'regular',
+        fontSize: '14px',
+        fontWeight: props.isSelected ? '500' : '400',
         fontFamily: '$display',
         color: props.isSelected
           ? '$thLibraryMenuSecondary'
           : '$thLibraryMenuUnselected',
         verticalAlign: 'middle',
-        borderRadius: '3px',
+        borderRadius: '8px',
         cursor: 'pointer',
         overflow: 'hidden',
         textOverflow: 'ellipsis',

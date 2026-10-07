@@ -21,7 +21,7 @@ export default function ConfirmEmail(): JSX.Element {
 
   return (
     <>
-      <PageMetaData title="Confirm Email - Omnivore" path="/confirm-email" />
+      <PageMetaData title="Confirm Email - Stash" path="/confirm-email" />
       <ProfileLayout>
         <form
           ref={authForm}

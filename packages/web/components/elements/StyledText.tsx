@@ -7,11 +7,10 @@ const textVariants = {
       lineHeight: '1.50',
     },
     logoTitle: {
-      fontFamily: 'Inter',
-      fontWeight: 700,
-      fontSize: '18px',
-      textTransform: 'uppercase',
-      letterSpacing: '0.15em',
+      fontFamily: '$inter',
+      fontWeight: 600,
+      fontSize: '19px',
+      letterSpacing: '-0.02em',
       // '@smDown': {
       //   display: 'none',
       //   visibility: 'collapse',
@@ -75,12 +74,15 @@ const textVariants = {
       fontWeight: '500',
     },
     articleTitle: {
-      fontWeight: 'bold',
-      fontSize: '35px',
+      fontFamily: '$display',
+      fontWeight: 600,
+      fontSize: '46px',
+      lineHeight: 1.04,
+      letterSpacing: '-0.035em',
       '@mdDown': {
-        fontSize: '25px',
+        fontSize: '30px',
       },
-      margin: 0,
+      margin: '10px 0 16px',
     },
     boldHeadline: {
       fontWeight: 'bold',
@@ -172,7 +174,7 @@ const textVariants = {
     controlButton: {
       color: '$grayText',
       fontWeight: '500',
-      fontFamily: 'inter',
+      fontFamily: '$inter',
       fontSize: '14px',
     },
     menuTitle: {
@@ -180,7 +182,7 @@ const textVariants = {
       m: '0px',
       color: '$utilityTextDefault',
       fontSize: 16,
-      fontFamily: 'inter',
+      fontFamily: '$inter',
       fontWeight: '500',
       lineHeight: 'unset',
     },
@@ -188,7 +190,7 @@ const textVariants = {
       pt: '0px',
       m: '0px',
       fontSize: 24,
-      fontFamily: 'inter',
+      fontFamily: '$inter',
       lineHeight: 'unset',
       fontWeight: 'bold',
       color: '$textSubtle',
@@ -197,7 +199,7 @@ const textVariants = {
       pt: '0px',
       m: '0px',
       fontSize: 24,
-      fontFamily: 'inter',
+      fontFamily: '$inter',
       lineHeight: 'unset',
       fontWeight: 'bold',
       color: 'white',
@@ -220,7 +222,7 @@ const textVariants = {
 }
 
 export const StyledText = styled('p', {
-  fontFamily: 'Inter',
+  fontFamily: '$inter',
   fontWeight: 'normal',
   lineHeight: '120%',
   color: '$grayTextContrast',
@@ -233,14 +235,14 @@ export const StyledText = styled('p', {
 export const StyledTextSpan = styled('span', StyledText)
 
 export const StyledListElement = styled('li', {
-  fontFamily: 'Inter',
+  fontFamily: '$inter',
   fontWeight: 'normal',
   lineHeight: '1.35',
   color: '$grayTextContrast',
 })
 
 export const StyledList = styled('ul', {
-  fontFamily: 'Inter',
+  fontFamily: '$inter',
   fontWeight: 'normal',
   lineHeight: '1.35',
   color: '$grayTextContrast',

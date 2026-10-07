@@ -6,7 +6,7 @@ export default function ForgotPassword(): JSX.Element {
   return (
     <AuthLayout>
       <PageMetaData
-        title="Reset your password - Omnivore"
+        title="Reset your password - Stash"
         path="/auth-forgot-password"
       />
       <EmailForgotPassword />

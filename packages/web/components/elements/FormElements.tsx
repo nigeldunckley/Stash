@@ -29,7 +29,7 @@ export const FormInput = styled('input', {
   width: '100%',
   bg: 'transparent',
   fontSize: '16px',
-  fontFamily: 'inter',
+  fontFamily: '$inter',
   fontWeight: 'normal',
   lineHeight: '1.35',
   borderRadius: '5px',

@@ -9,8 +9,8 @@ export function VerifyEmail(): JSX.Element {
         css={{
           width: '100vw',
           height: '100vh',
-          color: '#898989',
-          background: '#2A2A2A',
+          color: '$thTextSubtle2',
+          background: '$thBackground2',
           overflowY: 'clip',
         }}
       >
@@ -21,8 +21,8 @@ export function VerifyEmail(): JSX.Element {
             '@xl': { margin: '138px' },
           }}
         >
-          <h1 style={{ color: 'white' }}>Verify your email address</h1>
-          <Box css={{ color: '#898989' }}>
+          <h1 style={{ color: 'var(--colors-thTextContrast)' }}>Verify your email address</h1>
+          <Box css={{ color: '$thTextSubtle2' }}>
             We sent a verification link to the email you provided. Click the
             link to verify your email. You may need to check your spam folder.
           </Box>

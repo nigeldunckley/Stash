@@ -10,7 +10,7 @@ function LoadedContent(): JSX.Element {
   return (
     <PrimaryLayout
       pageMetaDataProps={{
-        title: 'Discover - Omnivore',
+        title: 'Discover - Stash',
         path: '/discover',
       }}
       pageTestId="discover-page-tag"

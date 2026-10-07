@@ -36,6 +36,17 @@ Open https://stash.nigeldunckley.com, sign up with your email, then:
 sudo ./install.sh lock
 ```
 
+## Letting the server pull the Stash web image
+
+GitHub builds the Stash web app into `ghcr.io/nigeldunckley/stash-web`.
+New packages start private, so either make it public (GitHub → your
+profile → Packages → stash-web → Package settings → Change visibility)
+or log the server in once with a token that has `read:packages`:
+
+```bash
+echo <token> | sudo docker login ghcr.io -u nigeldunckley --password-stdin
+```
+
 ## Updating
 
 ```bash

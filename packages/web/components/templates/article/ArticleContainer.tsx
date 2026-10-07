@@ -442,7 +442,6 @@ export function ArticleContainer(props: ArticleContainerProps): JSX.Element {
             data-testid="article-headline"
             css={{
               color: styles.readerFontColor,
-              fontFamily: styles.fontFamily,
               width: '100%',
               wordWrap: 'break-word',
               display: '-webkit-box',
