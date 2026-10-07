@@ -34,8 +34,15 @@ const requestHandler = async (
       // auth token is minted server-side by the API and never appears in the
       // URL, so a captured redirect (log, history, HAR) cannot be decoded
       // into a working credential.
-      const exchangeUrl = new URL(`${fetchEndpoint}/auth/exchange`)
       try {
+        // NEXT_PUBLIC_* values are fixed at build time and are empty in the
+        // self-hosted image, so on the server prefer the internal API address.
+        const apiBase =
+          process.env.INTERNAL_API_URL ||
+          (fetchEndpoint.startsWith('http')
+            ? fetchEndpoint
+            : `${process.env.SERVER_BASE_URL ?? ''}/api`)
+        const exchangeUrl = new URL(`${apiBase}/auth/exchange`)
         const response = await fetch(exchangeUrl.toString(), {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
