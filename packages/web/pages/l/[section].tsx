@@ -4,7 +4,7 @@ import {
   NavigationLayout,
   NavigationSection,
 } from '../../components/templates/NavigationLayout'
-import { HomeContainer } from '../../components/nav-containers/HomeContainer'
+import { StashHome } from '../../components/templates/home/StashHome'
 import { LibraryContainer } from '../../components/templates/library/LibraryContainer'
 import { useMemo } from 'react'
 import { HighlightsContainer } from '../../components/nav-containers/HighlightsContainer'
@@ -43,19 +43,7 @@ export default function Home(): JSX.Element {
     }
     switch (name) {
       case 'home':
-        // return <HomeContainer />
-        return (
-          <LibraryContainer
-            key={name}
-            folder={undefined}
-            filterFunc={(item) => {
-              return (
-                item.state !== State.ARCHIVED && item.state !== State.DELETED
-              )
-            }}
-            showNavigationMenu={showNavigationMenu}
-          />
-        )
+        return <StashHome key={name} />
       case 'highlights':
         return <HighlightsContainer />
       case 'library':

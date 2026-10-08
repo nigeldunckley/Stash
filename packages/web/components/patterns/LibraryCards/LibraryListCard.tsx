@@ -1,135 +1,281 @@
-import { Box, VStack, HStack, SpanBox } from '../../elements/LayoutPrimitives'
-import { LabelChip } from '../../elements/LabelChip'
-import type { LinkedItemCardProps } from './CardTypes'
-import { useCallback, useState } from 'react'
 import {
-  AuthorInfoStyle,
-  CardCheckbox,
-  LibraryItemMetadata,
-  MetaStyle,
-  TitleStyle,
-  MenuStyle,
-  FLAIR_ICON_NAMES,
-} from './LibraryCardStyles'
-import { shouldHideUrl, siteName } from '../../../lib/textFormatting'
-import { sortedLabels } from '../../../lib/labelsSort'
-import { LIBRARY_LEFT_MENU_WIDTH } from '../../templates/navMenu/LibraryMenu'
-import { LibraryHoverActions } from './LibraryHoverActions'
-import {
-  useHover,
-  useFloating,
-  useInteractions,
-  size,
-  offset,
-  autoUpdate,
-} from '@floating-ui/react'
-import { CardMenu } from '../CardMenu'
-import { DotsThree } from '@phosphor-icons/react'
-import { isTouchScreenDevice } from '../../../lib/deviceType'
-import { CoverImage } from '../../elements/CoverImage'
-import { ProgressBar } from '../../elements/ProgressBar'
-import { theme } from '../../tokens/stitches.config'
-import { ListFallbackImage } from './FallbackImage'
+  Archive,
+  ArrowCounterClockwise,
+  Bookmark,
+  DotsThree,
+  Tag,
+  Trash,
+} from '@phosphor-icons/react'
 import { useRouter } from 'next/router'
+import { useCallback, useState } from 'react'
+import { State } from '../../../lib/networking/fragments/articleFragment'
+import { useRestoreItem } from '../../../lib/networking/library_items/useLibraryItems'
+import { formatMinutes, minutesLeft } from '../../../lib/readingTime'
+import { siteName } from '../../../lib/textFormatting'
+import { sortedLabels } from '../../../lib/labelsSort'
+import { Box } from '../../elements/LayoutPrimitives'
 import { LoadingBar } from '../../elements/LoadingBar'
+import { ProgressBar } from '../../elements/ProgressBar'
+import { IconButton, ProgressRing, SiteIcon } from '../../elements/stash'
+import { motion } from '../../elements/stash/motion'
+import { styled, theme } from '../../tokens/stitches.config'
+import { CardMenu } from '../CardMenu'
+import type { LinkedItemCardProps } from './CardTypes'
+import { CardCheckbox, FLAIR_ICON_NAMES } from './LibraryCardStyles'
 
+const Actions = styled('div', {
+  display: 'none',
+  alignItems: 'center',
+  gap: '2px',
+})
+
+const Meta = styled('span', {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+  fontFamily: '$mono',
+  fontSize: '$micro',
+  color: '$stMuted',
+  whiteSpace: 'nowrap',
+  fontVariantNumeric: 'tabular-nums',
+})
+
+const Row = styled('div', {
+  position: 'relative',
+  display: 'grid',
+  gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+  alignItems: 'center',
+  gap: '12px',
+  width: '100%',
+  minHeight: '56px',
+  padding: '10px 12px',
+  boxSizing: 'border-box',
+  cursor: 'pointer',
+  color: '$stInk',
+  fontFamily: '$inter',
+  transition: `background ${motion.fast}`,
+  '@media (hover: hover)': {
+    '&:hover': { background: '$stSunken' },
+    [`&:hover ${Actions}`]: { display: 'flex' },
+    [`&:hover ${Meta}`]: { display: 'none' },
+  },
+  [`&[data-menu-open="true"] ${Actions}`]: { display: 'flex' },
+  [`&[data-menu-open="true"] ${Meta}`]: { display: 'none' },
+  '@media (hover: none)': {
+    [`& ${Meta}`]: { display: 'flex' },
+  },
+})
+
+// The dropdown supplies its own trigger button, so this is only the visual.
+const MenuGlyph = styled('span', {
+  display: 'grid',
+  placeItems: 'center',
+  width: '26px',
+  height: '26px',
+  borderRadius: '$sm',
+  border: '1px solid transparent',
+  color: '$stMuted',
+  '&:hover': {
+    color: '$stInk',
+    background: '$stSurface',
+    borderColor: '$stLine',
+  },
+})
+
+const Leading = styled('div', {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+  minWidth: '20px',
+  input: { margin: 0 },
+})
+
+const Body = styled('div', {
+  minWidth: 0,
+  display: 'grid',
+  gap: '2px',
+})
+
+const Title = styled('div', {
+  fontSize: '$small',
+  fontWeight: 500,
+  lineHeight: 1.35,
+  letterSpacing: '-0.005em',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+})
+
+const Subtitle = styled('div', {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  minWidth: 0,
+  fontSize: '$caption',
+  lineHeight: 1.35,
+  color: '$stMuted',
+  '& > span:first-child': {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+})
+
+const LabelDot = styled('span', {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '5px',
+  flex: 'none',
+  fontSize: '$micro',
+  color: '$stMuted',
+  '&::before': {
+    content: '""',
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    background: 'var(--label-color)',
+  },
+  '@smDown': { display: 'none' },
+})
+
+// A library item as a single dense row: favicon, title, author and source, and
+// read time with progress. Actions replace the read time on hover.
 export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
   const router = useRouter()
-  const [isOpen, setIsOpen] = useState(false)
+  const restoreItem = useRestoreItem()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const { item, isChecked, setIsChecked } = props
+  const source = siteName(item.originalArticleUrl, item.url, item.siteName)
+  const selecting = props.multiSelectMode !== 'off'
+  const left = formatMinutes(
+    minutesLeft(item.wordsCount, item.readingProgressPercent)
+  )
+  const labels = sortedLabels(item.labels).filter(
+    ({ name }) => FLAIR_ICON_NAMES.indexOf(name.toLocaleLowerCase()) == -1
+  )
 
-  const { refs, floatingStyles, context } = useFloating({
-    open: isOpen,
-    onOpenChange: setIsOpen,
-    middleware: [
-      offset({
-        mainAxis: -25,
-      }),
-      size(),
-    ],
-    placement: 'top-end',
-    whileElementsMounted: autoUpdate,
-  })
+  const handleCheckChanged = useCallback(() => {
+    setIsChecked(item.id, !isChecked)
+  }, [isChecked, setIsChecked, item])
 
-  const hover = useHover(context)
-
-  const { getReferenceProps, getFloatingProps } = useInteractions([hover])
-
-  const layoutWidths = props.legacyLayout
-    ? {
-        width: '100vw',
-        '@media (min-width: 768px)': {
-          width: `calc(100vw - ${LIBRARY_LEFT_MENU_WIDTH})`,
-        },
-        '@media (min-width: 930px)': {
-          width: '580px',
-        },
-        '@media (min-width: 1280px)': {
-          width: '890px',
-        },
-        '@media (min-width: 1600px)': {
-          width: '1200px',
-        },
-      }
-    : {
-        width: '100%',
-      }
+  const stop = (event: React.MouseEvent) => event.stopPropagation()
 
   return (
-    <VStack
-      ref={refs.setReference}
-      {...getReferenceProps()}
-      css={{
-        px: '20px',
-        pl: '10px',
-        py: '15px',
-        height: '100%',
-        cursor: 'pointer',
-        gap: '10px',
-        borderBottom: props.legacyLayout
-          ? 'unset'
-          : '1px solid $thLeftMenuBackground',
-        '@media (max-width: 930px)': {
-          borderRadius: '0px',
-        },
-        '&:hover': {
-          borderBottom: 'unset',
-        },
-        ...layoutWidths,
-      }}
-      alignment="start"
-      distribution="start"
+    <Row
+      data-menu-open={menuOpen}
       onClick={(event) => {
-        if (props.multiSelectMode !== 'off') {
-          props.setIsChecked(props.item.id, !props.isChecked)
+        if (selecting) {
+          setIsChecked(item.id, !isChecked)
           return
         }
         window.localStorage.setItem('nav-return', router.asPath)
+        const path = `/${props.viewer.profile.username}/${item.slug}`
         if (event.metaKey || event.ctrlKey) {
-          window.open(
-            `/${props.viewer.profile.username}/${props.item.slug}`,
-            '_blank'
-          )
+          window.open(path, '_blank')
         } else {
-          router.push(`/${props.viewer.profile.username}/${props.item.slug}`)
+          router.push(path)
         }
       }}
     >
-      {!isTouchScreenDevice() && props.multiSelectMode == 'off' && (
-        <Box
-          ref={refs.setFloating}
-          style={{ ...floatingStyles, zIndex: 3 }}
-          {...getFloatingProps()}
-        >
-          <LibraryHoverActions
-            item={props.item}
-            viewer={props.viewer}
-            handleAction={props.handleAction}
-            isHovered={isOpen ?? false}
+      <Leading>
+        {selecting && (
+          <CardCheckbox
+            isChecked={isChecked}
+            handleChanged={handleCheckChanged}
           />
-        </Box>
-      )}
-      <LibraryListCardContent {...props} isHovered={isOpen} />
-    </VStack>
+        )}
+        <SiteIcon src={item.siteIcon} name={source || item.title} size={20} />
+      </Leading>
+      <Body>
+        <Title>{item.title}</Title>
+        <Subtitle>
+          <span>{[item.author, source].filter(Boolean).join(' · ')}</span>
+          {labels.slice(0, 3).map(({ name, color }) => (
+            <LabelDot key={name} style={{ ['--label-color' as string]: color }}>
+              {name}
+            </LabelDot>
+          ))}
+        </Subtitle>
+      </Body>
+      <div onClick={stop} style={{ display: 'flex', alignItems: 'center' }}>
+        {props.isLoading ? (
+          <Meta>Saving…</Meta>
+        ) : (
+          <Meta>
+            {left}
+            <ProgressRing percent={item.readingProgressPercent} />
+          </Meta>
+        )}
+        {!selecting && (
+          <Actions>
+            {item.folder == 'following' ? (
+              <IconButton
+                label="Save to Library"
+                size="sm"
+                onClick={() => props.handleAction('move-to-inbox')}
+              >
+                <Bookmark size={15} />
+              </IconButton>
+            ) : (
+              <IconButton
+                label={item.state === State.ARCHIVED ? 'Unarchive' : 'Archive'}
+                shortcut="e"
+                size="sm"
+                onClick={() =>
+                  props.handleAction(
+                    item.state === State.ARCHIVED ? 'unarchive' : 'archive'
+                  )
+                }
+              >
+                <Archive size={15} />
+              </IconButton>
+            )}
+            <IconButton
+              label="Labels"
+              shortcut="l"
+              size="sm"
+              onClick={() => props.handleAction('set-labels')}
+            >
+              <Tag size={15} />
+            </IconButton>
+            {item.state == State.DELETED ? (
+              <IconButton
+                label="Restore"
+                size="sm"
+                onClick={async () => {
+                  await restoreItem.mutateAsync({
+                    itemId: item.id,
+                    slug: item.slug,
+                  })
+                }}
+              >
+                <ArrowCounterClockwise size={15} />
+              </IconButton>
+            ) : (
+              <IconButton
+                label="Delete"
+                shortcut="#"
+                size="sm"
+                onClick={() => props.handleAction('delete')}
+              >
+                <Trash size={15} />
+              </IconButton>
+            )}
+            <CardMenu
+              item={item}
+              viewer={props.viewer}
+              onOpenChange={setMenuOpen}
+              actionHandler={props.handleAction}
+              triggerElement={
+                <MenuGlyph aria-label="More actions" title="More actions">
+                  <DotsThree size={16} weight="bold" />
+                </MenuGlyph>
+              }
+            />
+          </Actions>
+        )}
+      </div>
+    </Row>
   )
 }
 
@@ -195,185 +341,5 @@ export const ProgressBarOverlay = (
         borderRadius={'2px'}
       />
     </Box>
-  )
-}
-
-type ListImageProps = {
-  src?: string
-  title?: string
-  readingProgress?: number
-  isLoading?: boolean
-}
-
-const ListImage = (props: ListImageProps): JSX.Element => {
-  const [displayFallback, setDisplayFallback] = useState(props.src == undefined)
-
-  return (
-    <>
-      {props.isLoading && (
-        <LoadingBarOverlay
-          width="55px"
-          top={50}
-          bottomRadius="4px"
-          fillColor={'rgba(60, 179, 113, 1)'}
-          percentFill={30}
-        />
-      )}
-      {(props.readingProgress ?? 0) > 0 && !props.isLoading && (
-        <ProgressBarOverlay
-          width="55px"
-          top={50}
-          bottomRadius="4px"
-          value={props.readingProgress ?? 0}
-        />
-      )}
-      {displayFallback ? (
-        <ListFallbackImage
-          title={props.title ?? 'Omnivore Fallback'}
-          width="55px"
-          height="55px"
-          fontSize="16pt"
-        />
-      ) : (
-        <CoverImage
-          src={props.src}
-          width={55}
-          height={55}
-          css={{
-            bg: '$thBackground',
-            borderRadius: '4px',
-          }}
-          onError={() => {
-            setDisplayFallback(true)
-          }}
-        />
-      )}
-    </>
-  )
-}
-
-export function LibraryListCardContent(
-  props: LinkedItemCardProps
-): JSX.Element {
-  const [menuOpen, setMenuOpen] = useState(false)
-  const { isChecked, setIsChecked, item } = props
-  const originText = siteName(
-    props.item.originalArticleUrl,
-    props.item.url,
-    props.item.siteName
-  )
-
-  const handleCheckChanged = useCallback(() => {
-    setIsChecked(item.id, !isChecked)
-  }, [isChecked, setIsChecked, item])
-
-  return (
-    <HStack css={{ gap: '15px', width: '100%' }}>
-      <SpanBox
-        css={{
-          display: 'flex',
-          m: '0px',
-          mt: '0px',
-          p: '0px',
-          ml: '4px',
-          lineHeight: '1',
-          '> input': {
-            p: '0px',
-            m: '0px',
-          },
-        }}
-      >
-        <CardCheckbox
-          isChecked={props.isChecked}
-          handleChanged={handleCheckChanged}
-        />
-      </SpanBox>
-      <Box css={{ position: 'relative', width: '55px' }}>
-        <ListImage
-          src={props.item.image}
-          title={props.item.title}
-          readingProgress={item.readingProgressPercent}
-          isLoading={props.isLoading}
-        />
-      </Box>
-      <VStack
-        alignment="start"
-        distribution="start"
-        css={{
-          height: '100%',
-          width: '100%',
-          lineHeight: 1,
-          gap: '3px',
-          position: 'relative',
-        }}
-      >
-        <Box
-          css={{
-            ...MenuStyle,
-            position: 'absolute',
-            top: -10,
-            right: -10,
-            m: '5px',
-            visibility: menuOpen ? 'visible' : 'hidden',
-            '@media (hover: none)': {
-              visibility: 'unset',
-            },
-          }}
-        >
-          <CardMenu
-            item={props.item}
-            viewer={props.viewer}
-            onOpenChange={(open) => setMenuOpen(open)}
-            actionHandler={props.handleAction}
-            triggerElement={
-              <DotsThree size={25} weight="bold" color="#ADADAD" />
-            }
-          />
-        </Box>
-        <HStack
-          css={{
-            ...MetaStyle,
-          }}
-          distribution="start"
-        >
-          <LibraryItemMetadata item={props.item} showProgress={true} />
-        </HStack>
-
-        <Box css={{ ...TitleStyle }}>{props.item.title}</Box>
-        {(props.item.author?.length ?? 0 + originText.length) > 0 && (
-          <SpanBox
-            css={{
-              ...AuthorInfoStyle,
-            }}
-          >
-            {props.item.author}
-            {props.item.author && originText && ' | '}
-            {originText}
-          </SpanBox>
-        )}
-
-        <HStack
-          distribution="start"
-          alignment="start"
-          // The two pixels here are to account for the label margin
-          css={{ width: '100%', ml: '-2px', mt: '5px' }}
-        >
-          <HStack
-            css={{
-              display: 'block',
-            }}
-          >
-            {sortedLabels(props.item.labels)
-              .filter(
-                ({ name }) =>
-                  FLAIR_ICON_NAMES.indexOf(name.toLocaleLowerCase()) == -1
-              )
-              .map(({ name, color }, index) => (
-                <LabelChip key={index} text={name || ''} color={color} />
-              ))}
-          </HStack>
-        </HStack>
-      </VStack>
-    </HStack>
   )
 }
