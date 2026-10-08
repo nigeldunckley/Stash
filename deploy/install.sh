@@ -4,6 +4,7 @@
 #   sudo ./install.sh lock                 turn off new sign-ups
 #   sudo ./install.sh update               pull new images and restart
 #   sudo ./install.sh proxy [port]         run behind an existing web server
+#   sudo ./install.sh autoupdate [off]     update by itself after each merge
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -74,7 +75,47 @@ add_new_images() {
   done
 }
 
+# Runs auto-update.sh every five minutes, so merges reach the server
+# without anyone logging in.
+setup_autoupdate() {
+  if [ "${1:-}" = off ]; then
+    systemctl disable --now stash-update.timer 2>/dev/null || true
+    rm -f /etc/systemd/system/stash-update.service \
+          /etc/systemd/system/stash-update.timer
+    systemctl daemon-reload
+    echo "Automatic updates are off."
+    return
+  fi
+  cat > /etc/systemd/system/stash-update.service <<UNIT
+[Unit]
+Description=Update Stash when a new version is published
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=$(pwd)/auto-update.sh
+UNIT
+  cat > /etc/systemd/system/stash-update.timer <<UNIT
+[Unit]
+Description=Check for a new Stash version every five minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable --now stash-update.timer
+  echo "Automatic updates are on. Stash now checks for a new version every"
+  echo "five minutes. See what it did with: journalctl -u stash-update"
+}
+
 case "${1:-}" in
+  autoupdate)
+    setup_autoupdate "${2:-}"
+    ;;
   lock)
     sed -i 's/^ENABLE_EMAIL_SIGNUP=.*/ENABLE_EMAIL_SIGNUP=false/' .env
     compose up -d --force-recreate api web
