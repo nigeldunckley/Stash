@@ -221,12 +221,19 @@ export function StashHome(): JSX.Element {
     sortDescending: true,
     searchQuery: 'is:reading sort:read-desc',
   })
-  const feedsQuery = useGetLibraryItems('home-feeds', 'following', {
-    limit: 5,
-    sortDescending: true,
-    searchQuery: 'is:unread sort:saved-desc',
-    includeCount: true,
-  })
+  const feedsQuery = useGetLibraryItems(
+    'home-feeds',
+    'following',
+    {
+      limit: 5,
+      sortDescending: true,
+      searchQuery: 'is:unread sort:saved-desc',
+      includeCount: true,
+    },
+    true,
+    // New feed items arrive in the background; check for them every two minutes.
+    2 * 60 * 1000
+  )
   const recentQuery = useGetLibraryItems('home-recent', 'inbox', {
     limit: 15,
     sortDescending: true,

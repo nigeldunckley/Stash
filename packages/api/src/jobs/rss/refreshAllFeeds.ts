@@ -44,7 +44,13 @@ export const refreshAllFeeds = async (db: DataSource): Promise<boolean> => {
       WHERE
         s.type = $1
         AND s.status = $2
-        AND (s.scheduled_at <= NOW() OR s.scheduled_at IS NULL)
+        AND (
+          s.scheduled_at <= NOW()
+          OR s.scheduled_at IS NULL
+          -- schedules set by older code could be days away; nothing waits
+          -- longer than two hours now (see nextCheckAt)
+          OR s.scheduled_at > NOW() + INTERVAL '2 hours'
+        )
       GROUP BY
         url
       `,
