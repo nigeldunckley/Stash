@@ -30,3 +30,25 @@ export function createImageProxyUrl(
 
 export const createThumbnailProxyUrl = (url: string): string =>
   createImageProxyUrl(url, 320, 320)
+
+// Returns the source image of a URL that was already run through the proxy
+// (feed items used to store their thumbnail that way), so it can be signed
+// again at another size.
+export function originalImageUrl(url: string): string {
+  if (!env.imageProxy.url || !url.startsWith(env.imageProxy.url)) {
+    return url
+  }
+  const match = url
+    .slice(env.imageProxy.url.length)
+    .match(/^\/[^/]*,s[^/]+\/(https?:\/\/?.+)$/)
+  if (!match) {
+    return url
+  }
+  // Some routers collapse the double slash in the embedded URL.
+  return match[1].replace(/^(https?:)\/(?!\/)/, '$1//')
+}
+
+// A large, uncropped version of an item's image for headers and cards:
+// 1200px wide, height kept in proportion.
+export const createHeaderImageProxyUrl = (url: string): string =>
+  createImageProxyUrl(originalImageUrl(url), 1200, 0)

@@ -108,6 +108,7 @@ type Article {
   folder: String!
   hasContent: Boolean
   hash: String!
+  headerImage: String
   highlights(input: ArticleHighlightsInput): [Highlight!]!
   id: ID!
   image: String
@@ -2437,6 +2438,7 @@ type SearchItem {
   feedContent: String
   folder: String!
   format: String
+  headerImage: String
   highlights: [Highlight!]
   highlightsCount: Int
   id: ID!

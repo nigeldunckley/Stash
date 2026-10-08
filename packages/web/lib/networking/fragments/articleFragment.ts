@@ -7,6 +7,7 @@ export const articleFragment = gql`
     url
     author
     image
+    headerImage
     savedAt
     createdAt
     publishedAt
@@ -51,6 +52,7 @@ export type ArticleFragmentData = {
   url: string
   author?: string
   image?: string
+  headerImage?: string
   savedAt: string
   createdAt: string
   publishedAt?: string

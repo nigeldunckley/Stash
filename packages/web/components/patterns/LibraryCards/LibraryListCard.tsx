@@ -17,6 +17,7 @@ import { Box } from '../../elements/LayoutPrimitives'
 import { LoadingBar } from '../../elements/LoadingBar'
 import { ProgressBar } from '../../elements/ProgressBar'
 import {
+  CoverImage,
   IconButton,
   ProgressRing,
   SiteIcon,
@@ -45,6 +46,18 @@ const Meta = styled('span', {
   fontVariantNumeric: 'tabular-nums',
 })
 
+const Thumb = styled(CoverImage, {
+  width: '72px',
+  height: '48px',
+  borderRadius: '$sm',
+  '@smDown': { width: '56px', height: '42px' },
+})
+
+const Trailing = styled('div', {
+  display: 'flex',
+  alignItems: 'center',
+})
+
 const Row = styled('div', {
   position: 'relative',
   display: 'grid',
@@ -71,6 +84,14 @@ const Row = styled('div', {
   [`&[data-menu-open="true"] ${Meta}`]: { display: 'none' },
   '@media (hover: none)': {
     [`& ${Meta}`]: { display: 'flex' },
+  },
+  '&[data-image="true"]': {
+    gridTemplateColumns: 'auto minmax(0, 1fr) auto auto',
+    minHeight: '68px',
+    '@smDown': {
+      gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+      [`& ${Trailing}`]: { display: 'none' },
+    },
   },
 })
 
@@ -189,6 +210,7 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
     >
       <Row
         data-menu-open={menuOpen}
+        data-image={!!item.image}
         onClick={(event) => {
           if (selecting) {
             setIsChecked(item.id, !isChecked)
@@ -226,7 +248,7 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
             ))}
           </Subtitle>
         </Body>
-        <div onClick={stop} style={{ display: 'flex', alignItems: 'center' }}>
+        <Trailing onClick={stop}>
           {props.isLoading ? (
             <Meta>Saving…</Meta>
           ) : (
@@ -305,7 +327,8 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
               />
             </Actions>
           )}
-        </div>
+        </Trailing>
+        {item.image && <Thumb src={item.image} />}
       </Row>
     </SwipeAction>
   )

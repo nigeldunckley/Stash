@@ -1,5 +1,6 @@
 import { forwardRef, ReactNode } from 'react'
 import { styled } from '../../tokens/stitches.config'
+import { CoverImage } from './CoverImage'
 import { motion } from './motion'
 
 const Actions = styled('div', {
@@ -29,6 +30,13 @@ const Leading = styled('div', {
   display: 'grid',
   placeItems: 'center',
   minWidth: '18px',
+})
+
+const Thumb = styled(CoverImage, {
+  width: '72px',
+  height: '48px',
+  borderRadius: '$sm',
+  '@smDown': { width: '56px', height: '42px' },
 })
 
 const Root = styled('div', {
@@ -84,7 +92,29 @@ const Root = styled('div', {
         '& .row-title': { color: '$stMuted', fontWeight: 400 },
       },
     },
+    withImage: {
+      true: {
+        gridTemplateColumns: 'auto minmax(0, 1fr) auto auto',
+        minHeight: '68px',
+        '@smDown': { gridTemplateColumns: 'auto minmax(0, 1fr) auto' },
+        [`& ${Trailing}`]: { '@smDown': { display: 'none' } },
+      },
+    },
   },
+  compoundVariants: [
+    {
+      // Rows with an excerpt have room for a larger picture.
+      tall: true,
+      withImage: true,
+      css: {
+        [`& ${Thumb}`]: {
+          width: '112px',
+          height: '74px',
+          '@smDown': { width: '72px', height: '54px' },
+        },
+      },
+    },
+  ],
 })
 
 const Body = styled('div', {
@@ -130,6 +160,8 @@ const Excerpt = styled('div', {
 type ItemRowProps = {
   leading: ReactNode
   title: string
+  // The item's picture, shown as a small thumbnail beside the text.
+  image?: string
   subtitle?: ReactNode
   excerpt?: string
   meta?: ReactNode
@@ -141,8 +173,9 @@ type ItemRowProps = {
   onMouseEnter?: () => void
 }
 
-// One item in a list: favicon or dot, title and source, and a trailing area that
-// shows meta (read time, progress) at rest and actions on hover or selection.
+// One item in a list: favicon or dot, title and source, a trailing area that
+// shows meta (read time, progress) at rest and actions on hover or selection,
+// and the item's picture at the end when it has one.
 export const ItemRow = forwardRef<HTMLDivElement, ItemRowProps>(
   function ItemRow(props, ref) {
     return (
@@ -153,6 +186,7 @@ export const ItemRow = forwardRef<HTMLDivElement, ItemRowProps>(
         selected={props.selected}
         muted={props.muted}
         tall={!!props.excerpt}
+        withImage={!!props.image}
         onClick={(event) => {
           if ((event.target as HTMLElement).closest('button, a')) {
             return
@@ -177,6 +211,7 @@ export const ItemRow = forwardRef<HTMLDivElement, ItemRowProps>(
           {props.meta && <Meta>{props.meta}</Meta>}
           {props.actions && <Actions>{props.actions}</Actions>}
         </Trailing>
+        {props.image && <Thumb src={props.image} />}
       </Root>
     )
   }

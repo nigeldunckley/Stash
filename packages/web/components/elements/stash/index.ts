@@ -1,4 +1,5 @@
 export { BottomSheet } from './BottomSheet'
+export { CoverImage } from './CoverImage'
 export { IconButton } from './IconButton'
 export { ItemList, ItemRow } from './ItemRow'
 export { Kbd } from './Kbd'

@@ -61,6 +61,19 @@ write_env() {
   chmod 600 .env
 }
 
+# Copies image settings that were added to env.template after .env was
+# written, such as the Stash API image.
+add_new_images() {
+  local line
+  [ -n "$(tail -c1 .env)" ] && echo >> .env
+  grep -E '^[A-Z_]+_IMAGE=' env.template | while read -r line; do
+    if ! grep -q "^${line%%=*}=" .env; then
+      echo "Adding ${line} to .env"
+      echo "$line" >> .env
+    fi
+  done
+}
+
 case "${1:-}" in
   lock)
     sed -i 's/^ENABLE_EMAIL_SIGNUP=.*/ENABLE_EMAIL_SIGNUP=false/' .env
@@ -82,6 +95,7 @@ case "${1:-}" in
     ;;
   update)
     git -C .. pull --ff-only
+    add_new_images
     compose pull
     compose up -d --build
     ;;

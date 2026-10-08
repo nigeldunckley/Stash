@@ -19,7 +19,6 @@ import createHttpTaskWithToken, {
   FetchContentJobData,
 } from '../../utils/createTask'
 import { cleanUrl } from '../../utils/helpers'
-import { createThumbnailProxyUrl } from '../../utils/imageproxy'
 import { logger } from '../../utils/logger'
 import { rssParserConfig } from '../../utils/parser'
 import { RSSRefreshContext } from './refreshAllFeeds'
@@ -70,7 +69,13 @@ type RssFeed = Parser.Output<{
   'sy:updateFrequency'?: string
 }
 type RssFeedItemMedia = {
-  $: { url: string; width?: string; height?: string; medium?: string }
+  $: {
+    url: string
+    width?: string
+    height?: string
+    medium?: string
+    type?: string
+  }
 }
 export type RssFeedItem = Item & {
   'media:thumbnail'?: RssFeedItemMedia
@@ -170,16 +175,24 @@ export const isContentFetchBlocked = (feedUrl: string) => {
   return false
 }
 
-const getThumbnail = (item: RssFeedItem) => {
-  if (item['media:thumbnail']) {
+const getThumbnail = (item: RssFeedItem): string | undefined => {
+  if (item['media:thumbnail']?.$?.url) {
     return item['media:thumbnail'].$.url
   }
 
-  if (item['media:content']) {
-    return item['media:content'].find((media) => media.$?.medium === 'image')?.$
-      .url
+  const media = item['media:content']?.find(
+    (media) =>
+      media.$?.medium === 'image' || media.$?.type?.startsWith('image/')
+  )?.$?.url
+  if (media) {
+    return media
   }
 
+  if (item.enclosure?.url && item.enclosure.type?.startsWith('image/')) {
+    return item.enclosure.url
+  }
+
+  // Otherwise the thumbnail job picks the largest picture in the content.
   return undefined
 }
 
@@ -384,8 +397,8 @@ const createItemWithFeedContent = async (
       folder,
     })
 
-    const thumbnail = getThumbnail(item)
-    const previewImage = thumbnail && createThumbnailProxyUrl(thumbnail)
+    // Store the source image; the API signs it at the size each view needs.
+    const previewImage = getThumbnail(item)
     const url = cleanUrl(item.link)
 
     const user = await findActiveUser(userId)

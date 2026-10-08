@@ -41,7 +41,11 @@ import {
 } from '../services/library_item'
 import { Merge } from '../util'
 import { isBase64Image, validatedDate, wordsCount } from '../utils/helpers'
-import { createImageProxyUrl } from '../utils/imageproxy'
+import {
+  createHeaderImageProxyUrl,
+  createImageProxyUrl,
+  originalImageUrl,
+} from '../utils/imageproxy'
 import { contentConverter } from '../utils/parser'
 import {
   generateDownloadSignedUrl,
@@ -462,10 +466,19 @@ export const functionResolvers = {
     },
     image(article: LibraryItem): string | undefined {
       if (article.thumbnail) {
-        return createImageProxyUrl(article.thumbnail, 320, 320)
+        return createImageProxyUrl(
+          originalImageUrl(article.thumbnail),
+          320,
+          320
+        )
       }
 
       return undefined
+    },
+    headerImage(article: LibraryItem): string | undefined {
+      return article.thumbnail
+        ? createHeaderImageProxyUrl(article.thumbnail)
+        : undefined
     },
     wordsCount(article: LibraryItem): number | undefined {
       if (article.wordCount) return article.wordCount
@@ -531,7 +544,13 @@ export const functionResolvers = {
       return item.originalUrl
     },
     image(item: LibraryItem) {
-      return item.thumbnail && createImageProxyUrl(item.thumbnail, 320, 320)
+      return (
+        item.thumbnail &&
+        createImageProxyUrl(originalImageUrl(item.thumbnail), 320, 320)
+      )
+    },
+    headerImage(item: LibraryItem) {
+      return item.thumbnail && createHeaderImageProxyUrl(item.thumbnail)
     },
     originalArticleUrl(item: LibraryItem) {
       return item.originalUrl
