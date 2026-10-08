@@ -2,6 +2,10 @@ import { gql } from 'graphql-request'
 import { GQL_BULK_ACTION } from '../library_items/gql'
 import { BulkAction } from '../library_items/useLibraryItems'
 import { gqlFetcher } from '../networkHelpers'
+import {
+  Subscription,
+  SubscriptionType,
+} from '../queries/useGetSubscriptionsQuery'
 
 export type ScannedFeed = {
   url: string
@@ -62,3 +66,27 @@ export async function markItemsSeen(ids: string[]): Promise<boolean> {
 // Quotes a value for use in a search filter such as subscription:"Name".
 export const searchValue = (value: string) =>
   `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+
+// Feed items record their feed by its address and newsletter items by the
+// newsletter's name, so that is what a search by subscription must match.
+export const subscriptionKey = (subscription: Subscription) =>
+  subscription.type == SubscriptionType.RSS && subscription.url
+    ? subscription.url
+    : subscription.name
+
+// The name to show for an item's subscription, which may be a feed address.
+export const subscriptionName = (
+  value: string | undefined,
+  subscriptions: Subscription[] | undefined
+): string | undefined => {
+  if (!value) {
+    return undefined
+  }
+  const match = subscriptions?.find(
+    (subscription) => subscription.url == value || subscription.name == value
+  )
+  if (match) {
+    return match.name
+  }
+  return /^https?:\/\//i.test(value) ? undefined : value
+}

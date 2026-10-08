@@ -23,6 +23,8 @@ import { Subscription } from '../../../lib/networking/queries/useGetSubscription
 import {
   markItemsSeen,
   searchValue,
+  subscriptionKey,
+  subscriptionName,
 } from '../../../lib/networking/subscriptions/feeds'
 import { useGetSubscriptions } from '../../../lib/networking/subscriptions/useGetSubscriptions'
 import { useGetViewer } from '../../../lib/networking/viewer/useGetViewer'
@@ -247,7 +249,9 @@ const byName = (a: Subscription, b: Subscription) =>
   a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
 
 const sourceQuery = (subscription?: Subscription) =>
-  subscription ? `subscription:${searchValue(subscription.name)}` : ''
+  subscription
+    ? `subscription:${searchValue(subscriptionKey(subscription))}`
+    : ''
 
 // The unseen count for one source, shown in the sources list.
 function SourceCount(props: { subscription?: Subscription }): JSX.Element {
@@ -786,13 +790,21 @@ export function StashFeeds(): JSX.Element {
                         subtitle={[
                           selected
                             ? undefined
-                            : item.subscription ||
+                            : subscriptionName(
+                                item.subscription,
+                                allSubscriptions
+                              ) ||
                               siteName(
                                 item.originalArticleUrl,
                                 item.url,
                                 item.siteName
                               ),
-                          item.author && item.author != item.subscription
+                          item.author &&
+                          item.author !=
+                            subscriptionName(
+                              item.subscription,
+                              allSubscriptions
+                            )
                             ? item.author
                             : undefined,
                           timeAgo(item.publishedAt || item.savedAt),

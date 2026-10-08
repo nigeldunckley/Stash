@@ -16,6 +16,8 @@ import {
   minutesLeft,
   readingMinutes,
 } from '../../../lib/readingTime'
+import { subscriptionName } from '../../../lib/networking/subscriptions/feeds'
+import { useGetSubscriptions } from '../../../lib/networking/subscriptions/useGetSubscriptions'
 import { siteName, timeAgo } from '../../../lib/textFormatting'
 import {
   CoverImage,
@@ -221,6 +223,7 @@ export function StashHome(): JSX.Element {
     sortDescending: true,
     searchQuery: 'is:reading sort:read-desc',
   })
+  const { data: subscriptions } = useGetSubscriptions({})
   const feedsQuery = useGetLibraryItems(
     'home-feeds',
     'following',
@@ -505,7 +508,8 @@ export function StashHome(): JSX.Element {
                     title={item.title}
                     image={item.image}
                     subtitle={[
-                      item.subscription || sourceOf(item),
+                      subscriptionName(item.subscription, subscriptions) ||
+                        sourceOf(item),
                       item.savedAt ? timeAgo(item.savedAt) : undefined,
                     ]
                       .filter(Boolean)
