@@ -24,6 +24,7 @@ import { rssParserConfig } from '../../utils/parser'
 import { videoIdFromYouTubeUrl } from '../../utils/youtube'
 import {
   channelIdFromFeedUrl,
+  channelUploads,
   isShortsLink,
   longFormVideoIds,
   mediaDescription,
@@ -469,7 +470,8 @@ const createYouTubeVideoItem = async (
           title,
           channel: youtube.channelName,
           channelUrl: `https://www.youtube.com/channel/${youtube.channelId}`,
-          description: mediaDescription(item['media:group']),
+          description:
+            mediaDescription(item['media:group']) || item.contentSnippet,
         }),
         source: 'rss-feeder',
         clientRequestId: '',
@@ -870,6 +872,46 @@ export const refreshFeed = async (request: any) => {
   return false
 }
 
+// A YouTube channel's latest uploads shaped like its feed, for when YouTube
+// doesn't serve the feed itself.
+const youtubeUploadsFeed = async (feedUrl: string, channelId: string) => {
+  try {
+    const channel = await channelUploads(channelId)
+    if (!channel || !channel.uploads.length) {
+      return undefined
+    }
+    const ids = channel.uploads.map((upload) => upload.id).join(',')
+    const fetchResult = {
+      url: feedUrl,
+      content: ids,
+      checksum: crypto.createHash('sha256').update(ids).digest('hex'),
+    }
+    const feed = {
+      title: channel.title,
+      items: channel.uploads.map(
+        (upload): RssFeedItem => ({
+          link: watchUrl(upload.id),
+          title: upload.title,
+          isoDate: upload.publishedAt?.toISOString(),
+          contentSnippet: upload.description,
+          'yt:videoId': upload.id,
+        })
+      ),
+    }
+    logger.info('youtube: read uploads without the feed', {
+      channelId,
+      count: feed.items.length,
+    })
+    return { fetchResult, feed }
+  } catch (error) {
+    logger.info('youtube: uploads unavailable', {
+      channelId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return undefined
+  }
+}
+
 export const _refreshFeed = async (request: RefreshFeedRequest) => {
   const {
     feedUrl,
@@ -893,14 +935,24 @@ export const _refreshFeed = async (request: RefreshFeedRequest) => {
       throw new Error('feed is blocked')
     }
 
-    const fetchResult = await fetchAndChecksum(feedUrl)
+    const channelId = channelIdFromFeedUrl(feedUrl)
+    let fetchResult = await fetchAndChecksum(feedUrl)
+    let feed = fetchResult
+      ? await parseFeed(feedUrl, fetchResult.content)
+      : null
+    if (!feed && channelId) {
+      const uploads = await youtubeUploadsFeed(feedUrl, channelId)
+      if (uploads) {
+        fetchResult = uploads.fetchResult
+        feed = uploads.feed
+      }
+    }
     if (!fetchResult) {
       logger.error(`Failed to fetch RSS feed ${feedUrl}`)
       await incrementFeedFailure(feedUrl)
       throw new Error('Failed to fetch RSS feed')
     }
 
-    const feed = await parseFeed(feedUrl, fetchResult.content)
     if (!feed) {
       logger.error(`Failed to parse RSS feed ${feedUrl}`)
       await incrementFeedFailure(feedUrl)
@@ -915,7 +967,6 @@ export const _refreshFeed = async (request: RefreshFeedRequest) => {
 
     logger.info('Fetched feed', { title: feed.title, at: new Date() })
 
-    const channelId = channelIdFromFeedUrl(feedUrl)
     const youtube: YouTubeFeed | undefined = channelId
       ? {
           channelId,

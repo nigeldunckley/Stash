@@ -4395,7 +4395,8 @@ export type YouTubeChannelError = {
 export enum YouTubeChannelErrorCode {
   BadRequest = 'BAD_REQUEST',
   NotFound = 'NOT_FOUND',
-  Unauthorized = 'UNAUTHORIZED'
+  Unauthorized = 'UNAUTHORIZED',
+  Unavailable = 'UNAVAILABLE'
 }
 
 export type YouTubeChannelResult = YouTubeChannelError | YouTubeChannelSuccess;

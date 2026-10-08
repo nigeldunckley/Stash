@@ -3556,6 +3556,7 @@ enum YouTubeChannelErrorCode {
   BAD_REQUEST
   NOT_FOUND
   UNAUTHORIZED
+  UNAVAILABLE
 }
 
 union YouTubeChannelResult = YouTubeChannelError | YouTubeChannelSuccess
