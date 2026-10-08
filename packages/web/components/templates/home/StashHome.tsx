@@ -18,6 +18,7 @@ import {
 } from '../../../lib/readingTime'
 import { siteName, timeAgo } from '../../../lib/textFormatting'
 import {
+  CoverImage,
   IconButton,
   ItemList,
   ItemRow,
@@ -118,9 +119,27 @@ const ContinueCard = styled('a', {
   color: 'inherit',
   textDecoration: 'none',
   cursor: 'pointer',
+  overflow: 'hidden',
   transition: `border-color ${motion.fast}`,
   '&:hover': { borderColor: '$stLineStrong' },
+  '&:hover img': { transform: 'scale(1.02)' },
   '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '1px' },
+})
+
+// The article's header image across the top of a Continue reading card.
+const CardCover = styled(CoverImage, {
+  margin: '-12px -12px 2px',
+  aspectRatio: '16 / 9',
+  borderBottom: '1px solid $stLine',
+  '&::after': { display: 'none' },
+  img: { transition: `opacity ${motion.base}, transform ${motion.slow}` },
+})
+
+const CoverFallback = styled('span', {
+  display: 'grid',
+  placeItems: 'center',
+  width: '100%',
+  height: '100%',
 })
 
 const CardSource = styled('div', {
@@ -416,6 +435,18 @@ export function StashHome(): JSX.Element {
                       open(item)
                     }}
                   >
+                    <CardCover
+                      src={item.headerImage ?? item.image}
+                      fallback={
+                        <CoverFallback>
+                          <SiteIcon
+                            src={item.siteIcon}
+                            name={source}
+                            size={28}
+                          />
+                        </CoverFallback>
+                      }
+                    />
                     <CardSource>
                       <SiteIcon src={item.siteIcon} name={source} size={14} />
                       <span>{source}</span>
@@ -465,6 +496,7 @@ export function StashHome(): JSX.Element {
                     ref={rowRef(item.id)}
                     leading={<UnseenDot />}
                     title={item.title}
+                    image={item.image}
                     subtitle={[
                       item.subscription || sourceOf(item),
                       item.savedAt ? timeAgo(item.savedAt) : undefined,
@@ -513,6 +545,7 @@ export function StashHome(): JSX.Element {
                       ref={rowRef(item.id)}
                       leading={<SiteIcon src={item.siteIcon} name={source} />}
                       title={item.title}
+                      image={item.image}
                       subtitle={[item.author, source]
                         .filter(Boolean)
                         .join(' · ')}

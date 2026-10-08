@@ -695,6 +695,7 @@ export function StashFeeds(): JSX.Element {
                       ref={rowRef(item.id)}
                       leading={<UnseenDot hidden={itemSeen} />}
                       title={item.title}
+                      image={item.image}
                       subtitle={[
                         selected
                           ? undefined

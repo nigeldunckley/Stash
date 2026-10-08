@@ -48,6 +48,7 @@ export const gqlSearchQuery = (includeTotalCount = false) => gql`
             readingProgressAnchorIndex
             author
             image
+            headerImage
             description
             publishedAt
             ownedByViewer

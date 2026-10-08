@@ -69,6 +69,8 @@ services:
   queue-processor:
     <<: *restart
     image: "${QUEUE_IMAGE:-ghcr.io/omnivore-app/sh-queue-processor:latest}"
+    # Stash runs the queue from its API image, so name the command here.
+    command: ["yarn", "workspace", "@omnivore/api", "start_queue_processor"]
     container_name: reader-queue-processor
     env_file: .env
     depends_on:

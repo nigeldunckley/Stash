@@ -10,6 +10,7 @@ import { HighlightsLayer } from '../../templates/article/HighlightsLayer'
 import { Button } from '../../elements/Button'
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { ReportIssuesModal } from './ReportIssuesModal'
+import { ReaderHeaderImage } from './ReaderHeaderImage'
 import { reportIssueMutation } from '../../../lib/networking/mutations/reportIssueMutation'
 import { updateTheme, updateThemeLocally } from '../../../lib/themeUpdater'
 import { ArticleMutations } from '../../../lib/articleActions'
@@ -480,6 +481,10 @@ export function ArticleContainer(props: ArticleContainerProps): JSX.Element {
               ))}
             </SpanBox>
           ) : null}
+          <ReaderHeaderImage
+            src={props.article.headerImage}
+            thumbnail={props.article.image}
+          />
           {recommendationsWithNotes.length > 0 && (
             <RecommendationComments
               recommendationsWithNotes={recommendationsWithNotes}

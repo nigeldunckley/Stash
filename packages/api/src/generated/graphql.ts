@@ -129,6 +129,7 @@ export type Article = {
   folder: Scalars['String'];
   hasContent?: Maybe<Scalars['Boolean']>;
   hash: Scalars['String'];
+  headerImage?: Maybe<Scalars['String']>;
   highlights: Array<Highlight>;
   id: Scalars['ID'];
   image?: Maybe<Scalars['String']>;
@@ -3176,6 +3177,7 @@ export type SearchItem = {
   feedContent?: Maybe<Scalars['String']>;
   folder: Scalars['String'];
   format?: Maybe<Scalars['String']>;
+  headerImage?: Maybe<Scalars['String']>;
   highlights?: Maybe<Array<Highlight>>;
   highlightsCount?: Maybe<Scalars['Int']>;
   id: Scalars['ID'];
@@ -5719,6 +5721,7 @@ export type ArticleResolvers<ContextType = ResolverContext, ParentType extends R
   folder?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   hasContent?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
   hash?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  headerImage?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   highlights?: Resolver<Array<ResolversTypes['Highlight']>, ParentType, ContextType, Partial<ArticleHighlightsArgs>>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   image?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -7537,6 +7540,7 @@ export type SearchItemResolvers<ContextType = ResolverContext, ParentType extend
   feedContent?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   folder?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   format?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  headerImage?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   highlights?: Resolver<Maybe<Array<ResolversTypes['Highlight']>>, ParentType, ContextType>;
   highlightsCount?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;

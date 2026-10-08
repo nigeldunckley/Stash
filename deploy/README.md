@@ -36,11 +36,13 @@ Open https://stash.nigeldunckley.com, sign up with your email, then:
 sudo ./install.sh lock
 ```
 
-## Letting the server pull the Stash web image
+## Letting the server pull the Stash images
 
-GitHub builds the Stash web app into `ghcr.io/nigeldunckley/stash-web`.
-New packages start private, so either make it public (GitHub → your
-profile → Packages → stash-web → Package settings → Change visibility)
+GitHub builds the Stash web app into `ghcr.io/nigeldunckley/stash-web` and
+the API (which also runs the queue processor) into
+`ghcr.io/nigeldunckley/stash-api`. New packages start private, so either
+make each one public (GitHub → your profile → Packages → the package →
+Package settings → Change visibility)
 or log the server in once with a token that has `read:packages`:
 
 ```bash

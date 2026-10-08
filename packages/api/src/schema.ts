@@ -382,6 +382,7 @@ const schema = gql`
     hasContent: Boolean
     author: String
     image: String
+    headerImage: String
     description: String
     originalHtml: String
     createdAt: Date!
@@ -1644,6 +1645,7 @@ const schema = gql`
     readingProgressAnchorIndex: Int!
     author: String
     image: String
+    headerImage: String
     description: String
     publishedAt: Date
     ownedByViewer: Boolean

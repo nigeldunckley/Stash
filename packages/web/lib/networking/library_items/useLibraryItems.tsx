@@ -973,6 +973,7 @@ export type ArticleAttributes = {
   originalArticleUrl: string
   author?: string
   image?: string
+  headerImage?: string
   savedAt: string
   siteName?: string
   createdAt: string
@@ -1074,6 +1075,7 @@ export type LibraryItemNode = {
   url: string
   author?: string
   image?: string
+  headerImage?: string
   createdAt: string
   publishedAt?: string
   contentReader?: ContentReader
