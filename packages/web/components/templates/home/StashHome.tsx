@@ -11,14 +11,13 @@ import {
   useGetLibraryItems,
 } from '../../../lib/networking/library_items/useLibraryItems'
 import { useGetViewer } from '../../../lib/networking/viewer/useGetViewer'
+import { formatMinutes, minutesLeft } from '../../../lib/readingTime'
 import {
-  formatMinutes,
-  minutesLeft,
-  readingMinutes,
-} from '../../../lib/readingTime'
-import { subscriptionName } from '../../../lib/networking/subscriptions/feeds'
+  markItemsSeen,
+  subscriptionName,
+} from '../../../lib/networking/subscriptions/feeds'
 import { useGetSubscriptions } from '../../../lib/networking/subscriptions/useGetSubscriptions'
-import { siteName, timeAgo } from '../../../lib/textFormatting'
+import { faviconFor, shortTimeAgo, siteName } from '../../../lib/textFormatting'
 import {
   CoverImage,
   IconButton,
@@ -196,6 +195,11 @@ const flatten = (pages?: { edges: LibraryItem[] }[]): LibraryItemNode[] =>
 const sourceOf = (item: LibraryItemNode) =>
   siteName(item.originalArticleUrl, item.url, item.siteName)
 
+// The source at the start of a feed row's subtitle, with its favicon.
+const RowSource = styled('span', {
+  '& > span:first-child': { verticalAlign: '-3px', marginRight: '6px' },
+})
+
 const isUrl = (value: string) => {
   try {
     const url = new URL(value)
@@ -230,7 +234,8 @@ export function StashHome(): JSX.Element {
     {
       limit: 5,
       sortDescending: true,
-      searchQuery: 'is:unread sort:saved-desc',
+      // The same items as the Unseen view in Feeds, newest first.
+      searchQuery: '-is:seen sort:published-desc',
       includeCount: true,
     },
     true,
@@ -257,6 +262,14 @@ export function StashHome(): JSX.Element {
     () => flatten(feedsQuery.data?.pages),
     [feedsQuery.data]
   )
+  const feedName = (item: LibraryItemNode) =>
+    subscriptionName(item.subscription, subscriptions) || sourceOf(item)
+  const feedIcon = (item: LibraryItemNode) =>
+    subscriptions?.find(
+      (subscription) =>
+        subscription.url == item.subscription ||
+        subscription.name == item.subscription
+    )?.icon || item.siteIcon
   const recent = useMemo(() => {
     const started = new Set(inProgress.map((item) => item.id))
     return flatten(recentQuery.data?.pages).filter(
@@ -290,6 +303,18 @@ export function StashHome(): JSX.Element {
       }
     },
     [router, viewer]
+  )
+
+  // Opening a feed item counts it as seen, as it does in Feeds, so it leaves
+  // New from feeds.
+  const openFeedItem = useCallback(
+    (item: LibraryItemNode) => {
+      markItemsSeen([item.id]).catch((error) =>
+        console.log('error marking item seen', error)
+      )
+      open(item)
+    },
+    [open]
   )
 
   const select = useCallback((id: string | undefined) => {
@@ -507,16 +532,27 @@ export function StashHome(): JSX.Element {
                     leading={<UnseenDot />}
                     title={item.title}
                     image={item.image}
-                    subtitle={[
-                      subscriptionName(item.subscription, subscriptions) ||
-                        sourceOf(item),
-                      item.savedAt ? timeAgo(item.savedAt) : undefined,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                    meta={formatMinutes(readingMinutes(item.wordsCount))}
+                    subtitle={
+                      <RowSource>
+                        <SiteIcon
+                          src={feedIcon(item)}
+                          fallbackSrc={faviconFor(
+                            item.originalArticleUrl,
+                            item.url
+                          )}
+                          name={feedName(item)}
+                          size={14}
+                        />
+                        {feedName(item)}
+                      </RowSource>
+                    }
+                    meta={
+                      <time dateTime={item.publishedAt || item.savedAt}>
+                        {shortTimeAgo(item.publishedAt || item.savedAt)}
+                      </time>
+                    }
                     selected={item.id === selectedId}
-                    onOpen={() => open(item)}
+                    onOpen={() => openFeedItem(item)}
                     onFocus={() => setSelectedId(item.id)}
                     actions={
                       <IconButton

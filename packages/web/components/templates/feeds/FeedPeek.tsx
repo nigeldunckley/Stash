@@ -3,6 +3,7 @@ import {
   Archive,
   ArrowRight,
   ArrowSquareOut,
+  Backspace,
   Bookmark,
   BookOpen,
   CaretDown,
@@ -15,7 +16,7 @@ import {
   useGetLibraryItemContent,
 } from '../../../lib/networking/library_items/useLibraryItems'
 import { formatMinutes, readingMinutes } from '../../../lib/readingTime'
-import { timeAgo } from '../../../lib/textFormatting'
+import { shortTimeAgo } from '../../../lib/textFormatting'
 import { keyframes, styled } from '../../tokens/stitches.config'
 import {
   CoverImage,
@@ -31,6 +32,7 @@ export type FeedPeekProps = {
   username?: string
   sourceName: string
   sourceIcon?: string
+  sourceIconFallback?: string
   position: number
   count: number
   saved: boolean
@@ -41,6 +43,9 @@ export type FeedPeekProps = {
   onClose: () => void
   onOpenOriginal: () => void
   onRead: () => void
+  // The pane's width after the reader drags its edge, or undefined to go
+  // back to the default.
+  onResize?: (width: number | undefined) => void
 }
 
 const slideIn = keyframes({
@@ -90,10 +95,142 @@ const Pane = styled('aside', {
     right: '12px',
     bottom: '12px',
     height: 'auto',
-    width: 'min(520px, calc(100vw - 24px))',
+    width: 'min(var(--peek-width, 520px), calc(100vw - 24px))',
     boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04), 0 18px 48px rgba(0, 0, 0, 0.16)',
   },
 })
+
+// The pane's default width and how narrow it may get (px).
+export const PEEK_WIDTH = 460
+export const PEEK_MIN = 340
+// The narrowest the list may get beside an inline pane (px).
+export const LIST_MIN = 380
+
+// The pane's left edge, dragged to trade list width for article width.
+const Grip = styled('div', {
+  position: 'absolute',
+  zIndex: 4,
+  top: 0,
+  bottom: 0,
+  left: 0,
+  width: '9px',
+  cursor: 'col-resize',
+  touchAction: 'none',
+  outline: 'none',
+  '&::after': {
+    content: '""',
+    position: 'absolute',
+    top: '50%',
+    left: '3px',
+    width: '3px',
+    height: '36px',
+    marginTop: '-18px',
+    borderRadius: '3px',
+    background: '$stLineStrong',
+    opacity: 0,
+    transition: `opacity ${motion.fast}, background ${motion.fast}, height ${motion.fast}`,
+  },
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: '1px',
+    background: '$stAccent',
+    opacity: 0,
+    transition: `opacity ${motion.fast}`,
+  },
+  '&:hover::after, &:focus-visible::after': { opacity: 1 },
+  '&:focus-visible::after, &[data-dragging="true"]::after': {
+    background: '$stAccent',
+  },
+  '&:hover::before, &:focus-visible::before, &[data-dragging="true"]::before': {
+    opacity: 1,
+  },
+  '&[data-dragging="true"]::after': {
+    opacity: 1,
+    height: '56px',
+    marginTop: '-28px',
+  },
+})
+
+function ResizeGrip(props: {
+  onResize?: (width: number | undefined) => void
+}): JSX.Element {
+  const [dragging, setDragging] = useState(false)
+  const drag = useRef<{ right: number; max: number; width: number }>()
+
+  // The widest the pane may get: inline, it leaves the list LIST_MIN;
+  // floating, it leaves a strip of the list showing.
+  const limits = (grip: HTMLElement) => {
+    const pane = grip.parentElement as HTMLElement
+    const panes = pane.parentElement as HTMLElement
+    const right = pane.getBoundingClientRect().right
+    const inline = window.matchMedia(PEEK_INLINE).matches
+    const left = inline
+      ? panes.getBoundingClientRect().left + 36 + 40 + LIST_MIN
+      : 160
+    return { right, max: Math.max(PEEK_MIN, right - left), pane, panes }
+  }
+
+  const apply = (grip: HTMLElement, width: number) => {
+    const { max, panes } = limits(grip)
+    const next = Math.round(Math.min(max, Math.max(PEEK_MIN, width)))
+    panes.style.setProperty('--peek-width', `${next}px`)
+    return next
+  }
+
+  const end = () => {
+    if (!drag.current) return
+    document.body.style.userSelect = ''
+    document.body.style.cursor = ''
+    setDragging(false)
+    props.onResize?.(drag.current.width)
+    drag.current = undefined
+  }
+
+  return (
+    <Grip
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the preview"
+      title="Drag to resize. Double-click to reset."
+      tabIndex={0}
+      data-dragging={dragging}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return
+        event.preventDefault()
+        const grip = event.currentTarget
+        const { right, max, pane } = limits(grip)
+        drag.current = { right, max, width: pane.offsetWidth }
+        grip.setPointerCapture(event.pointerId)
+        document.body.style.userSelect = 'none'
+        document.body.style.cursor = 'col-resize'
+        setDragging(true)
+      }}
+      onPointerMove={(event) => {
+        if (!drag.current) return
+        drag.current.width = apply(
+          event.currentTarget,
+          drag.current.right - event.clientX
+        )
+      }}
+      onPointerUp={end}
+      onPointerCancel={end}
+      onDoubleClick={() => props.onResize?.(undefined)}
+      onKeyDown={(event) => {
+        const delta =
+          event.key == 'ArrowLeft' ? 32 : event.key == 'ArrowRight' ? -32 : 0
+        if (!delta) return
+        event.preventDefault()
+        const grip = event.currentTarget
+        const pane = grip.parentElement as HTMLElement
+        props.onResize?.(apply(grip, pane.offsetWidth + delta))
+      }}
+    />
+  )
+}
 
 const Head = styled('div', {
   display: 'flex',
@@ -417,9 +554,16 @@ function PeekArticle(props: FeedPeekProps): JSX.Element {
 function Source(props: FeedPeekProps): JSX.Element {
   return (
     <>
-      <SiteIcon src={props.sourceIcon} name={props.sourceName} size={16} />
+      <SiteIcon
+        src={props.sourceIcon}
+        fallbackSrc={props.sourceIconFallback}
+        name={props.sourceName}
+        size={16}
+      />
       <SourceName>{props.sourceName}</SourceName>
-      <span>· {timeAgo(props.item.publishedAt || props.item.savedAt)}</span>
+      <span>
+        · {shortTimeAgo(props.item.publishedAt || props.item.savedAt)}
+      </span>
     </>
   )
 }
@@ -429,6 +573,7 @@ function Source(props: FeedPeekProps): JSX.Element {
 export function FeedPeekPane(props: FeedPeekProps): JSX.Element {
   return (
     <Pane aria-label="Peek">
+      <ResizeGrip onResize={props.onResize} />
       <Head>
         <Source {...props} />
         <Position>
@@ -476,7 +621,10 @@ export function FeedPeekPane(props: FeedPeekProps): JSX.Element {
         </Button>
         <Button onClick={props.onArchive} aria-label="Archive">
           <Archive size={15} />
-          Archive <Kbd>E</Kbd>
+          Archive{' '}
+          <Kbd>
+            <Backspace size={11} />
+          </Kbd>
         </Button>
         <Button onClick={props.onNext} aria-label="Next">
           Next <Kbd>J</Kbd>
