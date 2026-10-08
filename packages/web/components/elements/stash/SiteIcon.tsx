@@ -21,6 +21,9 @@ const Tile = styled('span', {
 
 type SiteIconProps = {
   src?: string
+  // Tried when src is missing or fails to load, such as the site's own
+  // /favicon.ico.
+  fallbackSrc?: string
   name?: string
   size?: number
 }
@@ -28,7 +31,11 @@ type SiteIconProps = {
 // A site's favicon, or the first letter of its name on a neutral tile.
 export const SiteIcon = (props: SiteIconProps): JSX.Element => {
   const size = props.size ?? 18
-  const [failed, setFailed] = useState(false)
+  const sources = [props.src, props.fallbackSrc].filter(
+    (src): src is string => !!src
+  )
+  const [failed, setFailed] = useState<string[]>([])
+  const src = sources.find((source) => !failed.includes(source))
   const letter = (props.name ?? '').trim().charAt(0).toLocaleUpperCase()
   return (
     <Tile
@@ -40,9 +47,14 @@ export const SiteIcon = (props: SiteIconProps): JSX.Element => {
         fontSize: Math.round(size * 0.55),
       }}
     >
-      {props.src && !failed ? (
+      {src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={props.src} alt="" onError={() => setFailed(true)} />
+        <img
+          key={src}
+          src={src}
+          alt=""
+          onError={() => setFailed((current) => [...current, src])}
+        />
       ) : (
         letter
       )}

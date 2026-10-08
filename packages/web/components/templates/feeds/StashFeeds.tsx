@@ -12,7 +12,14 @@ import {
 } from '@phosphor-icons/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/router'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { State } from '../../../lib/networking/fragments/articleFragment'
 import {
   BulkAction,
@@ -31,8 +38,7 @@ import {
 } from '../../../lib/networking/subscriptions/feeds'
 import { useGetSubscriptions } from '../../../lib/networking/subscriptions/useGetSubscriptions'
 import { useGetViewer } from '../../../lib/networking/viewer/useGetViewer'
-import { formatMinutes, readingMinutes } from '../../../lib/readingTime'
-import { siteName, timeAgo } from '../../../lib/textFormatting'
+import { faviconFor, shortTimeAgo, siteName } from '../../../lib/textFormatting'
 import { showErrorToast, showSuccessToast } from '../../../lib/toastHelpers'
 import {
   IconButton,
@@ -50,7 +56,12 @@ import {
 import { ease, motion } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
 import { AddFeedPanel } from './AddFeedPanel'
-import { FeedPeekPane, FeedPeekSheet, PEEK_INLINE } from './FeedPeek'
+import {
+  FeedPeekPane,
+  FeedPeekSheet,
+  PEEK_INLINE,
+  PEEK_WIDTH,
+} from './FeedPeek'
 import { SourceSettings } from './SourceSettings'
 
 const Page = styled('main', {
@@ -84,8 +95,8 @@ const Panes = styled('div', {
     // On wide screens the peek is a third column rather than floating.
     inline: {
       true: {
-        maxWidth: '1440px',
-        gridTemplateColumns: '36px minmax(0, 1fr) minmax(400px, 500px)',
+        maxWidth: '1680px',
+        gridTemplateColumns: `36px minmax(0, 1fr) var(--peek-width, ${PEEK_WIDTH}px)`,
       },
     },
   },
@@ -291,6 +302,11 @@ const Empty = styled('div', {
   borderRadius: '$md',
 })
 
+// The source at the start of a row's subtitle, with its favicon.
+const RowSource = styled('span', {
+  '& > span:first-child': { verticalAlign: '-3px', marginRight: '6px' },
+})
+
 const MobileSources = styled('div', {
   display: 'grid',
   gap: '2px',
@@ -300,6 +316,8 @@ const MobileSources = styled('div', {
 })
 
 type View = 'unseen' | 'all'
+
+const PEEK_WIDTH_KEY = 'feeds-peek-width'
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(false)
@@ -311,6 +329,12 @@ function useMediaQuery(query: string): boolean {
     return () => list.removeEventListener('change', update)
   }, [query])
   return matches
+}
+
+// The full publish date, for the tooltip on a row's age.
+const publishedLabel = (item: LibraryItemNode) => {
+  const date = item.publishedAt || item.savedAt
+  return date ? new Date(date).toLocaleString() : undefined
 }
 
 const isVisible = (item: LibraryItemNode) =>
@@ -372,6 +396,7 @@ function SourceList(props: {
         >
           <SiteIcon
             src={subscription.icon}
+            fallbackSrc={faviconFor(subscription.url)}
             name={subscription.name}
             size={18}
           />
@@ -422,6 +447,36 @@ export function StashFeeds(): JSX.Element {
   const [leaving, setLeaving] = useState<Set<string>>(new Set())
   const [focusId, setFocusId] = useState<string | undefined>()
 
+  // The peek pane's width, dragged by its edge and kept between visits.
+  const [peekWidth, setPeekWidth] = useState<number>()
+  useEffect(() => {
+    try {
+      const stored = Number(window.localStorage.getItem(PEEK_WIDTH_KEY))
+      if (stored > 0) setPeekWidth(stored)
+    } catch {
+      // Storage is unavailable; use the default width.
+    }
+  }, [])
+  const resizePeek = useCallback((width: number | undefined) => {
+    setPeekWidth(width)
+    try {
+      if (width) {
+        window.localStorage.setItem(PEEK_WIDTH_KEY, String(width))
+      } else {
+        window.localStorage.removeItem(PEEK_WIDTH_KEY)
+      }
+    } catch {
+      // Storage is unavailable; the width lasts until the page closes.
+    }
+  }, [])
+
+  // Re-render each minute so "5 mins ago" stays true.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60 * 1000)
+    return () => clearInterval(timer)
+  }, [])
+
   const select = useCallback(
     (subscription?: Subscription) => {
       const query = { ...router.query }
@@ -443,7 +498,7 @@ export function StashFeeds(): JSX.Element {
   const searchQuery = [
     sourceQuery(selected),
     view == 'unseen' ? '-is:seen' : '',
-    'sort:saved-desc',
+    'sort:published-desc',
   ]
     .filter(Boolean)
     .join(' ')
@@ -558,12 +613,19 @@ export function StashFeeds(): JSX.Element {
     await itemsQuery.refetch()
   }, [flush, itemsQuery])
 
-  // With nothing on screen there is nothing to disturb, so just show them.
+  // With nothing on screen, or the reader at the top of the list with
+  // nothing open, there is nothing to disturb, so just show them.
   useEffect(() => {
-    if (hasNewItems && items.length == 0) {
-      itemsQuery.refetch()
+    if (!hasNewItems) {
+      return
     }
-  }, [hasNewItems, items.length, itemsQuery])
+    if (items.length == 0) {
+      itemsQuery.refetch()
+    } else if (!peekItem && window.scrollY < 40) {
+      clearTimeout(flushTimer.current)
+      flush().then(() => itemsQuery.refetch())
+    }
+  }, [hasNewItems, items.length, itemsQuery, peekItem, flush])
 
   const isSeen = useCallback(
     (item: LibraryItemNode) => !!item.seenAt || seen.has(item.id),
@@ -836,7 +898,8 @@ export function StashFeeds(): JSX.Element {
   }, [bulkAction, selected, view, total, items])
 
   // Keyboard: j and k move, space peeks, o opens in the Reader, s saves to
-  // the Library, e archives, m marks seen, v opens the original page.
+  // the Library, Backspace (or Delete) archives, m marks seen, v opens the
+  // original page.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement
@@ -889,7 +952,10 @@ export function StashFeeds(): JSX.Element {
         case 's':
           if (current) save(current)
           break
-        case 'e':
+        case 'Backspace':
+        case 'Delete':
+          if (target.closest('button, a, [role="separator"]')) break
+          event.preventDefault()
           if (current) archive(current)
           break
         case 'm':
@@ -908,18 +974,22 @@ export function StashFeeds(): JSX.Element {
     subscriptionName(item.subscription, allSubscriptions) ||
     siteName(item.originalArticleUrl, item.url, item.siteName)
 
+  // The feed's own icon, else the page's, else the site's /favicon.ico.
   const sourceIcon = (item: LibraryItemNode) =>
     allSubscriptions?.find(
       (subscription) =>
         subscription.url == item.subscription ||
         subscription.name == item.subscription
-    )?.icon
+    )?.icon || item.siteIcon
+  const sourceIconFallback = (item: LibraryItemNode) =>
+    faviconFor(item.originalArticleUrl, item.url)
 
   const peekProps = (item: LibraryItemNode) => ({
     item,
     username: viewer?.profile.username,
     sourceName: sourceName(item),
     sourceIcon: sourceIcon(item),
+    sourceIconFallback: sourceIconFallback(item),
     position: Math.min(peekAnchor + 1, listed.length),
     count: listed.length,
     saved: saved.has(item.id),
@@ -930,6 +1000,7 @@ export function StashFeeds(): JSX.Element {
     onClose: closePeek,
     onOpenOriginal: () => openOriginal(item),
     onRead: () => open(item),
+    onResize: resizePeek,
   })
 
   const title = selected?.name ?? 'All feeds'
@@ -952,7 +1023,15 @@ export function StashFeeds(): JSX.Element {
 
   return (
     <Page>
-      <Panes peeking={!!peekItem} inline={!!peekItem && peekInline}>
+      <Panes
+        peeking={!!peekItem}
+        inline={!!peekItem && peekInline}
+        style={
+          peekWidth
+            ? ({ '--peek-width': `${peekWidth}px` } as CSSProperties)
+            : undefined
+        }
+      >
         <Sources aria-label="Sources" css={peekItem ? rail : undefined}>
           <SourcesHeading>
             Sources
@@ -1018,7 +1097,9 @@ export function StashFeeds(): JSX.Element {
               disabled={!unseenOnScreen.length || bulkAction.isPending}
             >
               <Checks size={14} />
-              <Wide>Mark all seen</Wide>
+              <Wide css={peekItem ? { display: 'none' } : undefined}>
+                Mark all seen
+              </Wide>
             </TextButton>
             {selected ? (
               <Popover
@@ -1094,23 +1175,44 @@ export function StashFeeds(): JSX.Element {
                           leading={<UnseenDot hidden={itemSeen} />}
                           title={item.title}
                           image={item.image}
-                          subtitle={[
-                            selected ? undefined : sourceName(item),
-                            item.author &&
-                            item.author !=
-                              subscriptionName(
-                                item.subscription,
-                                allSubscriptions
-                              )
-                              ? item.author
-                              : undefined,
-                            timeAgo(item.publishedAt || item.savedAt),
-                            saved.has(item.id) ? 'Saved' : undefined,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
+                          subtitle={
+                            <RowSource>
+                              {!selected && (
+                                <SiteIcon
+                                  src={sourceIcon(item)}
+                                  fallbackSrc={sourceIconFallback(item)}
+                                  name={sourceName(item)}
+                                  size={14}
+                                />
+                              )}
+                              {[
+                                selected ? undefined : sourceName(item),
+                                item.author &&
+                                item.author !=
+                                  subscriptionName(
+                                    item.subscription,
+                                    allSubscriptions
+                                  )
+                                  ? item.author
+                                  : undefined,
+                                saved.has(item.id) ? 'Saved' : undefined,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </RowSource>
+                          }
                           excerpt={item.description}
-                          meta={formatMinutes(readingMinutes(item.wordsCount))}
+                          meta={
+                            <time
+                              dateTime={item.publishedAt || item.savedAt}
+                              title={publishedLabel(item)}
+                            >
+                              {shortTimeAgo(
+                                item.publishedAt || item.savedAt,
+                                now
+                              )}
+                            </time>
+                          }
                           muted={itemSeen}
                           selected={
                             peekItem
@@ -1145,7 +1247,7 @@ export function StashFeeds(): JSX.Element {
                               </IconButton>
                               <IconButton
                                 label="Archive"
-                                shortcut="e"
+                                shortcut="⌫"
                                 size="sm"
                                 onClick={() => archive(item)}
                               >
