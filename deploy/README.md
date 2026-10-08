@@ -55,6 +55,20 @@ echo <token> | sudo docker login ghcr.io -u nigeldunckley --password-stdin
 sudo ./install.sh update
 ```
 
+### Updating by itself
+
+Run this once and the server keeps itself up to date. Every five minutes
+it checks GitHub for new commits on main and new Stash images. When it
+finds either, it applies them. A merge usually goes live a few minutes
+after GitHub finishes building the image.
+
+```bash
+sudo ./install.sh autoupdate
+```
+
+See what it has done with `journalctl -u stash-update`, and turn it off
+with `sudo ./install.sh autoupdate off`.
+
 ## Useful commands
 
 ```bash
