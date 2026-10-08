@@ -877,7 +877,7 @@ export const refreshFeed = async (request: any) => {
 const youtubeUploadsFeed = async (feedUrl: string, channelId: string) => {
   try {
     const channel = await channelUploads(channelId)
-    if (!channel || !channel.uploads.length) {
+    if (!channel) {
       return undefined
     }
     const ids = channel.uploads.map((upload) => upload.id).join(',')
@@ -889,8 +889,10 @@ const youtubeUploadsFeed = async (feedUrl: string, channelId: string) => {
     const feed = {
       title: channel.title,
       items: channel.uploads.map(
-        (upload): RssFeedItem => ({
+        (upload): RssFeedItem & { links: string[] } => ({
+          guid: `yt:video:${upload.id}`,
           link: watchUrl(upload.id),
+          links: [watchUrl(upload.id)],
           title: upload.title,
           isoDate: upload.publishedAt?.toISOString(),
           contentSnippet: upload.description,
