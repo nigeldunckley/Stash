@@ -1,5 +1,6 @@
 import {
   ArrowSquareOut,
+  ArrowUp,
   Bookmark,
   CaretDown,
   Checks,
@@ -182,6 +183,42 @@ const Wide = styled('span', {
   '@smDown': { display: 'none' },
 })
 
+// Floats over the top of the list when the server has items the list
+// doesn't show yet.
+const NewItemsBar = styled('div', {
+  position: 'sticky',
+  // The pill sits on the list's top edge, and 12px below the top once stuck.
+  top: '27px',
+  zIndex: 3,
+  display: 'flex',
+  justifyContent: 'center',
+  height: 0,
+  overflow: 'visible',
+  button: {
+    all: 'unset',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    height: '30px',
+    marginTop: '-15px',
+    padding: '0 12px',
+    borderRadius: '999px',
+    background: '$stInk',
+    color: '$stCanvas',
+    fontFamily: '$inter',
+    fontSize: '$caption',
+    fontWeight: 600,
+    cursor: 'pointer',
+    boxShadow: '0 6px 18px rgba(0, 0, 0, 0.18)',
+    transition: `transform ${motion.fast}`,
+    '&:hover': { transform: 'translateY(-1px)' },
+    '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '2px' },
+  },
+})
+
+// How often the open list and the counts look for new items (ms).
+const LIVE_CHECK = 60 * 1000
+
 const Empty = styled('div', {
   padding: '40px 16px',
   textAlign: 'center',
@@ -222,7 +259,9 @@ function SourceCount(props: { subscription?: Subscription }): JSX.Element {
       sortDescending: true,
       searchQuery: `${sourceQuery(props.subscription)} -is:seen`.trim(),
       includeCount: true,
-    }
+    },
+    true,
+    LIVE_CHECK * 2
   )
   const count = query.data?.pages[0]?.pageInfo.totalCount
   if (!count) {
@@ -334,6 +373,31 @@ export function StashFeeds(): JSX.Element {
   )
   const total = itemsQuery.data?.pages[0]?.pageInfo.totalCount
 
+  // Refetching the open list would pull rows out from under the reader, so a
+  // one-item query watches for newer items and offers to show them.
+  const latestQuery = useGetLibraryItems(
+    `feeds-latest-${selected?.id ?? 'all'}-${view}`,
+    'following',
+    { limit: 1, sortDescending: true, searchQuery },
+    true,
+    LIVE_CHECK
+  )
+  const latestId = latestQuery.data?.pages[0]?.edges[0]?.node.id
+  const listedIds = useMemo(
+    () =>
+      new Set(
+        (itemsQuery.data?.pages ?? []).flatMap((page) =>
+          page.edges.map((edge) => edge.node.id)
+        )
+      ),
+    [itemsQuery.data]
+  )
+  const hasNewItems =
+    !!latestId &&
+    !itemsQuery.isFetching &&
+    !itemsQuery.isPending &&
+    !listedIds.has(latestId)
+
   // Seen state is kept locally so rows stay put while they are being read.
   const [seen, setSeen] = useState<Set<string>>(new Set())
   const pending = useRef(new Set<string>())
@@ -387,6 +451,20 @@ export function StashFeeds(): JSX.Element {
       flush()
     }
   }, [flush])
+
+  const showNewItems = useCallback(async () => {
+    clearTimeout(flushTimer.current)
+    await flush()
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    await itemsQuery.refetch()
+  }, [flush, itemsQuery])
+
+  // With nothing on screen there is nothing to disturb, so just show them.
+  useEffect(() => {
+    if (hasNewItems && items.length == 0) {
+      itemsQuery.refetch()
+    }
+  }, [hasNewItems, items.length, itemsQuery])
 
   const isSeen = useCallback(
     (item: LibraryItemNode) => !!item.seenAt || seen.has(item.id),
@@ -681,68 +759,78 @@ export function StashFeeds(): JSX.Element {
                 : 'Nothing from this source yet.'}
             </Empty>
           ) : (
-            <ItemList>
-              {items.map((item) => {
-                const itemSeen = isSeen(item)
-                return (
-                  <SwipeAction
-                    key={item.id}
-                    label="Save"
-                    icon={<Bookmark size={16} />}
-                    onAction={() => save(item)}
-                  >
-                    <ItemRow
-                      ref={rowRef(item.id)}
-                      leading={<UnseenDot hidden={itemSeen} />}
-                      title={item.title}
-                      image={item.image}
-                      subtitle={[
-                        selected
-                          ? undefined
-                          : item.subscription ||
-                            siteName(
-                              item.originalArticleUrl,
-                              item.url,
-                              item.siteName
-                            ),
-                        item.author && item.author != item.subscription
-                          ? item.author
-                          : undefined,
-                        timeAgo(item.publishedAt || item.savedAt),
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                      excerpt={item.description}
-                      meta={formatMinutes(readingMinutes(item.wordsCount))}
-                      muted={itemSeen}
-                      selected={item.id == focusId}
-                      onOpen={() => open(item)}
-                      onFocus={() => setFocusId(item.id)}
-                      actions={
-                        <>
-                          <IconButton
-                            label="Save to Library"
-                            shortcut="s"
-                            size="sm"
-                            onClick={() => save(item)}
-                          >
-                            <Bookmark size={15} />
-                          </IconButton>
-                          <IconButton
-                            label="Open original"
-                            shortcut="v"
-                            size="sm"
-                            onClick={() => openOriginal(item)}
-                          >
-                            <ArrowSquareOut size={15} />
-                          </IconButton>
-                        </>
-                      }
-                    />
-                  </SwipeAction>
-                )
-              })}
-            </ItemList>
+            <>
+              {hasNewItems && (
+                <NewItemsBar>
+                  <button onClick={showNewItems}>
+                    <ArrowUp size={13} weight="bold" />
+                    New items
+                  </button>
+                </NewItemsBar>
+              )}
+              <ItemList>
+                {items.map((item) => {
+                  const itemSeen = isSeen(item)
+                  return (
+                    <SwipeAction
+                      key={item.id}
+                      label="Save"
+                      icon={<Bookmark size={16} />}
+                      onAction={() => save(item)}
+                    >
+                      <ItemRow
+                        ref={rowRef(item.id)}
+                        leading={<UnseenDot hidden={itemSeen} />}
+                        title={item.title}
+                        image={item.image}
+                        subtitle={[
+                          selected
+                            ? undefined
+                            : item.subscription ||
+                              siteName(
+                                item.originalArticleUrl,
+                                item.url,
+                                item.siteName
+                              ),
+                          item.author && item.author != item.subscription
+                            ? item.author
+                            : undefined,
+                          timeAgo(item.publishedAt || item.savedAt),
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                        excerpt={item.description}
+                        meta={formatMinutes(readingMinutes(item.wordsCount))}
+                        muted={itemSeen}
+                        selected={item.id == focusId}
+                        onOpen={() => open(item)}
+                        onFocus={() => setFocusId(item.id)}
+                        actions={
+                          <>
+                            <IconButton
+                              label="Save to Library"
+                              shortcut="s"
+                              size="sm"
+                              onClick={() => save(item)}
+                            >
+                              <Bookmark size={15} />
+                            </IconButton>
+                            <IconButton
+                              label="Open original"
+                              shortcut="v"
+                              size="sm"
+                              onClick={() => openOriginal(item)}
+                            >
+                              <ArrowSquareOut size={15} />
+                            </IconButton>
+                          </>
+                        }
+                      />
+                    </SwipeAction>
+                  )
+                })}
+              </ItemList>
+            </>
           )}
           <div ref={sentinel} style={{ height: 1 }} />
         </section>

@@ -478,6 +478,23 @@ const getUpdateFrequency = (feed: RssFeed) => {
   return frequency
 }
 
+// Feeds are checked again after the period they declare, kept between half an
+// hour and two hours so new items show up within a reasonable time.
+const MIN_CHECK_INTERVAL_MS = 30 * 60 * 1000
+const MAX_CHECK_INTERVAL_MS = 2 * 60 * 60 * 1000
+
+export const nextCheckAt = (feed: RssFeed, now = Date.now()): Date => {
+  const declared =
+    feed['syn:updatePeriod'] || feed['sy:updatePeriod']
+      ? getUpdatePeriodInHours(feed) * 60 * 60 * 1000 * getUpdateFrequency(feed)
+      : MIN_CHECK_INTERVAL_MS
+  const interval = Math.min(
+    MAX_CHECK_INTERVAL_MS,
+    Math.max(MIN_CHECK_INTERVAL_MS, declared)
+  )
+  return new Date(now + interval)
+}
+
 const getUpdatePeriodInHours = (feed: RssFeed) => {
   const updatePeriod = feed['syn:updatePeriod'] || feed['sy:updatePeriod']
 
@@ -553,20 +570,29 @@ const processSubscription = async (
   feedUrl: string,
   fetchResult: { content: string; checksum: string },
   mostRecentItemDate: number,
-  scheduledAt: number,
   lastFetchedChecksum: string,
   fetchContentType: FetchContentType,
   folder: FolderType,
   feed: RssFeed
 ) => {
   const refreshedAt = new Date()
+  const scheduledAt = nextCheckAt(feed, refreshedAt.getTime())
 
   let lastItemFetchedAt: Date | null = null
   let lastValidItem: RssFeedItem | null = null
 
+  // Even when nothing is new, record the check and when to look again.
+  const recordCheck = async (lastFetchedChecksum?: string) => {
+    await updateSubscription(userId, subscriptionId, {
+      refreshedAt,
+      scheduledAt,
+      lastFetchedChecksum,
+    })
+  }
+
   if (fetchResult.checksum === lastFetchedChecksum) {
     logger.info('feed has not been updated', { feedUrl, lastFetchedChecksum })
-    return
+    return recordCheck()
   }
   const updatedLastFetchedChecksum = fetchResult.checksum
 
@@ -574,15 +600,8 @@ const processSubscription = async (
   let itemCount = 0,
     failedAt: Date | null = null
 
-  const feedLastBuildDate = feed.lastBuildDate
-  logger.info(`Feed last build date ${feedLastBuildDate || 'N/A'}`)
-  if (
-    feedLastBuildDate &&
-    new Date(feedLastBuildDate) <= new Date(mostRecentItemDate)
-  ) {
-    logger.info(`Skipping old feed ${feedLastBuildDate}`)
-    return
-  }
+  // The feed's lastBuildDate is not trusted to skip it: many feeds never
+  // update it. The checksum above and the item dates below decide instead.
 
   // save each item in the feed
   for (const item of feed.items) {
@@ -673,7 +692,7 @@ const processSubscription = async (
     // the feed has been fetched before, no new valid items found
     if (mostRecentItemDate || !lastValidItem) {
       logger.info('No new valid items found')
-      return
+      return recordCheck(updatedLastFetchedChecksum)
     }
 
     // the feed has never been fetched, save at least the last valid item
@@ -697,15 +716,11 @@ const processSubscription = async (
       : refreshedAt
   }
 
-  const updateFrequency = getUpdateFrequency(feed)
-  const updatePeriodInMs = getUpdatePeriodInHours(feed) * 60 * 60 * 1000
-  const nextScheduledAt = scheduledAt + updatePeriodInMs * updateFrequency
-
   // update subscription mostRecentItemDate and refreshedAt
   const updatedSubscription = await updateSubscription(userId, subscriptionId, {
     mostRecentItemDate: lastItemFetchedAt,
     lastFetchedChecksum: updatedLastFetchedChecksum,
-    scheduledAt: new Date(nextScheduledAt),
+    scheduledAt,
     refreshedAt,
     failedAt,
   })
@@ -725,7 +740,6 @@ export const _refreshFeed = async (request: RefreshFeedRequest) => {
     feedUrl,
     subscriptionIds,
     mostRecentItemDates,
-    scheduledTimestamps,
     userIds,
     lastFetchedChecksums,
     fetchContentTypes,
@@ -781,7 +795,6 @@ export const _refreshFeed = async (request: RefreshFeedRequest) => {
           feedUrl,
           fetchResult,
           mostRecentItemDates[i],
-          scheduledTimestamps[i],
           lastFetchedChecksums[i],
           fetchContentType,
           folders[i],

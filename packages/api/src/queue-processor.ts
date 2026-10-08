@@ -272,7 +272,9 @@ const setupCronJobs = async () => {
   await queue.upsertJobScheduler(
     REFRESH_ALL_FEEDS_JOB_NAME,
     {
-      every: 14_400_000, // 4 Hours
+      // Each feed sets when it is next due (see nextCheckAt); this only
+      // picks up the ones whose time has come.
+      every: 15 * 60 * 1000, // 15 minutes
     },
     {
       opts: {

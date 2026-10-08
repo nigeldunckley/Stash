@@ -210,7 +210,10 @@ export function useGetLibraryItems(
   section: string,
   folder: string | undefined,
   { limit, searchQuery, includeCount }: LibraryItemsQueryInput,
-  enabled = true
+  enabled = true,
+  // Check the server again on this interval (ms), for lists that should
+  // pick up new items on their own.
+  refetchInterval?: number
 ) {
   const queryClient = useQueryClient()
 
@@ -287,6 +290,7 @@ export function useGetLibraryItems(
       }
     },
     enabled,
+    refetchInterval,
     initialPageParam: INITIAL_INDEX,
     getNextPageParam: (lastPage: LibraryItems, pages) => {
       return lastPage.pageInfo.hasNextPage
