@@ -1,5 +1,5 @@
 import { gql } from 'graphql-request'
-import { GQL_BULK_ACTION } from '../library_items/gql'
+import { GQL_BULK_ACTION, GQL_MOVE_ITEM_TO_FOLDER } from '../library_items/gql'
 import { BulkAction } from '../library_items/useLibraryItems'
 import { gqlFetcher } from '../networkHelpers'
 import {
@@ -61,6 +61,20 @@ export async function markItemsSeen(ids: string[]): Promise<boolean> {
     expectedCount: ids.length,
   })) as { bulkAction: { success?: boolean; errorCodes?: string[] } }
   return !!data.bulkAction?.success
+}
+
+// Moves one item between Feeds ('following') and the Library ('inbox')
+// without refetching the open feed list, which keeps its own state.
+export async function moveItemToFolder(
+  id: string,
+  folder: 'inbox' | 'following'
+): Promise<void> {
+  const data = (await gqlFetcher(GQL_MOVE_ITEM_TO_FOLDER, { id, folder })) as {
+    moveToFolder: { success?: boolean; errorCodes?: string[] }
+  }
+  if (data.moveToFolder.errorCodes?.length) {
+    throw new Error(data.moveToFolder.errorCodes[0])
+  }
 }
 
 // Quotes a value for use in a search filter such as subscription:"Name".

@@ -67,6 +67,8 @@ const Root = styled('div', {
     selected: {
       true: {
         background: '$stSunken',
+        // The accent bar already marks the row, so skip the focus ring.
+        '&:focus-visible': { boxShadow: 'none' },
         [`& ${Actions}`]: { display: 'flex' },
         [`& ${Meta}`]: { display: 'none' },
         '&::before': {

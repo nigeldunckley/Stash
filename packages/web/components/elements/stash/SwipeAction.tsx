@@ -14,18 +14,34 @@ const Behind = styled('div', {
   alignItems: 'center',
   justifyContent: 'flex-end',
   gap: '8px',
-  paddingRight: '20px',
+  padding: '0 20px',
   background: '$stSunken',
   color: '$stMuted',
   fontFamily: '$inter',
   fontSize: '$caption',
   fontWeight: 600,
   transition: `background 120ms ${ease}, color 120ms ${ease}`,
+  '& svg': { transition: `transform 160ms ${ease}` },
   variants: {
     armed: {
-      true: { background: '$stAccent', color: '$stOnAccent' },
+      true: {
+        background: '$stAccent',
+        color: '$stOnAccent',
+        '& svg': { transform: 'scale(1.15)' },
+      },
+    },
+    // The action revealed by swiping right sits on the left, in ink.
+    start: {
+      true: { justifyContent: 'flex-start' },
     },
   },
+  compoundVariants: [
+    {
+      start: true,
+      armed: true,
+      css: { background: '$stInk', color: '$stCanvas' },
+    },
+  ],
 })
 
 const Front = styled('div', {
@@ -41,12 +57,29 @@ type SwipeActionProps = {
   label: string
   icon: ReactNode
   onAction: () => void
+  // An optional second action, run by swiping to the right. The row springs
+  // back in place afterwards instead of leaving.
+  start?: {
+    label: string
+    icon: ReactNode
+    onAction: () => void
+  }
   disabled?: boolean
   children: ReactNode
 }
 
+// Past the trigger point the row moves at under half speed, so it feels held.
+const resist = (dx: number) => {
+  const distance = Math.abs(dx)
+  return (
+    Math.sign(dx) *
+    (distance > TRIGGER ? TRIGGER + (distance - TRIGGER) * 0.45 : distance)
+  )
+}
+
 // Swipe a row to the left on a touch screen to run its main action, such as
-// archive. Mouse and keyboard use are unchanged.
+// archive, and optionally to the right for a second one. Mouse and keyboard
+// use are unchanged.
 export function SwipeAction(props: SwipeActionProps): JSX.Element {
   const [offset, setOffset] = useState(0)
   const [settling, setSettling] = useState(false)
@@ -67,8 +100,14 @@ export function SwipeAction(props: SwipeActionProps): JSX.Element {
     <Root>
       {offset < 0 && (
         <Behind armed={offset <= -TRIGGER} aria-hidden="true">
-          {props.icon}
           {props.label}
+          {props.icon}
+        </Behind>
+      )}
+      {offset > 0 && props.start && (
+        <Behind start armed={offset >= TRIGGER} aria-hidden="true">
+          {props.start.icon}
+          {props.start.label}
         </Behind>
       )}
       <Front
@@ -99,7 +138,7 @@ export function SwipeAction(props: SwipeActionProps): JSX.Element {
           }
           if (direction.current == 'x') {
             moved.current = true
-            setOffset(Math.min(0, dx))
+            setOffset(resist(props.start ? dx : Math.min(0, dx)))
           }
         }}
         onTouchEnd={(event) => {
@@ -109,9 +148,16 @@ export function SwipeAction(props: SwipeActionProps): JSX.Element {
             setOffset(-width)
             setTimeout(() => {
               props.onAction()
-              setSettling(false)
-              setOffset(0)
+              // Stay off screen while the row leaves the list; come back
+              // only if it is still there.
+              setTimeout(() => {
+                setSettling(false)
+                setOffset(0)
+              }, 400)
             }, 200)
+          } else if (offset >= TRIGGER && props.start) {
+            setOffset(0)
+            props.start.onAction()
           } else {
             setOffset(0)
           }
