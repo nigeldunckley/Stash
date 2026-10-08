@@ -112,4 +112,8 @@ export class Subscription {
 
   @Column('text')
   folder?: string | null
+
+  // For YouTube channels: whether Shorts are saved along with videos.
+  @Column('boolean', { default: false })
+  includeShorts!: boolean
 }

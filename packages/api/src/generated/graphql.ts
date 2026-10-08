@@ -2538,6 +2538,7 @@ export type Query = {
   recentSearches: RecentSearchesResult;
   rules: RulesResult;
   scanFeeds: ScanFeedsResult;
+  youtubeChannel: YouTubeChannelResult;
   search: SearchResult;
   sendInstallInstructions: SendInstallInstructionsResult;
   subscription: SubscriptionResult;
@@ -2616,6 +2617,11 @@ export type QueryRulesArgs = {
 
 export type QueryScanFeedsArgs = {
   input: ScanFeedsInput;
+};
+
+
+export type QueryYoutubeChannelArgs = {
+  url: Scalars['String'];
 };
 
 
@@ -3604,6 +3610,7 @@ export type SubscribeInput = {
   fetchContent?: InputMaybe<Scalars['Boolean']>;
   fetchContentType?: InputMaybe<FetchContentType>;
   folder?: InputMaybe<Scalars['String']>;
+  includeShorts?: InputMaybe<Scalars['Boolean']>;
   isPrivate?: InputMaybe<Scalars['Boolean']>;
   subscriptionType?: InputMaybe<SubscriptionType>;
   url: Scalars['String'];
@@ -3624,6 +3631,7 @@ export type Subscription = {
   description?: Maybe<Scalars['String']>;
   failedAt?: Maybe<Scalars['Date']>;
   fetchContent: Scalars['Boolean'];
+  includeShorts: Scalars['Boolean'];
   fetchContentType: FetchContentType;
   folder: Scalars['String'];
   icon?: Maybe<Scalars['String']>;
@@ -4097,6 +4105,7 @@ export type UpdateSubscriptionInput = {
   refreshedAt?: InputMaybe<Scalars['Date']>;
   scheduledAt?: InputMaybe<Scalars['Date']>;
   status?: InputMaybe<SubscriptionStatus>;
+  includeShorts?: InputMaybe<Scalars['Boolean']>;
 };
 
 export type UpdateSubscriptionResult = UpdateSubscriptionError | UpdateSubscriptionSuccess;
@@ -4366,6 +4375,44 @@ export type WebhooksSuccess = {
 };
 
 
+
+export type YouTubeChannel = {
+  __typename?: 'YouTubeChannel';
+  avatar?: Maybe<Scalars['String']>;
+  channelId: Scalars['ID'];
+  feedUrl: Scalars['String'];
+  handle?: Maybe<Scalars['String']>;
+  title: Scalars['String'];
+  uploadsPerWeek?: Maybe<Scalars['Float']>;
+  videos: Array<YouTubeChannelVideo>;
+};
+
+export type YouTubeChannelError = {
+  __typename?: 'YouTubeChannelError';
+  errorCodes: Array<YouTubeChannelErrorCode>;
+};
+
+export enum YouTubeChannelErrorCode {
+  BadRequest = 'BAD_REQUEST',
+  NotFound = 'NOT_FOUND',
+  Unauthorized = 'UNAUTHORIZED'
+}
+
+export type YouTubeChannelResult = YouTubeChannelError | YouTubeChannelSuccess;
+
+export type YouTubeChannelSuccess = {
+  __typename?: 'YouTubeChannelSuccess';
+  channel: YouTubeChannel;
+};
+
+export type YouTubeChannelVideo = {
+  __typename?: 'YouTubeChannelVideo';
+  id: Scalars['ID'];
+  publishedAt?: Maybe<Scalars['Date']>;
+  thumbnail: Scalars['String'];
+  title: Scalars['String'];
+  url: Scalars['String'];
+};
 
 export type ResolverTypeWrapper<T> = Promise<T> | T;
 
@@ -4893,6 +4940,12 @@ export type ResolversTypes = {
   ScanFeedsInput: ScanFeedsInput;
   ScanFeedsResult: ResolversTypes['ScanFeedsError'] | ResolversTypes['ScanFeedsSuccess'];
   ScanFeedsSuccess: ResolverTypeWrapper<ScanFeedsSuccess>;
+  YouTubeChannel: ResolverTypeWrapper<YouTubeChannel>;
+  YouTubeChannelError: ResolverTypeWrapper<YouTubeChannelError>;
+  YouTubeChannelErrorCode: YouTubeChannelErrorCode;
+  YouTubeChannelResult: ResolversTypes['YouTubeChannelError'] | ResolversTypes['YouTubeChannelSuccess'];
+  YouTubeChannelSuccess: ResolverTypeWrapper<YouTubeChannelSuccess>;
+  YouTubeChannelVideo: ResolverTypeWrapper<YouTubeChannelVideo>;
   SearchError: ResolverTypeWrapper<SearchError>;
   SearchErrorCode: SearchErrorCode;
   SearchItem: ResolverTypeWrapper<SearchItem>;
@@ -5466,6 +5519,11 @@ export type ResolversParentTypes = {
   ScanFeedsInput: ScanFeedsInput;
   ScanFeedsResult: ResolversParentTypes['ScanFeedsError'] | ResolversParentTypes['ScanFeedsSuccess'];
   ScanFeedsSuccess: ScanFeedsSuccess;
+  YouTubeChannel: YouTubeChannel;
+  YouTubeChannelError: YouTubeChannelError;
+  YouTubeChannelResult: ResolversParentTypes['YouTubeChannelError'] | ResolversParentTypes['YouTubeChannelSuccess'];
+  YouTubeChannelSuccess: YouTubeChannelSuccess;
+  YouTubeChannelVideo: YouTubeChannelVideo;
   SearchError: SearchError;
   SearchItem: SearchItem;
   SearchItemEdge: SearchItemEdge;
@@ -7207,6 +7265,7 @@ export type QueryResolvers<ContextType = ResolverContext, ParentType extends Res
   recentSearches?: Resolver<ResolversTypes['RecentSearchesResult'], ParentType, ContextType>;
   rules?: Resolver<ResolversTypes['RulesResult'], ParentType, ContextType, Partial<QueryRulesArgs>>;
   scanFeeds?: Resolver<ResolversTypes['ScanFeedsResult'], ParentType, ContextType, RequireFields<QueryScanFeedsArgs, 'input'>>;
+  youtubeChannel?: Resolver<ResolversTypes['YouTubeChannelResult'], ParentType, ContextType, RequireFields<QueryYoutubeChannelArgs, 'url'>>;
   search?: Resolver<ResolversTypes['SearchResult'], ParentType, ContextType, Partial<QuerySearchArgs>>;
   sendInstallInstructions?: Resolver<ResolversTypes['SendInstallInstructionsResult'], ParentType, ContextType>;
   subscription?: Resolver<ResolversTypes['SubscriptionResult'], ParentType, ContextType, RequireFields<QuerySubscriptionArgs, 'id'>>;
@@ -7810,6 +7869,7 @@ export type SubscriptionResolvers<ContextType = ResolverContext, ParentType exte
   fetchContent?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   fetchContentType?: Resolver<ResolversTypes['FetchContentType'], ParentType, ContextType>;
   folder?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  includeShorts?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   icon?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   isPrivate?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;

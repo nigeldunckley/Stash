@@ -11,7 +11,7 @@ import { PanelLabel } from '../../elements/stash'
 import { motion } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
 
-const Form = styled('form', {
+export const Form = styled('form', {
   display: 'flex',
   gap: '6px',
   input: {
@@ -37,7 +37,7 @@ const Form = styled('form', {
   },
 })
 
-const Button = styled('button', {
+export const Button = styled('button', {
   all: 'unset',
   boxSizing: 'border-box',
   display: 'inline-flex',
@@ -88,7 +88,7 @@ const Choice = styled('button', {
   },
 })
 
-const Hint = styled('p', {
+export const Hint = styled('p', {
   margin: 0,
   fontFamily: '$inter',
   fontSize: '$caption',

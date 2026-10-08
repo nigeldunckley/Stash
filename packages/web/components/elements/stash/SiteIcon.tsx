@@ -26,6 +26,8 @@ type SiteIconProps = {
   fallbackSrc?: string
   name?: string
   size?: number
+  // Round, for people and YouTube channels rather than sites.
+  round?: boolean
 }
 
 // A site's favicon, or the first letter of its name on a neutral tile.
@@ -43,7 +45,7 @@ export const SiteIcon = (props: SiteIconProps): JSX.Element => {
       style={{
         width: size,
         height: size,
-        borderRadius: Math.max(3, Math.round(size / 4.5)),
+        borderRadius: props.round ? '50%' : Math.max(3, Math.round(size / 4.5)),
         fontSize: Math.round(size * 0.55),
       }}
     >

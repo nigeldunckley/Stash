@@ -1744,6 +1744,7 @@ const schema = gql`
     mostRecentItemDate: Date
     refreshedAt: Date
     failedAt: Date
+    includeShorts: Boolean!
   }
 
   enum SubscriptionStatus {
@@ -2663,6 +2664,7 @@ const schema = gql`
     fetchContent: Boolean
     fetchContentType: FetchContentType
     folder: String
+    includeShorts: Boolean
   }
 
   input UpdateSubscriptionInput {
@@ -2680,6 +2682,7 @@ const schema = gql`
     refreshedAt: Date
     mostRecentItemDate: Date
     failedAt: Date
+    includeShorts: Boolean
   }
 
   union UpdateSubscriptionResult =
@@ -2906,6 +2909,40 @@ const schema = gql`
     UNAUTHORIZED
     BAD_REQUEST
     ALREADY_EXISTS
+  }
+
+  type YouTubeChannelVideo {
+    id: ID!
+    title: String!
+    url: String!
+    thumbnail: String!
+    publishedAt: Date
+  }
+
+  type YouTubeChannel {
+    channelId: ID!
+    feedUrl: String!
+    title: String!
+    handle: String
+    avatar: String
+    videos: [YouTubeChannelVideo!]!
+    uploadsPerWeek: Float
+  }
+
+  union YouTubeChannelResult = YouTubeChannelSuccess | YouTubeChannelError
+
+  type YouTubeChannelSuccess {
+    channel: YouTubeChannel!
+  }
+
+  enum YouTubeChannelErrorCode {
+    BAD_REQUEST
+    NOT_FOUND
+    UNAUTHORIZED
+  }
+
+  type YouTubeChannelError {
+    errorCodes: [YouTubeChannelErrorCode!]!
   }
 
   input ScanFeedsInput {
@@ -3663,6 +3700,7 @@ const schema = gql`
     feeds(input: FeedsInput!): FeedsResult!
     discoverFeeds: DiscoverFeedResult!
     scanFeeds(input: ScanFeedsInput!): ScanFeedsResult!
+    youtubeChannel(url: String!): YouTubeChannelResult!
     home(first: Int, after: String): HomeResult!
     subscription(id: ID!): SubscriptionResult!
     hiddenHomeSection: HiddenHomeSectionResult!

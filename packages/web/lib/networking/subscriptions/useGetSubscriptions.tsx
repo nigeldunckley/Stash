@@ -59,6 +59,7 @@ const GQL_GET_SUBSCRIPTIONS = gql`
           updatedAt
           lastFetchedAt
           fetchContentType
+          includeShorts
           mostRecentItemDate
           failedAt
         }

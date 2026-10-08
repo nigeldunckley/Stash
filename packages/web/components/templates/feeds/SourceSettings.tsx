@@ -8,7 +8,8 @@ import {
 } from '../../../lib/networking/queries/useGetSubscriptionsQuery'
 import { timeAgo } from '../../../lib/textFormatting'
 import { showErrorToast, showSuccessToast } from '../../../lib/toastHelpers'
-import { PanelLabel, SegmentedControl } from '../../elements/stash'
+import { channelPageUrl, isYouTubeFeedUrl } from '../../../lib/youtube'
+import { PanelLabel, SegmentedControl, Switch } from '../../elements/stash'
 import { motion } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
 
@@ -24,6 +25,16 @@ const Detail = styled('div', {
   color: '$stMuted',
   overflowWrap: 'anywhere',
   a: { color: '$stInk2' },
+})
+
+const Toggle = styled('label', {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '12px',
+  fontFamily: '$inter',
+  fontSize: '$small',
+  color: '$stInk2',
 })
 
 const Danger = styled('button', {
@@ -50,7 +61,8 @@ const Danger = styled('button', {
 
 type FullText = 'ALWAYS' | 'WHEN_EMPTY' | 'NEVER'
 
-// Settings for one feed: whether to fetch the full article, and unsubscribe.
+// Settings for one feed: whether to fetch the full article (or, for a
+// YouTube channel, whether to include Shorts), and unsubscribe.
 export function SourceSettings(props: {
   subscription: Subscription
   onUnsubscribed: () => void
@@ -61,6 +73,27 @@ export function SourceSettings(props: {
     (subscription.fetchContentType as FullText | undefined) ?? 'ALWAYS'
   )
   const [confirming, setConfirming] = useState(false)
+  const channel = isYouTubeFeedUrl(subscription.url)
+  const [includeShorts, setIncludeShorts] = useState(
+    !!subscription.includeShorts
+  )
+
+  const changeShorts = async (value: boolean) => {
+    setIncludeShorts(value)
+    try {
+      const result = await updateSubscriptionMutation({
+        id: subscription.id,
+        includeShorts: value,
+      })
+      if (result.updateSubscription.errorCodes?.length) {
+        throw new Error(result.updateSubscription.errorCodes[0])
+      }
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
+    } catch {
+      setIncludeShorts(!value)
+      showErrorToast('Could not update this channel')
+    }
+  }
 
   const changeFullText = async (value: FullText) => {
     const previous = fullText
@@ -101,10 +134,20 @@ export function SourceSettings(props: {
       <Row>
         <PanelLabel>{subscription.name}</PanelLabel>
         <Detail>
-          {subscription.url && (
-            <a href={subscription.url} target="_blank" rel="noreferrer">
-              {subscription.url}
+          {channel && channelPageUrl(subscription.url) ? (
+            <a
+              href={channelPageUrl(subscription.url)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open channel on YouTube
             </a>
+          ) : (
+            subscription.url && (
+              <a href={subscription.url} target="_blank" rel="noreferrer">
+                {subscription.url}
+              </a>
+            )
           )}
           {subscription.lastFetchedAt && (
             <div>Checked {timeAgo(subscription.lastFetchedAt)}</div>
@@ -114,23 +157,40 @@ export function SourceSettings(props: {
           )}
         </Detail>
       </Row>
-      <Row>
-        <PanelLabel>Fetch full article</PanelLabel>
-        <SegmentedControl
-          label="Fetch full article"
-          value={fullText}
-          onChange={changeFullText}
-          options={[
-            { value: 'ALWAYS', label: 'Always' },
-            { value: 'WHEN_EMPTY', label: 'If short' },
-            { value: 'NEVER', label: 'Never' },
-          ]}
-        />
-        <Detail>
-          Stash can load the whole article from the site when the feed only
-          carries a summary.
-        </Detail>
-      </Row>
+      {channel ? (
+        <Row>
+          <Toggle>
+            Include Shorts
+            <Switch
+              label="Include Shorts"
+              checked={includeShorts}
+              onChange={changeShorts}
+            />
+          </Toggle>
+          <Detail>
+            Shorts are vertical clips under a minute. New ones appear from the
+            next check.
+          </Detail>
+        </Row>
+      ) : (
+        <Row>
+          <PanelLabel>Fetch full article</PanelLabel>
+          <SegmentedControl
+            label="Fetch full article"
+            value={fullText}
+            onChange={changeFullText}
+            options={[
+              { value: 'ALWAYS', label: 'Always' },
+              { value: 'WHEN_EMPTY', label: 'If short' },
+              { value: 'NEVER', label: 'Never' },
+            ]}
+          />
+          <Detail>
+            Stash can load the whole article from the site when the feed only
+            carries a summary.
+          </Detail>
+        </Row>
+      )}
       <Row>
         <Danger
           data-confirm={confirming}

@@ -43,6 +43,7 @@ export enum PageType {
   PROFILE = 'PROFILE',
   WEBSITE = 'WEBSITE',
   HIGHLIGHTS = 'HIGHLIGHTS',
+  VIDEO = 'VIDEO',
   UNKNOWN = 'UNKNOWN',
 }
 

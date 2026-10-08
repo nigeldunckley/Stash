@@ -33,6 +33,8 @@ export type Subscription = {
   failedAt?: string
 
   fetchContentType?: FetchContentType
+  // YouTube channels: whether Shorts come in with the videos.
+  includeShorts?: boolean
 } & (
   | {
       type: SubscriptionType.NEWSLETTER

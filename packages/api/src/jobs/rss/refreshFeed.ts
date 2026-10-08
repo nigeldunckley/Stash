@@ -21,6 +21,16 @@ import createHttpTaskWithToken, {
 import { cleanUrl } from '../../utils/helpers'
 import { logger } from '../../utils/logger'
 import { rssParserConfig } from '../../utils/parser'
+import { videoIdFromYouTubeUrl } from '../../utils/youtube'
+import {
+  channelIdFromFeedUrl,
+  isShortsLink,
+  longFormVideoIds,
+  mediaDescription,
+  videoDocument,
+  videoThumbnail,
+  watchUrl,
+} from '../../utils/youtubeChannel'
 import { RSSRefreshContext } from './refreshAllFeeds'
 
 type FolderType = 'following' | 'inbox'
@@ -34,6 +44,9 @@ interface RefreshFeedRequest {
   userIds: string[]
   fetchContentTypes: FetchContentType[]
   folders: FolderType[]
+  // Per subscription, whether a YouTube channel's Shorts are wanted. Older
+  // jobs don't carry it, which means no.
+  includeShorts?: boolean[]
   refreshContext?: RSSRefreshContext
   priority?: 'low' | 'high'
 }
@@ -80,6 +93,8 @@ type RssFeedItemMedia = {
 export type RssFeedItem = Item & {
   'media:thumbnail'?: RssFeedItemMedia
   'media:content'?: RssFeedItemMedia[]
+  'media:group'?: unknown
+  'yt:videoId'?: string
   link: string
 }
 
@@ -96,7 +111,9 @@ interface FetchContentTask {
 
 export const isOldItem = (
   item: RssFeedItem,
-  mostRecentItemTimestamp: number
+  mostRecentItemTimestamp: number,
+  // How far back a feed's first check reaches.
+  firstLookBackMs = 24 * 60 * 60 * 1000
 ) => {
   // always fetch items without isoDate
   if (!item.isoDate) {
@@ -107,7 +124,7 @@ export const isOldItem = (
 
   // don't fetch older than 24 hrs items for new feeds
   if (!mostRecentItemTimestamp) {
-    return publishedAt < new Date(Date.now() - 24 * 60 * 60 * 1000)
+    return publishedAt < new Date(Date.now() - firstLookBackMs)
   }
 
   // don't fetch existing items for old feeds
@@ -324,12 +341,17 @@ const createTask = async (
   feedUrl: string,
   item: RssFeedItem,
   fetchContentType: FetchContentType,
-  folder: FolderType
+  folder: FolderType,
+  youtube?: YouTubeFeed
 ) => {
   const isRecentlySaved = await isItemRecentlySaved(userId, item.link)
   if (isRecentlySaved) {
     logger.info(`Item recently saved ${item.link}`)
     return true
+  }
+
+  if (youtube) {
+    return createYouTubeVideoItem(userId, feedUrl, item, folder, youtube)
   }
 
   const feedContent = item.content || item.contentSnippet || item.summary
@@ -378,6 +400,96 @@ const fetchContentAndCreateItem = async (
     })
   } catch (error) {
     logger.error('Error while creating task', error)
+    return false
+  }
+}
+
+// A YouTube channel feed: its entries are videos, saved straight from the
+// feed so Stash never has to fetch YouTube's pages for them.
+type YouTubeFeed = {
+  channelId: string
+  channelName: string
+  // Video IDs to keep when Shorts are left out, if YouTube listed them.
+  longForm?: Set<string>
+}
+
+const youtubeVideoId = (item: RssFeedItem) =>
+  item['yt:videoId'] ||
+  videoIdFromYouTubeUrl(item.link) ||
+  item.link.match(/\/shorts\/([\w-]{11})/)?.[1]
+
+// Shorts are left out unless the subscription asks for them. YouTube's list
+// of long videos decides; when it is missing, the /shorts/ link does.
+const isUnwantedShort = (
+  item: RssFeedItem,
+  youtube: YouTubeFeed,
+  includeShorts: boolean
+) => {
+  if (includeShorts) {
+    return false
+  }
+  const id = youtubeVideoId(item)
+  if (youtube.longForm && id) {
+    return !youtube.longForm.has(id)
+  }
+  return isShortsLink(item.link)
+}
+
+const createYouTubeVideoItem = async (
+  userId: string,
+  feedUrl: string,
+  item: RssFeedItem,
+  folder: FolderType,
+  youtube: YouTubeFeed
+) => {
+  const videoId = youtubeVideoId(item)
+  if (!videoId) {
+    logger.error('youtube: feed entry without a video id', { link: item.link })
+    return false
+  }
+
+  try {
+    const user = await findActiveUser(userId)
+    if (!user) {
+      logger.error('User not found', { userId })
+      return false
+    }
+
+    const title = item.title || watchUrl(videoId)
+    const result = await savePage(
+      {
+        url: isShortsLink(item.link) ? item.link : watchUrl(videoId),
+        title,
+        folder,
+        rssFeedUrl: feedUrl,
+        savedAt: item.isoDate,
+        publishedAt: item.isoDate,
+        originalContent: videoDocument({
+          videoId,
+          title,
+          channel: youtube.channelName,
+          channelUrl: `https://www.youtube.com/channel/${youtube.channelId}`,
+          description: mediaDescription(item['media:group']),
+        }),
+        source: 'rss-feeder',
+        clientRequestId: '',
+        author: youtube.channelName,
+        previewImage: videoThumbnail(videoId),
+        // The video job sets the length; until then it is unknown.
+        wordCount: 0,
+        labels: [{ name: 'RSS' }],
+      },
+      user
+    )
+
+    if (result.__typename === 'SaveError') {
+      logger.error(`youtube: could not save video: ${result.errorCodes[0]}`)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    logger.error('youtube: could not save video', error)
     return false
   }
 }
@@ -450,6 +562,8 @@ const parser = new Parser({
       'created',
       ['media:content', 'media:content', { keepArray: true }],
       ['media:thumbnail'],
+      ['media:group', 'media:group'],
+      ['yt:videoId', 'yt:videoId'],
       'author',
     ],
     feed: [
@@ -482,8 +596,17 @@ const getUpdateFrequency = (feed: RssFeed) => {
 // hour and two hours so new items show up within a reasonable time.
 const MIN_CHECK_INTERVAL_MS = 30 * 60 * 1000
 const MAX_CHECK_INTERVAL_MS = 2 * 60 * 60 * 1000
+// YouTube channel feeds are small and new videos are wanted quickly.
+const YOUTUBE_CHECK_INTERVAL_MS = 15 * 60 * 1000
 
-export const nextCheckAt = (feed: RssFeed, now = Date.now()): Date => {
+export const nextCheckAt = (
+  feed: RssFeed,
+  now = Date.now(),
+  feedUrl = ''
+): Date => {
+  if (channelIdFromFeedUrl(feedUrl)) {
+    return new Date(now + YOUTUBE_CHECK_INTERVAL_MS)
+  }
   const declared =
     feed['syn:updatePeriod'] || feed['sy:updatePeriod']
       ? getUpdatePeriodInHours(feed) * 60 * 60 * 1000 * getUpdateFrequency(feed)
@@ -573,10 +696,14 @@ const processSubscription = async (
   lastFetchedChecksum: string,
   fetchContentType: FetchContentType,
   folder: FolderType,
-  feed: RssFeed
+  feed: RssFeed,
+  youtube?: YouTubeFeed,
+  includeShorts = false
 ) => {
   const refreshedAt = new Date()
-  const scheduledAt = nextCheckAt(feed, refreshedAt.getTime())
+  const scheduledAt = nextCheckAt(feed, refreshedAt.getTime(), feedUrl)
+  // A new channel starts with its last week of videos rather than one day.
+  const firstLookBackMs = (youtube ? 7 : 1) * 24 * 60 * 60 * 1000
 
   let lastItemFetchedAt: Date | null = null
   let lastValidItem: RssFeedItem | null = null
@@ -640,6 +767,12 @@ const processSubscription = async (
       const publishedAt = feedItem.isoDate
         ? new Date(feedItem.isoDate)
         : new Date()
+
+      if (youtube && isUnwantedShort(feedItem, youtube, includeShorts)) {
+        logger.info(`Skipping YouTube Short ${feedItem.link}`)
+        continue
+      }
+
       // remember the last valid item
       if (
         !lastValidItem ||
@@ -658,7 +791,7 @@ const processSubscription = async (
       }
 
       // skip old items
-      if (isOldItem(feedItem, mostRecentItemDate)) {
+      if (isOldItem(feedItem, mostRecentItemDate, firstLookBackMs)) {
         logger.info(`Skipping old feed item ${feedItem.link}`)
         continue
       }
@@ -669,7 +802,8 @@ const processSubscription = async (
         feedUrl,
         feedItem,
         fetchContentType,
-        folder
+        folder,
+        youtube
       )
       if (!created) {
         throw new Error('Failed to create task for feed item')
@@ -702,7 +836,8 @@ const processSubscription = async (
       feedUrl,
       lastValidItem,
       fetchContentType,
-      folder
+      folder,
+      youtube
     )
     if (!created) {
       logger.error('Failed to create task for feed item', {
@@ -744,6 +879,7 @@ export const _refreshFeed = async (request: RefreshFeedRequest) => {
     lastFetchedChecksums,
     fetchContentTypes,
     folders,
+    includeShorts,
     refreshContext,
     priority,
   } = request
@@ -779,6 +915,17 @@ export const _refreshFeed = async (request: RefreshFeedRequest) => {
 
     logger.info('Fetched feed', { title: feed.title, at: new Date() })
 
+    const channelId = channelIdFromFeedUrl(feedUrl)
+    const youtube: YouTubeFeed | undefined = channelId
+      ? {
+          channelId,
+          channelName: feed.title || channelId,
+          longForm: subscriptionIds.every((_, i) => includeShorts?.[i])
+            ? undefined
+            : await longFormVideoIds(channelId),
+        }
+      : undefined
+
     const fetchContentTasks = new Map<string, FetchContentTask>() // url -> FetchContentTask
     // process each subscription sequentially
     for (let i = 0; i < subscriptionIds.length; i++) {
@@ -798,7 +945,9 @@ export const _refreshFeed = async (request: RefreshFeedRequest) => {
           lastFetchedChecksums[i],
           fetchContentType,
           folders[i],
-          feed
+          feed,
+          youtube,
+          !!includeShorts?.[i]
         )
       } catch (error) {
         logger.error('Error while processing subscription', {

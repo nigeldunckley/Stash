@@ -25,6 +25,7 @@ export type SubscribeMutationInput = {
   name?: string
   url?: string
   subscriptionType?: SubscriptionType
+  includeShorts?: boolean
 }
 
 export async function subscribeMutation(

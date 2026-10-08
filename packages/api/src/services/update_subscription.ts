@@ -30,6 +30,7 @@ type UpdateSubscriptionData = {
   status?: SubscriptionStatus | null
   refreshedAt?: Date | null
   failedAt?: Date | null
+  includeShorts?: boolean | null
 }
 
 export const updateSubscription = async (
@@ -54,6 +55,7 @@ export const updateSubscription = async (
     isPrivate: newData.isPrivate ?? undefined,
     fetchContentType: newData.fetchContentType || undefined,
     folder: newData.folder ?? undefined,
+    includeShorts: newData.includeShorts ?? undefined,
   })
 
   return await repo.findOneByOrFail({
