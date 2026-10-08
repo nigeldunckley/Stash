@@ -899,7 +899,7 @@ function HomeFeedGrid(props: HomeFeedContentProps): JSX.Element {
   const { data: viewerData } = useGetViewer()
   const [layout, setLayout] = usePersistedState<LayoutType>({
     key: 'libraryLayout',
-    initialValue: 'GRID_LAYOUT',
+    initialValue: 'LIST_LAYOUT',
   })
 
   const updateLayout = useCallback(
@@ -1250,6 +1250,7 @@ type LibraryItemsProps = {
 }
 
 function LibraryItemsList(props: LibraryItemsProps): JSX.Element {
+  const isList = props.layout == 'LIST_LAYOUT'
   return (
     <Box
       ref={props.gridContainerRef}
@@ -1257,25 +1258,35 @@ function LibraryItemsList(props: LibraryItemsProps): JSX.Element {
         display: 'grid',
         width: '100%',
         gridAutoRows: 'auto',
-        borderRadius: '6px',
-        gridGap: props.layout == 'LIST_LAYOUT' ? '0px' : '20px',
+        gridGap: isList ? '0px' : '16px',
         marginTop: '10px',
         marginBottom: '0px',
         paddingTop: '0',
         paddingBottom: '0px',
-        overflow: 'visible',
-        px: '70px',
-        '@xlgDown': {
-          px: '0px',
-        },
-        '@mdDown': {
-          px: '0px',
-          gap: '0px',
-        },
-        gridTemplateColumns:
-          props.layout == 'LIST_LAYOUT'
-            ? 'none'
-            : `repeat( auto-fit, minmax(280px, 1fr) )`,
+        overflow: isList ? 'hidden' : 'visible',
+        boxSizing: 'border-box',
+        gridTemplateColumns: isList
+          ? 'minmax(0, 1fr)'
+          : `repeat( auto-fit, minmax(280px, 1fr) )`,
+        ...(isList
+          ? {
+              maxWidth: '880px',
+              mx: 'auto',
+              background: '$stSurface',
+              border: '1px solid $stLine',
+              borderRadius: '$md',
+              '@mdDown': {
+                borderRadius: '0px',
+                borderLeft: 'none',
+                borderRight: 'none',
+              },
+            }
+          : {
+              px: '70px',
+              '@xlgDown': {
+                px: '0px',
+              },
+            }),
       }}
     >
       {props.items.map((linkedItem) => (
@@ -1287,29 +1298,35 @@ function LibraryItemsList(props: LibraryItemsProps): JSX.Element {
           key={linkedItem.node.id + linkedItem.node.image}
           css={{
             width: '100%',
-            '&:focus-visible': {
-              outline: 'none',
-            },
-            '&> div': {
-              // bg: '$thLeftMenuBackground',
-              // bg: '$thLibraryBackground',
-            },
-            '&:focus': {
-              outline: 'none',
-              '> div': {
-                outline: 'none',
-                bg: '$thBackgroundActive',
-              },
-            },
-            '&:hover': {
-              '> div': {
-                bg: '$thBackgroundActive',
-                boxShadow: '$cardBoxShadow',
-              },
-              '> a': {
-                bg: '$thBackgroundActive',
-              },
-            },
+            minWidth: 0,
+            position: 'relative',
+            outline: 'none',
+            ...(isList
+              ? {
+                  borderTop: '1px solid $stLine',
+                  '&:first-child': { borderTop: 'none' },
+                  '&:focus > div': { background: '$stSunken' },
+                  '&:focus::before': {
+                    content: '""',
+                    position: 'absolute',
+                    zIndex: 1,
+                    left: 0,
+                    top: '8px',
+                    bottom: '8px',
+                    width: '2px',
+                    borderRadius: '2px',
+                    background: '$stAccent',
+                  },
+                }
+              : {
+                  '&:focus > div': {
+                    outline: '2px solid $stAccent',
+                    outlineOffset: '1px',
+                  },
+                  '&:hover > div': {
+                    boxShadow: '$cardBoxShadow',
+                  },
+                }),
           }}
         >
           {props.viewer && (

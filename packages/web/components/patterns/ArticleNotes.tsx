@@ -54,7 +54,7 @@ export function ArticleNotes(props: NoteSectionProps): JSX.Element {
       setText={props.setText}
       saveText={saveText}
       fillBackground={false}
-      isExpanded
+      isExpanded={false}
     />
   )
 }

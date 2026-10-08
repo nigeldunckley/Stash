@@ -26,12 +26,9 @@ import { isTouchScreenDevice } from '../../../lib/deviceType'
 import { UserBasicData } from '../../../lib/networking/queries/useGetViewerQuery'
 import { ReadableItem } from '../../../lib/networking/library_items/useLibraryItems'
 import { SetHighlightLabelsModalPresenter } from './SetLabelsModalPresenter'
-import 'react-sliding-pane/dist/react-sliding-pane.css'
-import { NotebookContent } from './Notebook'
-import { NotebookHeader } from './NotebookHeader'
 import useGetWindowDimensions from '../../../lib/hooks/useGetWindowDimensions'
 import { ConfirmationModal } from '../../patterns/ConfirmationModal'
-import { ResizableSidebar } from './ResizableSidebar'
+import { StashNotebookPanel } from '../reader/StashNotebookPanel'
 
 type HighlightsLayerProps = {
   viewer: UserBasicData
@@ -77,13 +74,15 @@ export function HighlightsLayer(props: HighlightsLayerProps): JSX.Element {
   const focusedHighlightMousePos = useRef({ pageX: 0, pageY: 0 })
 
   const [currentHighlightIdx, setCurrentHighlightIdx] = useState(0)
-  const [focusedHighlight, setFocusedHighlight] =
-    useState<Highlight | undefined>(undefined)
+  const [focusedHighlight, setFocusedHighlight] = useState<
+    Highlight | undefined
+  >(undefined)
 
   const [selectionData, setSelectionData] = useSelection(highlightLocations)
 
-  const [labelsTarget, setLabelsTarget] =
-    useState<Highlight | undefined>(undefined)
+  const [labelsTarget, setLabelsTarget] = useState<Highlight | undefined>(
+    undefined
+  )
 
   const [
     confirmDeleteHighlightWithNoteId,
@@ -91,6 +90,11 @@ export function HighlightsLayer(props: HighlightsLayerProps): JSX.Element {
   ] = useState<string | undefined>(undefined)
 
   const windowDimensions = useGetWindowDimensions()
+
+  const { setShowHighlightsModal } = props
+  const closeNotebook = useCallback(() => {
+    setShowHighlightsModal(false)
+  }, [setShowHighlightsModal])
 
   const createHighlightFromSelection = useCallback(
     async (
@@ -102,7 +106,7 @@ export function HighlightsLayer(props: HighlightsLayerProps): JSX.Element {
           selection: selection,
           articleId: props.item.id,
           existingHighlights: highlights,
-          color: options?.color,
+          color: options?.color ?? 'orange',
           highlightStartEndOffsets: highlightLocations,
           annotation: options?.annotation,
           highlightPositionPercent: selectionPercentPos(selection.selection),
@@ -126,6 +130,14 @@ export function HighlightsLayer(props: HighlightsLayerProps): JSX.Element {
       setSelectionData(null)
       setHighlights(result.highlights)
 
+      // Open the notebook beside the article after the first highlight.
+      if (
+        !highlights.some((h) => h.type == 'HIGHLIGHT') &&
+        window.innerWidth >= 1100
+      ) {
+        setShowHighlightsModal(true)
+      }
+
       if (result.newHighlightIndex === undefined) {
         setHighlightModalAction({ highlightModalAction: 'none' })
         return undefined
@@ -139,6 +151,7 @@ export function HighlightsLayer(props: HighlightsLayerProps): JSX.Element {
       props.item.id,
       props.articleMutations,
       setSelectionData,
+      setShowHighlightsModal,
     ]
   )
 
@@ -838,45 +851,33 @@ export function HighlightsLayer(props: HighlightsLayerProps): JSX.Element {
             handleButtonClick={handleAction}
             isSharedToFeed={focusedHighlight?.sharedAt != undefined}
             displayAtBottom={isTouchScreenDevice()}
-            highlightColor={focusedHighlight?.color ?? 'yellow'}
+            highlightColor={focusedHighlight?.color ?? 'orange'}
           />
         </>
       )}
-      <ResizableSidebar
-        isShow={props.showHighlightsModal}
-        onClose={() => {
-          props.setShowHighlightsModal(false)
-        }}
-      >
-        <NotebookHeader
-          viewer={props.viewer}
-          item={props.item}
-          setShowNotebook={props.setShowHighlightsModal}
-        />
-        <NotebookContent
-          viewer={props.viewer}
-          item={props.item}
-          // highlights={highlights}
-          // onClose={handleCloseNotebook}
-          viewInReader={(highlightId) => {
-            // The timeout here is a bit of a hack to work around rerendering
-            setTimeout(() => {
-              const target = document.querySelector(
-                `[omnivore-highlight-id="${highlightId}"]`
-              )
-              target?.scrollIntoView({
-                block: 'center',
-                behavior: 'auto',
-              })
-            }, 1)
-            history.replaceState(
-              undefined,
-              window.location.href,
-              `#${highlightId}`
+      <StashNotebookPanel
+        open={props.showHighlightsModal}
+        onClose={closeNotebook}
+        viewer={props.viewer}
+        item={props.item}
+        viewInReader={(highlightId) => {
+          // The timeout here is a bit of a hack to work around rerendering
+          setTimeout(() => {
+            const target = document.querySelector(
+              `[omnivore-highlight-id="${highlightId}"]`
             )
-          }}
-        />
-      </ResizableSidebar>
+            target?.scrollIntoView({
+              block: 'center',
+              behavior: 'auto',
+            })
+          }, 1)
+          history.replaceState(
+            undefined,
+            window.location.href,
+            `#${highlightId}`
+          )
+        }}
+      />
     </>
   )
 }

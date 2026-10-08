@@ -13,10 +13,15 @@
 
 .highlight {
   color: var(--colors-highlightText);
-  background-color: rgba(var(--colors-highlightBackground), 0.35);
-  border-bottom: 2px rgb(var(--colors-highlightBackground)) solid;
+  background-color: rgba(var(--colors-highlightBackground), 0.18);
+  border-bottom: 1.5px rgb(var(--colors-highlightBackground)) solid;
   border-radius: 2px;
   cursor: pointer;
+}
+
+.highlight__orange {
+  background-color: rgba(var(--colors-highlight_background_orange), var(--colors-highlight_background_alpha));
+  border-bottom: 1.5px solid rgba(var(--colors-highlight_background_orange), var(--colors-highlight_underline_alpha));
 }
 
 

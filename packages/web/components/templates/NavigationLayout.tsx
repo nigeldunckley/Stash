@@ -17,6 +17,7 @@ import { Button } from '../elements/Button'
 import { List } from '@phosphor-icons/react'
 import { LIBRARY_LEFT_MENU_WIDTH } from './navMenu/LibraryLegacyMenu'
 import { AddLinkModal } from './AddLinkModal'
+import { MobileTabBar } from './navMenu/MobileTabBar'
 import useWindowDimensions from '../../lib/hooks/useGetWindowDimensions'
 import { useHandleAddUrl } from '../../lib/hooks/useHandleAddUrl'
 import { useGetViewer } from '../../lib/networking/viewer/useGetViewer'
@@ -111,11 +112,7 @@ export function NavigationLayout(props: NavigationLayoutProps): JSX.Element {
   const { logout } = useLogout()
 
   return (
-    <HStack
-      css={{}}
-      distribution="start"
-      alignment="start"
-    >
+    <HStack css={{}} distribution="start" alignment="start">
       <PageMetaData path={props.section} title={props.title} />
       <Header
         section={props.section}
@@ -152,7 +149,7 @@ export function NavigationLayout(props: NavigationLayoutProps): JSX.Element {
                 top: '0px',
                 left: '0px',
                 width: '100vw',
-                height: '100vh',
+                height: '100dvh',
                 pointerEvents: 'auto',
               },
             }}
@@ -164,6 +161,10 @@ export function NavigationLayout(props: NavigationLayoutProps): JSX.Element {
         </>
       )}
       {props.children}
+      <MobileTabBar
+        section={props.section}
+        onMore={() => props.setShowNavigationMenu(!props.showNavigationMenu)}
+      />
       {showLogoutConfirmation && (
         <ConfirmationModal
           message={'Are you sure you want to log out?'}
@@ -199,13 +200,18 @@ const Header = (props: HeaderProps): JSX.Element => {
       distribution="center"
       css={{
         zIndex: 10,
-        position: (props.menuOpen ||  ['discover', 'l/discover'].includes(props.section)) ? 'fixed' : 'absolute',
+        position:
+          props.menuOpen || ['discover', 'l/discover'].includes(props.section)
+            ? 'fixed'
+            : 'absolute',
         left: '0px',
         top: '0px',
         pl: '20px',
         pt: '20px',
 
         height: '58px',
+        // The tab bar replaces the menu button on iPhone.
+        '@mdDown': { display: 'none' },
       }}
     >
       <Button

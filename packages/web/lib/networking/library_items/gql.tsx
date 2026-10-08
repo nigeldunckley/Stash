@@ -67,6 +67,7 @@ export const gqlSearchQuery = (includeTotalCount = false) => gql`
             siteIcon
             subscription
             readAt
+            seenAt
             savedAt
             wordsCount
             highlightsCount

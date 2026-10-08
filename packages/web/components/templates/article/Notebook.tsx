@@ -16,7 +16,6 @@ import {
 } from '../../../lib/networking/library_items/useLibraryItems'
 import { updateHighlightMutation } from '../../../lib/networking/mutations/updateHighlightMutation'
 import { UserBasicData } from '../../../lib/networking/queries/useGetViewerQuery'
-import { isDarkTheme } from '../../../lib/themeUpdater'
 import { showErrorToast, showSuccessToast } from '../../../lib/toastHelpers'
 import { TrashIcon } from '../../elements/icons/TrashIcon'
 import { Box, HStack, SpanBox, VStack } from '../../elements/LayoutPrimitives'
@@ -46,7 +45,6 @@ type NoteState = {
 }
 
 export function NotebookContent(props: NotebookContentProps): JSX.Element {
-  const isDark = isDarkTheme()
   const createHighlight = useCreateHighlight()
   const deleteHighlight = useDeleteHighlight()
   const updateHighlight = useUpdateHighlight()
@@ -235,11 +233,56 @@ export function NotebookContent(props: NotebookContentProps): JSX.Element {
         '@mdDown': { p: '15px' },
       }}
     >
+      <VStack css={{ mt: '20px', gap: '20px', width: '100%' }}>
+        {sortedHighlights.map((highlight) => (
+          <HighlightViewItem
+            key={highlight.id}
+            item={props.item}
+            viewer={props.viewer}
+            highlight={highlight}
+            viewInReader={props.viewInReader}
+            setSetLabelsTarget={setLabelsTarget}
+            setShowConfirmDeleteHighlightId={setShowConfirmDeleteHighlightId}
+            updateHighlight={() => {
+              // nothing should be needed here anymore with new caching
+              console.log('update highlight')
+            }}
+          />
+        ))}
+        {sortedHighlights.length === 0 && (
+          <Box
+            css={{
+              p: '14px',
+              width: '100%',
+              boxSizing: 'border-box',
+              fontSize: '$small',
+              lineHeight: 1.5,
+              color: '$stMuted',
+              border: '1px dashed $stLine',
+              borderRadius: '$md',
+            }}
+          >
+            No highlights yet. Select text in the article to highlight it.
+          </Box>
+        )}
+      </VStack>
       <>
+        <SpanBox
+          css={{
+            mt: '28px',
+            fontFamily: '$mono',
+            fontSize: '$micro',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            color: '$stMuted',
+          }}
+        >
+          Document note
+        </SpanBox>
         <HStack
           alignment="start"
           distribution="start"
-          css={{ width: '100%', gap: '10px', mt: '25px' }}
+          css={{ width: '100%', gap: '10px', mt: '8px' }}
         >
           <ArticleNotes
             targetId={props.item.id}
@@ -253,9 +296,10 @@ export function NotebookContent(props: NotebookContentProps): JSX.Element {
           css={{
             minHeight: '15px',
             width: '100%',
-            fontSize: '9px',
-            mt: '5px',
-            color: '$thTextSubtle',
+            fontFamily: '$mono',
+            fontSize: '$micro',
+            mt: '6px',
+            color: '$stMuted',
           }}
           alignment="start"
           distribution="start"
@@ -280,49 +324,7 @@ export function NotebookContent(props: NotebookContentProps): JSX.Element {
           ) : null}
         </HStack>
       </>
-
-      <VStack css={{ mt: '25px', gap: '25px' }}>
-        {sortedHighlights.map((highlight) => (
-          <HighlightViewItem
-            key={highlight.id}
-            item={props.item}
-            viewer={props.viewer}
-            highlight={highlight}
-            viewInReader={props.viewInReader}
-            setSetLabelsTarget={setLabelsTarget}
-            setShowConfirmDeleteHighlightId={setShowConfirmDeleteHighlightId}
-            updateHighlight={() => {
-              // nothing should be needed here anymore with new caching
-              console.log('update highlight')
-            }}
-          />
-        ))}
-        {sortedHighlights.length === 0 && (
-          <Box
-            css={{
-              p: '10px',
-              mt: '15px',
-              width: '100%',
-              fontSize: '13px',
-              color: '$thTextSubtle',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mb: '100px',
-              bg: isDark ? '#3D3D3D' : '$thBackground',
-              borderRadius: '6px',
-              boxShadow: '0px 4px 4px rgba(33, 33, 33, 0.1)',
-            }}
-          >
-            You have not added any highlights to this document.
-          </Box>
-        )}
-        <Box
-          css={{
-            width: '100%',
-            height: '320px',
-          }}
-        ></Box>
-      </VStack>
+      <Box css={{ width: '100%', height: '40px', flex: 'none' }} />
 
       {showConfirmDeleteHighlightId && (
         <ConfirmationModal

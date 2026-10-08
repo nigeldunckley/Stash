@@ -105,24 +105,20 @@ export function HighlightView(props: HighlightViewProps): JSX.Element {
           },
         }}
       >
-        <StyledQuote>
+        <StyledQuote
+          css={{
+            paddingLeft: '12px',
+            borderLeft: `2px solid rgb(${highlightColor})`,
+          }}
+        >
           <SpanBox
             css={{
-              '> *': {
-                display: 'inline',
-                padding: '3px',
-                backgroundColor: `rgba(${highlightColor}, var(--colors-highlight_background_alpha))`,
-                boxDecorationBreak: 'clone',
-                borderRadius: '2px',
-              },
-              '> ul': {
-                display: 'block',
-                boxShadow: 'unset',
-                backgroundColor: 'unset',
-              },
-              fontSize: '15px',
-              lineHeight: 1.5,
-              color: '$thTextSubtle2',
+              '> *': { margin: 0 },
+              '> * + *': { marginTop: '0.6em' },
+              fontFamily: '$serif',
+              fontSize: '16px',
+              lineHeight: 1.55,
+              color: '$stInk',
               img: {
                 display: 'block',
                 margin: '0.5em auto !important',
@@ -145,10 +141,7 @@ export function HighlightView(props: HighlightViewProps): JSX.Element {
         <HStack
           css={{
             width: '100%',
-            pt: '15px',
-            '@mdDown': {
-              p: '10px',
-            },
+            pt: '10px',
           }}
           alignment="start"
           distribution="start"

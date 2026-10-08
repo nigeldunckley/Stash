@@ -41,11 +41,12 @@ const Root = styled('div', {
   minHeight: '56px',
   boxSizing: 'border-box',
   background: '$stSurface',
-  borderTop: '1px solid $stLine',
   cursor: 'pointer',
   outline: 'none',
   transition: `background ${motion.fast}`,
-  '&:first-child': { borderTop: 'none' },
+  // Keyboard users reach the actions by tabbing into the row.
+  [`&:focus-within ${Actions}`]: { display: 'flex' },
+  [`&:focus-within ${Meta}`]: { display: 'none' },
   '@media (hover: hover)': {
     '&:hover': { background: '$stSunken' },
     [`&:hover ${Actions}`]: { display: 'flex' },
@@ -187,4 +188,6 @@ export const ItemList = styled('div', {
   borderRadius: '$md',
   background: '$stSurface',
   overflow: 'hidden',
+  // Rows may be wrapped (for example in SwipeAction), so divide the children.
+  '& > * + *': { borderTop: '1px solid $stLine' },
 })

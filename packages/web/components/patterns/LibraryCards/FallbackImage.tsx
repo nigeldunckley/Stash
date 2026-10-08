@@ -8,8 +8,9 @@ type FallbackImageProps = {
   fontSize: string
 }
 
-// Shown in place of a cover image. A plain panel with the source name, so cards
-// without artwork stay quiet instead of filling with a giant letter.
+// Shown in place of a cover image. A plain panel with the source name (or the
+// title when there is no source), so cards without artwork stay quiet instead
+// of filling with a giant letter.
 export const GridFallbackImage = (props: FallbackImageProps): JSX.Element => {
   return (
     <VStack
@@ -25,7 +26,7 @@ export const GridFallbackImage = (props: FallbackImageProps): JSX.Element => {
         borderBottom: '1px solid $stLine',
       }}
     >
-      {props.source && (
+      {(props.source || props.title) && (
         <SpanBox
           css={{
             maxWidth: '100%',
@@ -39,7 +40,7 @@ export const GridFallbackImage = (props: FallbackImageProps): JSX.Element => {
             textOverflow: 'ellipsis',
           }}
         >
-          {props.source}
+          {props.source || props.title}
         </SpanBox>
       )}
     </VStack>

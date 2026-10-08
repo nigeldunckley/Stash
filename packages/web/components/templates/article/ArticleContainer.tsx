@@ -45,6 +45,8 @@ type ArticleContainerProps = {
   justifyText?: boolean
   textDirection?: TextDirection
   setShowHighlightsModal: React.Dispatch<React.SetStateAction<boolean>>
+  // Rendered after the article text, inside the reading column.
+  footer?: React.ReactNode
 }
 
 type RecommendationCommentsProps = {
@@ -544,24 +546,7 @@ export function ArticleContainer(props: ArticleContainerProps): JSX.Element {
           articleMutations={props.articleMutations}
           isAppleAppEmbed={props.isAppleAppEmbed}
         />
-        <Button
-          style="ghost"
-          css={{
-            p: 0,
-            my: '$4',
-            color: '$error',
-            fontSize: '$1',
-            '&:hover': {
-              opacity: 0.8,
-            },
-            '@media print': {
-              display: 'none',
-            },
-          }}
-          onClick={() => setShowReportIssuesModal(true)}
-        >
-          Report issues with this page -{'>'}
-        </Button>
+        {props.footer}
         <Box css={{ height: '100px' }} />
       </Box>
       <HighlightsLayer
