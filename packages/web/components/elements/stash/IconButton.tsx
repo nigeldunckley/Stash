@@ -1,0 +1,78 @@
+import { forwardRef, ReactNode } from 'react'
+import { styled } from '../../tokens/stitches.config'
+import { motion } from './motion'
+
+const Button = styled('button', {
+  all: 'unset',
+  boxSizing: 'border-box',
+  display: 'inline-grid',
+  placeItems: 'center',
+  flex: 'none',
+  cursor: 'pointer',
+  color: '$stMuted',
+  border: '1px solid transparent',
+  borderRadius: '$sm',
+  transition: `color ${motion.fast}, background ${motion.fast}, border-color ${motion.fast}`,
+  '&:hover': {
+    color: '$stInk',
+    background: '$stSurface',
+    borderColor: '$stLine',
+  },
+  '&:focus-visible': {
+    outline: '2px solid $stAccent',
+    outlineOffset: '1px',
+  },
+  '&:disabled': {
+    opacity: 0.4,
+    cursor: 'default',
+  },
+  variants: {
+    size: {
+      sm: { width: '26px', height: '26px' },
+      md: { width: '30px', height: '30px' },
+      lg: { width: '36px', height: '36px' },
+    },
+    active: {
+      true: {
+        color: '$stInk',
+        background: '$stSunken',
+        borderColor: '$stLine',
+      },
+    },
+  },
+  defaultVariants: {
+    size: 'md',
+  },
+})
+
+type IconButtonProps = {
+  label: string
+  shortcut?: string
+  size?: 'sm' | 'md' | 'lg'
+  active?: boolean
+  disabled?: boolean
+  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void
+  children: ReactNode
+}
+
+// A square, borderless icon button. The label is used for screen readers and,
+// together with the shortcut, for the native tooltip.
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
+  function IconButton(props, ref) {
+    const { label, shortcut, size, active, children, ...rest } = props
+    return (
+      <Button
+        ref={ref}
+        type="button"
+        aria-label={label}
+        aria-pressed={active}
+        title={shortcut ? `${label}  ${shortcut}` : label}
+        size={size}
+        active={active}
+        {...rest}
+      >
+        {children}
+      </Button>
+    )
+  }
+)

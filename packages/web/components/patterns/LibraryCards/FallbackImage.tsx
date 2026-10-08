@@ -2,11 +2,14 @@ import { SpanBox, VStack } from '../../elements/LayoutPrimitives'
 
 type FallbackImageProps = {
   title: string
+  source?: string
   width: string
   height: string
   fontSize: string
 }
 
+// Shown in place of a cover image. A plain panel with the source name, so cards
+// without artwork stay quiet instead of filling with a giant letter.
 export const GridFallbackImage = (props: FallbackImageProps): JSX.Element => {
   return (
     <VStack
@@ -15,37 +18,30 @@ export const GridFallbackImage = (props: FallbackImageProps): JSX.Element => {
       css={{
         width: props.width,
         height: props.height,
-        padding: '16px 18px',
-        position: 'relative',
+        padding: '12px 14px',
+        boxSizing: 'border-box',
         overflow: 'hidden',
-        color: '$thFallbackImageForeground',
-        backgroundColor: '$thFallbackImageBackground',
+        backgroundColor: '$stSunken',
+        borderBottom: '1px solid $stLine',
       }}
     >
-      <SpanBox
-        aria-hidden="true"
-        css={{
-          position: 'absolute',
-          right: '14px',
-          top: '-18px',
-          fontFamily: '$display',
-          fontSize: '140px',
-          fontWeight: 600,
-          lineHeight: 1,
-          letterSpacing: '-0.06em',
-          opacity: 0.12,
-        }}
-      >
-        {props.title.substring(0, 1).toLocaleUpperCase()}
-      </SpanBox>
-      <SpanBox
-        css={{
-          width: '28px',
-          height: '3px',
-          borderRadius: '3px',
-          bg: '#FF4F00',
-        }}
-      />
+      {props.source && (
+        <SpanBox
+          css={{
+            maxWidth: '100%',
+            fontFamily: '$mono',
+            fontSize: '$micro',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            color: '$stMuted',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {props.source}
+        </SpanBox>
+      )}
     </VStack>
   )
 }
@@ -55,30 +51,21 @@ export const ListFallbackImage = (props: FallbackImageProps): JSX.Element => {
     <VStack
       distribution="center"
       alignment="center"
+      aria-hidden="true"
       css={{
         width: props.width,
         height: props.height,
-        fontSize: '22px',
-        fontWeight: 600,
-        fontFamily: '$display',
-        padding: '5px',
-        borderRadius: '10px',
-        color: '$thFallbackImageForeground',
-        backgroundColor: '$thFallbackImageBackground',
+        boxSizing: 'border-box',
+        fontFamily: '$mono',
+        fontSize: '18px',
+        fontWeight: 500,
+        borderRadius: '$md',
+        color: '$stMuted',
+        backgroundColor: '$stSunken',
+        border: '1px solid $stLine',
       }}
     >
-      <SpanBox
-        css={{
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          wordBreak: 'break-word',
-          display: '-webkit-box',
-          '-webkit-line-clamp': '2',
-          '-webkit-box-orient': 'vertical',
-        }}
-      >
-        {props.title.substring(0, 1).toLocaleUpperCase()}
-      </SpanBox>
+      {(props.source || props.title).substring(0, 1).toLocaleUpperCase()}
     </VStack>
   )
 }

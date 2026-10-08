@@ -146,6 +146,7 @@ export function LibraryGridCard(props: LinkedItemCardProps): JSX.Element {
 type GridImageProps = {
   src?: string
   title?: string
+  source?: string
   readingProgress?: number
   isLoading?: boolean
 }
@@ -174,6 +175,7 @@ const GridImage = (props: GridImageProps): JSX.Element => {
       {displayFallback ? (
         <GridFallbackImage
           title={props.title ?? 'Stash'}
+          source={props.source}
           width="100%"
           height="150px"
           fontSize="16px"
@@ -215,6 +217,7 @@ const LibraryGridCardContent = (props: LinkedItemCardProps): JSX.Element => {
         <GridImage
           src={props.item.image}
           title={props.item.title}
+          source={originText}
           readingProgress={item.readingProgressPercent}
           isLoading={props.isLoading}
         />
