@@ -711,11 +711,14 @@ const processSubscription = async (
   let lastValidItem: RssFeedItem | null = null
 
   // Even when nothing is new, record the check and when to look again.
+  // A check that found nothing new still succeeded, so any earlier failure
+  // is over.
   const recordCheck = async (lastFetchedChecksum?: string) => {
     await updateSubscription(userId, subscriptionId, {
       refreshedAt,
       scheduledAt,
       lastFetchedChecksum,
+      failedAt: null,
     })
   }
 
