@@ -64,6 +64,9 @@ const Row = styled('div', {
     [`&:hover ${Actions}`]: { display: 'flex' },
     [`&:hover ${Meta}`]: { display: 'none' },
   },
+  // Keyboard users reach the actions by tabbing to the card.
+  [`.linkedItemCard:focus-within & ${Actions}`]: { display: 'flex' },
+  [`.linkedItemCard:focus-within & ${Meta}`]: { display: 'none' },
   [`&[data-menu-open="true"] ${Actions}`]: { display: 'flex' },
   [`&[data-menu-open="true"] ${Meta}`]: { display: 'none' },
   '@media (hover: none)': {

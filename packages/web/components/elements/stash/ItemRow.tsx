@@ -44,6 +44,9 @@ const Root = styled('div', {
   cursor: 'pointer',
   outline: 'none',
   transition: `background ${motion.fast}`,
+  // Keyboard users reach the actions by tabbing into the row.
+  [`&:focus-within ${Actions}`]: { display: 'flex' },
+  [`&:focus-within ${Meta}`]: { display: 'none' },
   '@media (hover: hover)': {
     '&:hover': { background: '$stSunken' },
     [`&:hover ${Actions}`]: { display: 'flex' },
