@@ -225,10 +225,12 @@ type PlayerState = { time: number; duration: number; playing: boolean }
 // once asked to, and takes seek commands.
 function usePlayer(
   frame: React.RefObject<HTMLIFrameElement>,
-  videoId: string
+  videoId: string,
+  start: number
 ): [PlayerState, (seconds: number) => void] {
+  // Until the player reports, the video is where it was asked to start.
   const [state, setState] = useState<PlayerState>({
-    time: positions.get(videoId) ?? 0,
+    time: start,
     duration: 0,
     playing: false,
   })
@@ -312,7 +314,7 @@ export function PeekVideo(props: {
     return `${PLAYER_ORIGIN}/embed/${videoId}?${params}`
   }, [videoId, start])
 
-  const [player, seek] = usePlayer(frame, videoId)
+  const [player, seek] = usePlayer(frame, videoId, start)
   const duration = player.duration || knownSeconds || 0
 
   // Ask the player to report its time once it has loaded.

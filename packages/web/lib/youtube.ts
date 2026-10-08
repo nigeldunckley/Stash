@@ -3,6 +3,19 @@
 import { PageType } from './networking/fragments/articleFragment'
 
 // A channel is followed through its feed of uploads.
+// The channel's page on YouTube, for a channel feed address.
+export const channelPageUrl = (
+  feedUrl: string | undefined
+): string | undefined => {
+  if (!feedUrl) return undefined
+  try {
+    const id = new URL(feedUrl).searchParams.get('channel_id')
+    return id ? `https://www.youtube.com/channel/${id}` : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export const isYouTubeFeedUrl = (url: string | undefined): boolean => {
   if (!url) {
     return false

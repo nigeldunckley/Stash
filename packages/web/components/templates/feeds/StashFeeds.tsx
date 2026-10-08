@@ -57,10 +57,14 @@ import {
 } from '../../elements/stash'
 import { ease, motion } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
-import { dayGroup, isYouTubeFeedUrl } from '../../../lib/youtube'
+import {
+  dayGroup,
+  descriptionWithoutChapters,
+  isYouTubeFeedUrl,
+} from '../../../lib/youtube'
 import { AddChannelPanel } from './AddChannelPanel'
 import { AddFeedPanel } from './AddFeedPanel'
-import { VideoCard, VideoGrid, VideoGroup } from './VideoCard'
+import { VideoCard, VideoGrid, VideoGroup, VideoGroups } from './VideoCard'
 import {
   FeedPeekPane,
   FeedPeekSheet,
@@ -240,6 +244,13 @@ const Toolbar = styled('header', {
   gap: '10px',
   flexWrap: 'wrap',
   marginBottom: '16px',
+  // One line on a phone: the source name gives way to the controls.
+  '@smDown': {
+    gap: '6px',
+    flexWrap: 'nowrap',
+    '& > *': { flex: 'none' },
+    '& > :first-child, & > :nth-child(2)': { flex: '0 1 auto', minWidth: 0 },
+  },
 })
 
 const TitleButton = styled('button', {
@@ -247,6 +258,8 @@ const TitleButton = styled('button', {
   display: 'none',
   alignItems: 'center',
   gap: '6px',
+  minWidth: 0,
+  maxWidth: '100%',
   cursor: 'pointer',
   '@mdDown': { display: 'inline-flex' },
 })
@@ -1322,6 +1335,7 @@ export function StashFeeds(): JSX.Element {
                     fallbackSrc={sourceIconFallback(item)}
                     name={sourceName(item)}
                     size={14}
+                    round={watching}
                   />
                 )}
                 {[
@@ -1337,7 +1351,11 @@ export function StashFeeds(): JSX.Element {
                   .join(' · ')}
               </RowSource>
             }
-            excerpt={item.description}
+            excerpt={
+              watching
+                ? descriptionWithoutChapters(item.description)
+                : item.description
+            }
             meta={
               <time
                 dateTime={item.publishedAt || item.savedAt}
@@ -1452,7 +1470,9 @@ export function StashFeeds(): JSX.Element {
                 <TitleButton
                   aria-label={watching ? 'Choose a channel' : 'Choose a source'}
                 >
-                  <ListTitle>{title}</ListTitle>
+                  <ListTitle>
+                    {selected?.name ?? (watching ? 'Channels' : 'Sources')}
+                  </ListTitle>
                   <CaretDown size={14} />
                 </TitleButton>
               }
@@ -1574,12 +1594,14 @@ export function StashFeeds(): JSX.Element {
                 </NewItemsBar>
               )}
               {tab == 'watch' && layout == 'grid' ? (
-                videoGroups.map((group) => (
-                  <section key={group.label} aria-label={group.label}>
-                    <VideoGroup>{group.label}</VideoGroup>
-                    <VideoGrid>{group.items.map(cardFor)}</VideoGrid>
-                  </section>
-                ))
+                <VideoGroups>
+                  {videoGroups.map((group) => (
+                    <section key={group.label} aria-label={group.label}>
+                      <VideoGroup>{group.label}</VideoGroup>
+                      <VideoGrid>{group.items.map(cardFor)}</VideoGrid>
+                    </section>
+                  ))}
+                </VideoGroups>
               ) : (
                 <ItemList>{listed.map(rowFor)}</ItemList>
               )}

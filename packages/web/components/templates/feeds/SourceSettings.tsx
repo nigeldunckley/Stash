@@ -8,7 +8,7 @@ import {
 } from '../../../lib/networking/queries/useGetSubscriptionsQuery'
 import { timeAgo } from '../../../lib/textFormatting'
 import { showErrorToast, showSuccessToast } from '../../../lib/toastHelpers'
-import { isYouTubeFeedUrl } from '../../../lib/youtube'
+import { channelPageUrl, isYouTubeFeedUrl } from '../../../lib/youtube'
 import { PanelLabel, SegmentedControl, Switch } from '../../elements/stash'
 import { motion } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
@@ -134,10 +134,20 @@ export function SourceSettings(props: {
       <Row>
         <PanelLabel>{subscription.name}</PanelLabel>
         <Detail>
-          {subscription.url && (
-            <a href={subscription.url} target="_blank" rel="noreferrer">
-              {subscription.url}
+          {channel && channelPageUrl(subscription.url) ? (
+            <a
+              href={channelPageUrl(subscription.url)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open channel on YouTube
             </a>
+          ) : (
+            subscription.url && (
+              <a href={subscription.url} target="_blank" rel="noreferrer">
+                {subscription.url}
+              </a>
+            )
           )}
           {subscription.lastFetchedAt && (
             <div>Checked {timeAgo(subscription.lastFetchedAt)}</div>

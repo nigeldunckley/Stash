@@ -78,7 +78,9 @@ const Toggle = styled('label', {
 const Import = styled('div', {
   display: 'flex',
   alignItems: 'center',
-  gap: '10px',
+  flexWrap: 'wrap',
+  gap: '6px 10px',
+  '& > button': { whiteSpace: 'nowrap' },
   paddingTop: '12px',
   borderTop: '1px solid $stLine',
 })

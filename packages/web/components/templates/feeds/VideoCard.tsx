@@ -19,6 +19,13 @@ export const VideoGrid = styled('div', {
   '@smDown': { gridTemplateColumns: 'minmax(0, 1fr)', gap: '24px' },
 })
 
+// The day groups, one under another.
+export const VideoGroups = styled('div', {
+  display: 'grid',
+  gap: '30px',
+  '@smDown': { gap: '28px' },
+})
+
 // Today, Yesterday, This week… above each run of videos.
 export const VideoGroup = styled('div', {
   display: 'flex',
@@ -36,7 +43,6 @@ export const VideoGroup = styled('div', {
     height: '1px',
     background: '$stLine',
   },
-  '* + &': { marginTop: '26px' },
 })
 
 const Thumb = styled('div', {
