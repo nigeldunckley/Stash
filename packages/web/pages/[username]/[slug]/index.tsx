@@ -19,6 +19,11 @@ import { useRegisterActions } from 'kbar'
 import { ReaderHeader } from '../../../components/templates/reader/ReaderHeader'
 import { StashReaderBar } from '../../../components/templates/reader/StashReaderBar'
 import { ReaderOutline } from '../../../components/templates/reader/ReaderOutline'
+import { FinishCard } from '../../../components/templates/reader/FinishCard'
+import {
+  NOTEBOOK_DOCKED,
+  NOTEBOOK_WIDTH,
+} from '../../../components/templates/reader/StashNotebookPanel'
 import { EditArticleModal } from '../../../components/templates/homeFeed/EditItemModals'
 import { VerticalArticleActionsMenu } from '../../../components/templates/article/VerticalArticleActions'
 import { PdfHeaderSpacer } from '../../../components/templates/article/PdfHeaderSpacer'
@@ -286,12 +291,17 @@ export default function Reader(): JSX.Element {
       actionHandler('showEditModal')
     }
 
+    const editLabels = () => {
+      readerSettings.setShowSetLabelsModal(true)
+    }
+
     document.addEventListener('archive', archive)
     document.addEventListener('delete', deletePage)
     document.addEventListener('mark-read', markRead)
     document.addEventListener('mark-unread', markUnread)
     document.addEventListener('openOriginalArticle', openOriginalArticle)
     document.addEventListener('showEditModal', showEditModal)
+    document.addEventListener('editLabels', editLabels)
 
     document.addEventListener('goNextOrHome', goNextOrHome)
     document.addEventListener('goPreviousOrHome', goPreviousOrHome)
@@ -304,10 +314,16 @@ export default function Reader(): JSX.Element {
       document.removeEventListener('delete', deletePage)
       document.removeEventListener('openOriginalArticle', openOriginalArticle)
       document.removeEventListener('showEditModal', showEditModal)
+      document.removeEventListener('editLabels', editLabels)
       document.removeEventListener('goNextOrHome', goNextOrHome)
       document.removeEventListener('goPreviousOrHome', goPreviousOrHome)
     }
-  }, [actionHandler, goNextOrHome, goPreviousOrHome])
+  }, [
+    actionHandler,
+    goNextOrHome,
+    goPreviousOrHome,
+    readerSettings.setShowSetLabelsModal,
+  ])
 
   useRegisterActions(
     [
@@ -646,6 +662,11 @@ export default function Reader(): JSX.Element {
             background: '$readerBg',
             overflow: 'hidden',
             paddingTop: '84px',
+            boxSizing: 'border-box',
+            transition: 'padding-right 200ms cubic-bezier(0.2, 0, 0, 1)',
+            [`body[data-notebook="open"] &`]: {
+              [NOTEBOOK_DOCKED]: { paddingRight: `${NOTEBOOK_WIDTH}px` },
+            },
             '--reader-column': `${1024 - readerSettings.marginWidth}px`,
             '& #article-container h2, & #article-container h3': {
               scrollMarginTop: '72px',
@@ -672,6 +693,13 @@ export default function Reader(): JSX.Element {
               highContrastText={readerSettings.highContrastText ?? undefined}
               highlightOnRelease={
                 readerSettings.highlightOnRelease ?? undefined
+              }
+              footer={
+                <FinishCard
+                  item={libraryItem}
+                  username={viewerData.profile.username}
+                  onDone={goBack}
+                />
               }
               textDirection={
                 libraryItem.directionality ?? readerSettings.textDirection

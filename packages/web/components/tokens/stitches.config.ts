@@ -277,7 +277,7 @@ export const { styled, css, theme, getCssText, globalCss, keyframes, config } =
 
         highlight_background_green: '85, 198, 137',
         highlight_background_blue: '106, 177, 255',
-        highlight_background_orange: '254, 181, 109',
+        highlight_background_orange: '255, 79, 0',
         highlight_background_yellow: '255, 210, 52',
         highlight_background_red: '251, 154, 154',
 
@@ -549,7 +549,7 @@ export const globalStyles = globalCss({
   // browser prefers this loaded here vs in the article styling css
   '.article-inner-css': {
     '::selection': {
-      background: 'rgb($highlightBackground)',
+      background: 'rgba(var(--colors-highlightBackground), 0.28)',
     },
   },
 })

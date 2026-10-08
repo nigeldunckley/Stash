@@ -1,13 +1,8 @@
+import { Check, Copy, NotePencil, Tag } from '@phosphor-icons/react'
 import { isAndroid } from '../../lib/deviceType'
-import { styled, theme } from '../tokens/stitches.config'
-import { Button } from '../elements/Button'
-import { HStack, Box } from '../elements/LayoutPrimitives'
-import { Circle, CheckCircle } from '@phosphor-icons/react'
-import { LabelIcon } from '../elements/icons/LabelIcon'
-import { NotebookIcon } from '../elements/icons/NotebookIcon'
 import { highlightColor, highlightColors } from '../../lib/themeUpdater'
-import { useState } from 'react'
-import { CopyIcon } from '../elements/icons/CopyIcon'
+import { motion } from '../elements/stash/motion'
+import { styled } from '../tokens/stitches.config'
 
 type PageCoordinates = {
   pageX: number
@@ -34,173 +29,144 @@ type HighlightBarProps = {
   handleButtonClick: (action: HighlightAction, param?: string) => void
 }
 
-export function HighlightBar(props: HighlightBarProps): JSX.Element {
-  return (
-    <Box
-      css={{
-        // width: '295px',
-        // height: '50px',
-        position: props.displayAtBottom ? 'fixed' : 'absolute',
-        background: '$thBackground2',
-        borderRadius: '5px',
-        border: '1px solid $thHighlightBar',
-        boxShadow: `0px 4px 4px 0px rgba(0, 0, 0, 0.15)`,
-        zIndex: 999,
-        ...(props.displayAtBottom && {
-          bottom: 'calc(38px + env(safe-area-inset-bottom, 40px))',
-          left: `calc(50% - ${(props.isNewHighlight ? 295 : 323) / 2}px)`
-        }),
-        ...(props.displayAtBottom && {
-          '@smDown': {
-            maxWidth: '90vw',
-            bottom: `calc(28px + ${
-              isAndroid() ? 30 : 0
-            }px + env(safe-area-inset-bottom, 40px))`,
-          },
-        }),
-        ...(!props.displayAtBottom && { left: props.anchorCoordinates.pageX }),
-        ...(!props.displayAtBottom && { top: props.anchorCoordinates.pageY }),
-      }}
-    >
-      <BarContent {...props} />
-    </Box>
-  )
-}
-
-const Separator = styled('div', {
-  width: '1px',
-  height: '20px',
-  mx: '5px',
-  background: '$thHighlightBar',
+// The bar is always dark, in every theme, so it reads as a tool over the text.
+const Pill = styled('div', {
+  zIndex: 999,
+  display: 'flex',
+  alignItems: 'center',
+  gap: '2px',
+  padding: '4px',
+  boxSizing: 'border-box',
+  background: '#18181B',
+  color: '#FAFAFA',
+  border: '1px solid #27272A',
+  borderRadius: '$md',
+  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.2)',
+  fontFamily: '$inter',
+  fontSize: '$caption',
+  whiteSpace: 'nowrap',
 })
 
-function BarContent(props: HighlightBarProps): JSX.Element {
-  const [hovered, setHovered] = useState<string | undefined>(undefined)
-  const size = props.displayAtBottom ? 35 : 25
+const Swatch = styled('button', {
+  all: 'unset',
+  display: 'grid',
+  placeItems: 'center',
+  width: '28px',
+  height: '28px',
+  borderRadius: '$sm',
+  cursor: 'pointer',
+  transition: `background ${motion.fast}`,
+  '&:hover': { background: 'rgba(255, 255, 255, 0.08)' },
+  '&:focus-visible': { boxShadow: '0 0 0 2px #FF4F00' },
+  '& > span': {
+    display: 'grid',
+    placeItems: 'center',
+    width: '14px',
+    height: '14px',
+    borderRadius: '50%',
+    color: '#09090B',
+    boxShadow: 'inset 0 0 0 1px rgba(0, 0, 0, 0.15)',
+  },
+  variants: {
+    touch: { true: { width: '40px', height: '40px' } },
+  },
+})
+
+const Action = styled('button', {
+  all: 'unset',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+  height: '28px',
+  padding: '0 9px',
+  borderRadius: '$sm',
+  cursor: 'pointer',
+  color: '#D4D4D8',
+  transition: `background ${motion.fast}, color ${motion.fast}`,
+  '&:hover': { background: 'rgba(255, 255, 255, 0.08)', color: '#FAFAFA' },
+  '&:focus-visible': { boxShadow: '0 0 0 2px #FF4F00' },
+  variants: {
+    touch: { true: { height: '40px', padding: '0 12px' } },
+  },
+})
+
+const Divider = styled('span', {
+  width: '1px',
+  height: '18px',
+  margin: '0 4px',
+  background: '#3F3F46',
+})
+
+export function HighlightBar(props: HighlightBarProps): JSX.Element {
+  const touch = props.displayAtBottom
+  const position = touch
+    ? {
+        position: 'fixed' as const,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        maxWidth: 'calc(100vw - 24px)',
+        bottom: `calc(${isAndroid() ? 58 : 28}px + env(safe-area-inset-bottom, 0px))`,
+      }
+    : {
+        position: 'absolute' as const,
+        left: props.anchorCoordinates.pageX,
+        top: props.anchorCoordinates.pageY,
+      }
 
   return (
-    <HStack
-      distribution="start"
-      alignment="center"
-      css={{
-        display: 'flex',
-        gap: '5px',
-        maxWidth: '100%',
-        width: props.displayAtBottom ? '100%' : 'auto',
-        padding: props.displayAtBottom ? '10px 15px' : '5px 10px',
-      }}
+    <Pill
+      style={position}
+      role="toolbar"
+      aria-label="Highlight"
     >
       {highlightColors.map((color) => {
+        const current = !props.isNewHighlight && props.highlightColor == color
         return (
-          <Button
-            key={`color-${color}`}
-            style="highlightBarIcon"
-            title={`Create highlight (${color})`}
+          <Swatch
+            key={color}
+            touch={touch}
+            title={
+              props.isNewHighlight
+                ? `Highlight ${color}`
+                : current
+                ? 'Remove highlight'
+                : `Change to ${color}`
+            }
+            aria-pressed={current}
             onClick={() => {
-              if (!props.isNewHighlight && props.highlightColor != color) {
-                props.handleButtonClick('updateColor', color)
-              } else if (
-                !props.isNewHighlight &&
-                props.highlightColor == color
-              ) {
+              if (props.isNewHighlight) {
+                props.handleButtonClick('create', color)
+              } else if (current) {
                 props.handleButtonClick('delete')
               } else {
-                props.handleButtonClick('create', color)
+                props.handleButtonClick('updateColor', color)
               }
             }}
-            onMouseEnter={() => {
-              setHovered(color)
-            }}
-            onMouseLeave={() => {
-              setHovered(undefined)
-            }}
           >
-            {props.isNewHighlight || props.highlightColor != color ? (
-              <Circle
-                key={color}
-                width={size}
-                height={size}
-                color={highlightColor(color)}
-                weight="fill"
-              />
-            ) : (
-              <CheckCircle
-                key={color}
-                width={size}
-                height={size}
-                color={highlightColor(color)}
-                weight="fill"
-              />
-            )}
-          </Button>
+            <span style={{ background: highlightColor(color) }}>
+              {current && <Check size={10} weight="bold" />}
+            </span>
+          </Swatch>
         )
       })}
-      <Separator />
+      <Divider />
+      <Action touch={touch} onClick={() => props.handleButtonClick('comment')}>
+        <NotePencil size={15} />
+        Note
+      </Action>
       {!props.isNewHighlight && (
-        <>
-          <Button
-            title={`Set labels`}
-            style="highlightBarIcon"
-            onClick={() => props.handleButtonClick('setHighlightLabels')}
-            onMouseEnter={() => {
-              setHovered('labels')
-            }}
-            onMouseLeave={() => {
-              setHovered(undefined)
-            }}
-          >
-            <LabelIcon
-              size={size}
-              color={
-                hovered == 'labels'
-                  ? theme.colors.thTextContrast.toString()
-                  : theme.colors.thHighlightBar.toString()
-              }
-            />
-          </Button>
-        </>
+        <Action
+          touch={touch}
+          onClick={() => props.handleButtonClick('setHighlightLabels')}
+        >
+          <Tag size={15} />
+          Labels
+        </Action>
       )}
-
-      <Button
-        title={props.isNewHighlight ? `Create highlight w/note` : 'Add note'}
-        style="highlightBarIcon"
-        onClick={() => props.handleButtonClick('comment')}
-        onMouseEnter={() => {
-          setHovered('note')
-        }}
-        onMouseLeave={() => {
-          setHovered(undefined)
-        }}
-      >
-        <NotebookIcon
-          size={size}
-          color={
-            hovered == 'note'
-              ? theme.colors.thTextContrast.toString()
-              : theme.colors.thHighlightBar.toString()
-          }
-        />
-      </Button>
-      <Button
-        title={`Copy`}
-        style="highlightBarIcon"
-        onClick={() => props.handleButtonClick('copy')}
-        onMouseEnter={() => {
-          setHovered('copy')
-        }}
-        onMouseLeave={() => {
-          setHovered(undefined)
-        }}
-      >
-        <CopyIcon
-          size={size}
-          color={
-            hovered == 'copy'
-              ? theme.colors.thTextContrast.toString()
-              : theme.colors.thHighlightBar.toString()
-          }
-        />
-      </Button>
-    </HStack>
+      <Action touch={touch} onClick={() => props.handleButtonClick('copy')}>
+        <Copy size={15} />
+        Copy
+      </Action>
+    </Pill>
   )
 }

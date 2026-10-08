@@ -16,6 +16,8 @@ const Nav = styled('nav', {
   alignContent: 'start',
   gap: '2px',
   '@media print': { display: 'none' },
+  // The notebook takes the right side, so the outline steps aside.
+  'body[data-notebook="open"] &': { display: 'none' },
 })
 
 const Heading = styled('div', {

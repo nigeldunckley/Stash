@@ -45,6 +45,8 @@ type ArticleContainerProps = {
   justifyText?: boolean
   textDirection?: TextDirection
   setShowHighlightsModal: React.Dispatch<React.SetStateAction<boolean>>
+  // Rendered after the article text, inside the reading column.
+  footer?: React.ReactNode
 }
 
 type RecommendationCommentsProps = {
@@ -544,6 +546,7 @@ export function ArticleContainer(props: ArticleContainerProps): JSX.Element {
           articleMutations={props.articleMutations}
           isAppleAppEmbed={props.isAppleAppEmbed}
         />
+        {props.footer}
         <Box css={{ height: '100px' }} />
       </Box>
       <HighlightsLayer

@@ -142,7 +142,7 @@ export function isDarkTheme(): boolean {
   )
 }
 
-export const highlightColors = ['yellow', 'red', 'green', 'blue']
+export const highlightColors = ['orange', 'yellow', 'green', 'blue']
 
 export const highlightColor = (name: string | undefined) => {
   switch (name) {
@@ -153,7 +153,7 @@ export const highlightColor = (name: string | undefined) => {
     case 'yellow':
       return '#FFD234'
     case 'orange':
-      return '#FEB56D'
+      return '#FF4F00'
     case 'red':
       return '#FB9A9A'
   }

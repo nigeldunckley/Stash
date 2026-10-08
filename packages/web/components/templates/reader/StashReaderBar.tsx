@@ -50,6 +50,9 @@ const Bar = styled('header', {
   transition: `transform ${motion.base}, border-color ${motion.base}`,
   [reducedMotion]: { transition: 'none' },
   '@media print': { display: 'none' },
+  'body[data-notebook="open"] &': {
+    '@media (min-width: 1100px)': { right: '360px' },
+  },
   variants: {
     hidden: {
       true: { transform: 'translateY(-100%)' },
