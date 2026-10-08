@@ -88,10 +88,8 @@ const Row = styled('div', {
   '&[data-image="true"]': {
     gridTemplateColumns: 'auto minmax(0, 1fr) auto auto',
     minHeight: '68px',
-    '@smDown': {
-      gridTemplateColumns: 'auto minmax(0, 1fr) auto',
-      [`& ${Trailing}`]: { display: 'none' },
-    },
+    // Phones keep the actions but drop the meta to make room.
+    '@smDown': { [`& ${Meta}`]: { display: 'none' } },
   },
 })
 

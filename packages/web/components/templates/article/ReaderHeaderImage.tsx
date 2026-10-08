@@ -24,17 +24,22 @@ const Figure = styled('figure', {
 
 // Images often come back through the image proxy as
 // https://host/images/<size>,s<signature>/<original url>, and sites serve one
-// picture at several sizes (photo-1200x630.jpg, photo@2x.webp). Compare file
-// names with those parts removed so copies of one picture match.
+// picture at several sizes (photo-1200x630.jpg, photo@2x.webp) or from
+// another host. Compare paths with those parts removed so copies of one
+// picture match.
 export function imageKey(src: string): string {
   const proxied = src.match(/\/[^/]*,s[^/]+\/(https?:\/\/?.+)$/)
-  const path = (proxied ? proxied[1] : src).split(/[?#]/)[0]
+  const url = (proxied ? proxied[1] : src).replace(/^https?:\/\/?[^/]+/i, '')
+  const [path, query = ''] = url.split('#')[0].split('?')
   const file = path.split('/').pop() ?? ''
-  return file
+  const stem = file
     .toLowerCase()
     .replace(/\.[a-z0-9]+$/, '')
     .replace(/(-|_)?(\d+x\d+|scaled|large|medium)$/, '')
     .replace(/@\dx$/, '')
+  const dir = path.slice(0, path.length - file.length).toLowerCase()
+  // Without a file extension the query usually names the picture.
+  return dir + stem + (/\.[a-z0-9]+$/i.test(file) ? '' : `?${query}`)
 }
 
 // How much text may come before a copy of the header image in the body for it
