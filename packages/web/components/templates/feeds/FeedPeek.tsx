@@ -102,9 +102,9 @@ const Pane = styled('aside', {
 
 // The pane's default width and how narrow it may get (px).
 export const PEEK_WIDTH = 460
-const PEEK_MIN = 340
+export const PEEK_MIN = 340
 // The narrowest the list may get beside an inline pane (px).
-const LIST_MIN = 380
+export const LIST_MIN = 380
 
 // The pane's left edge, dragged to trade list width for article width.
 const Grip = styled('div', {

@@ -12,7 +12,10 @@ import {
 } from '../../../lib/networking/library_items/useLibraryItems'
 import { useGetViewer } from '../../../lib/networking/viewer/useGetViewer'
 import { formatMinutes, minutesLeft } from '../../../lib/readingTime'
-import { subscriptionName } from '../../../lib/networking/subscriptions/feeds'
+import {
+  markItemsSeen,
+  subscriptionName,
+} from '../../../lib/networking/subscriptions/feeds'
 import { useGetSubscriptions } from '../../../lib/networking/subscriptions/useGetSubscriptions'
 import { faviconFor, shortTimeAgo, siteName } from '../../../lib/textFormatting'
 import {
@@ -302,6 +305,18 @@ export function StashHome(): JSX.Element {
     [router, viewer]
   )
 
+  // Opening a feed item counts it as seen, as it does in Feeds, so it leaves
+  // New from feeds.
+  const openFeedItem = useCallback(
+    (item: LibraryItemNode) => {
+      markItemsSeen([item.id]).catch((error) =>
+        console.log('error marking item seen', error)
+      )
+      open(item)
+    },
+    [open]
+  )
+
   const select = useCallback((id: string | undefined) => {
     setSelectedId(id)
     if (id) {
@@ -537,7 +552,7 @@ export function StashHome(): JSX.Element {
                       </time>
                     }
                     selected={item.id === selectedId}
-                    onOpen={() => open(item)}
+                    onOpen={() => openFeedItem(item)}
                     onFocus={() => setSelectedId(item.id)}
                     actions={
                       <IconButton

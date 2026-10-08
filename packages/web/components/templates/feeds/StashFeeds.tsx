@@ -59,7 +59,9 @@ import { AddFeedPanel } from './AddFeedPanel'
 import {
   FeedPeekPane,
   FeedPeekSheet,
+  LIST_MIN,
   PEEK_INLINE,
+  PEEK_MIN,
   PEEK_WIDTH,
 } from './FeedPeek'
 import { SourceSettings } from './SourceSettings'
@@ -96,7 +98,11 @@ const Panes = styled('div', {
     inline: {
       true: {
         maxWidth: '1680px',
-        gridTemplateColumns: `36px minmax(0, 1fr) var(--peek-width, ${PEEK_WIDTH}px)`,
+        // The stored width gives way when the window is too narrow for it, so
+        // the list keeps at least LIST_MIN.
+        gridTemplateColumns: `36px minmax(0, 1fr) max(${PEEK_MIN}px, min(var(--peek-width, ${PEEK_WIDTH}px), calc(100% - ${
+          36 + 40 + LIST_MIN
+        }px)))`,
       },
     },
   },
@@ -528,11 +534,17 @@ export function StashFeeds(): JSX.Element {
   const total = itemsQuery.data?.pages[0]?.pageInfo.totalCount
 
   // Refetching the open list would pull rows out from under the reader, so a
-  // one-item query watches for newer items and offers to show them.
+  // one-item query watches for newer items and offers to show them. It looks
+  // at the most recently changed unseen item rather than the newest by
+  // publish date, so items that arrive with an older date are noticed too.
   const latestQuery = useGetLibraryItems(
-    `feeds-latest-${selected?.id ?? 'all'}-${view}`,
+    `feeds-latest-${selected?.id ?? 'all'}`,
     'following',
-    { limit: 1, sortDescending: true, searchQuery },
+    {
+      limit: 1,
+      sortDescending: true,
+      searchQuery: `${sourceQuery(selected)} -is:seen sort:updated-desc`.trim(),
+    },
     true,
     LIVE_CHECK
   )
@@ -546,8 +558,22 @@ export function StashFeeds(): JSX.Element {
       ),
     [itemsQuery.data]
   )
+  // What the watcher saw when the list last loaded. A different item since
+  // then means something arrived or changed.
+  const [baselineId, setBaselineId] = useState<string>()
+  const latestRef = useRef(latestId)
+  latestRef.current = latestId
+  useEffect(() => {
+    setBaselineId(latestRef.current)
+  }, [itemsQuery.dataUpdatedAt])
+  useEffect(() => {
+    if (latestId) {
+      setBaselineId((current) => current ?? latestId)
+    }
+  }, [latestId])
   const hasNewItems =
     !!latestId &&
+    latestId != baselineId &&
     !itemsQuery.isFetching &&
     !itemsQuery.isPending &&
     !listedIds.has(latestId)
