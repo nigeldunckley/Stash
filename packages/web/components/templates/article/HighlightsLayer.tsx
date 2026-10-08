@@ -74,13 +74,15 @@ export function HighlightsLayer(props: HighlightsLayerProps): JSX.Element {
   const focusedHighlightMousePos = useRef({ pageX: 0, pageY: 0 })
 
   const [currentHighlightIdx, setCurrentHighlightIdx] = useState(0)
-  const [focusedHighlight, setFocusedHighlight] =
-    useState<Highlight | undefined>(undefined)
+  const [focusedHighlight, setFocusedHighlight] = useState<
+    Highlight | undefined
+  >(undefined)
 
   const [selectionData, setSelectionData] = useSelection(highlightLocations)
 
-  const [labelsTarget, setLabelsTarget] =
-    useState<Highlight | undefined>(undefined)
+  const [labelsTarget, setLabelsTarget] = useState<Highlight | undefined>(
+    undefined
+  )
 
   const [
     confirmDeleteHighlightWithNoteId,
@@ -859,22 +861,22 @@ export function HighlightsLayer(props: HighlightsLayerProps): JSX.Element {
         viewer={props.viewer}
         item={props.item}
         viewInReader={(highlightId) => {
-            // The timeout here is a bit of a hack to work around rerendering
-            setTimeout(() => {
-              const target = document.querySelector(
-                `[omnivore-highlight-id="${highlightId}"]`
-              )
-              target?.scrollIntoView({
-                block: 'center',
-                behavior: 'auto',
-              })
-            }, 1)
-            history.replaceState(
-              undefined,
-              window.location.href,
-              `#${highlightId}`
+          // The timeout here is a bit of a hack to work around rerendering
+          setTimeout(() => {
+            const target = document.querySelector(
+              `[omnivore-highlight-id="${highlightId}"]`
             )
-          }}
+            target?.scrollIntoView({
+              block: 'center',
+              behavior: 'auto',
+            })
+          }, 1)
+          history.replaceState(
+            undefined,
+            window.location.href,
+            `#${highlightId}`
+          )
+        }}
       />
     </>
   )

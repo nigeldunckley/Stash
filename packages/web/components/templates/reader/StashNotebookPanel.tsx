@@ -159,7 +159,9 @@ type StashNotebookPanelProps = {
 
 // The reader's notebook: highlights and notes, and the item's details. A panel
 // on the right on wide screens, a bottom sheet on iPhone.
-export function StashNotebookPanel(props: StashNotebookPanelProps): JSX.Element {
+export function StashNotebookPanel(
+  props: StashNotebookPanelProps
+): JSX.Element {
   const [tab, setTab] = useState<Tab>('highlights')
   const { width } = useGetWindowDimensions()
   const sheet = width > 0 && width < SHEET_BELOW
@@ -226,9 +228,7 @@ export function StashNotebookPanel(props: StashNotebookPanelProps): JSX.Element 
       options={[
         {
           value: 'highlights',
-          label: highlightCount
-            ? `Highlights ${highlightCount}`
-            : 'Highlights',
+          label: highlightCount ? `Highlights ${highlightCount}` : 'Highlights',
         },
         { value: 'info', label: 'Info' },
       ]}
@@ -319,9 +319,7 @@ function Info({ article }: InfoProps): JSX.Element {
         >
           {article.title}
         </div>
-        {article.description && (
-          <Muted>{article.description}</Muted>
-        )}
+        {article.description && <Muted>{article.description}</Muted>}
       </div>
       <InfoList>
         {article.author && (

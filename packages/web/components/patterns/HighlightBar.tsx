@@ -105,7 +105,9 @@ export function HighlightBar(props: HighlightBarProps): JSX.Element {
         left: '50%',
         transform: 'translateX(-50%)',
         maxWidth: 'calc(100vw - 24px)',
-        bottom: `calc(${isAndroid() ? 58 : 28}px + env(safe-area-inset-bottom, 0px))`,
+        bottom: `calc(${
+          isAndroid() ? 58 : 28
+        }px + env(safe-area-inset-bottom, 0px))`,
       }
     : {
         position: 'absolute' as const,
@@ -114,11 +116,7 @@ export function HighlightBar(props: HighlightBarProps): JSX.Element {
       }
 
   return (
-    <Pill
-      style={position}
-      role="toolbar"
-      aria-label="Highlight"
-    >
+    <Pill style={position} role="toolbar" aria-label="Highlight">
       {highlightColors.map((color) => {
         const current = !props.isNewHighlight && props.highlightColor == color
         return (
