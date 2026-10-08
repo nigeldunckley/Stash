@@ -2,6 +2,7 @@ import axios from 'axios'
 import { parseHTML } from 'linkedom'
 import Parser from 'rss-parser'
 import _ from 'underscore'
+import { Client as InnerTube } from 'youtubei'
 import { logger } from './logger'
 import { videoIdFromYouTubeUrl } from './youtube'
 
@@ -19,6 +20,16 @@ const PAGE_HEADERS = {
   'accept-language': 'en-GB,en;q=0.9',
   cookie: 'SOCS=CAI; CONSENT=YES+1',
 }
+
+// YouTube's own app interface. It answers in JSON, so unlike the channel's web
+// page it is never replaced by a consent page or a "sign in" wall.
+const innertube = new InnerTube({
+  youtubeClientOptions: { hl: 'en', gl: 'GB' },
+})
+
+// Something went wrong talking to YouTube, as opposed to YouTube saying there
+// is no such channel.
+export class YouTubeUnavailableError extends Error {}
 
 export type YouTubeVideo = {
   id: string
@@ -229,68 +240,220 @@ const uploadsPerWeek = (dates: Date[]) => {
   return Math.round(((dates.length - 1) / weeks) * 10) / 10
 }
 
+// The channel ID behind a channel address such as youtube.com/@handle.
+const resolveChannelId = async (page: string): Promise<string | undefined> => {
+  const response = (await innertube.http.post(
+    '/youtubei/v1/navigation/resolve_url',
+    { data: { url: page } }
+  )) as {
+    data?: { endpoint?: { browseEndpoint?: { browseId?: string } } }
+  }
+  const id = response.data?.endpoint?.browseEndpoint?.browseId
+  return id && CHANNEL_ID.test(id) ? id : undefined
+}
+
+type ChannelInfo = {
+  title?: string
+  handle?: string
+  avatar?: string
+  videos: YouTubeVideo[]
+}
+
+// The channel's name, handle, picture and latest uploads from the app
+// interface.
+const channelInfo = async (
+  channelId: string,
+  videoCount: number
+): Promise<ChannelInfo | undefined> => {
+  const channel = await innertube.getChannel(channelId)
+  if (!channel) {
+    return undefined
+  }
+  let videos: YouTubeVideo[] = []
+  if (videoCount > 0) {
+    try {
+      const items = await channel.videos.next()
+      videos = items.slice(0, videoCount).map((video) => ({
+        id: video.id,
+        title: video.title,
+        url: watchUrl(video.id),
+        thumbnail: videoThumbnail(video.id),
+      }))
+    } catch (error) {
+      logger.info('youtube: channel videos unavailable', { channelId, error })
+    }
+  }
+  return {
+    title: channel.name || undefined,
+    handle: channel.handle || undefined,
+    avatar: channel.thumbnails?.length ? channel.thumbnails.best : undefined,
+    videos,
+  }
+}
+
+const videosFromFeed = (feed: Awaited<ReturnType<typeof fetchChannelFeed>>) =>
+  feed.items
+    .map((item): YouTubeVideo | undefined => {
+      const id = item['yt:videoId'] || videoIdFromYouTubeUrl(item.link)
+      if (!id) {
+        return undefined
+      }
+      return {
+        id,
+        title: item.title || '',
+        url: item.link || watchUrl(id),
+        thumbnail: videoThumbnail(id),
+        publishedAt: item.isoDate ? new Date(item.isoDate) : undefined,
+      }
+    })
+    .filter((video): video is YouTubeVideo => !!video)
+
+const attempt = async <T>(
+  what: string,
+  context: Record<string, unknown>,
+  run: () => Promise<T>
+): Promise<{ value?: T; failed: boolean }> => {
+  try {
+    return { value: await run(), failed: false }
+  } catch (error) {
+    logger.info(`youtube: ${what} failed`, {
+      ...context,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return { failed: true }
+  }
+}
+
+// Finds the channel behind a channel link, @handle, feed address or video
+// link. Undefined means YouTube has no such channel; YouTubeUnavailableError
+// means YouTube couldn't be asked.
 export const resolveYouTubeChannel = async (
   value: string,
   videoCount = 3
 ): Promise<YouTubeChannel | undefined> => {
-  try {
-    const target = await channelPageFor(value)
-    if (!target) {
-      return undefined
-    }
-
-    let page: ChannelPage = { channelId: target.channelId }
-    if (target.page) {
-      try {
-        page = { ...readChannelPage(await fetchPage(target.page)), ...page }
-      } catch (error) {
-        // Without the page a channel ID is still enough to follow it.
-        if (!target.channelId) throw error
-        logger.info('youtube: channel page unavailable', { value })
-      }
-    }
-
-    const channelId = page.channelId
-    if (!channelId || !CHANNEL_ID.test(channelId)) {
-      return undefined
-    }
-
-    const feedUrl = channelFeedUrl(channelId)
-    const feed = await fetchChannelFeed(feedUrl)
-    const videos = feed.items
-      .map((item): YouTubeVideo | undefined => {
-        const id = item['yt:videoId'] || videoIdFromYouTubeUrl(item.link)
-        if (!id) {
-          return undefined
-        }
-        return {
-          id,
-          title: item.title || '',
-          url: item.link || watchUrl(id),
-          thumbnail: videoThumbnail(id),
-          publishedAt: item.isoDate ? new Date(item.isoDate) : undefined,
-        }
-      })
-      .filter((video): video is YouTubeVideo => !!video)
-
-    return {
-      channelId,
-      feedUrl,
-      title: page.title || feed.title || channelId,
-      handle: page.handle,
-      avatar: page.avatar,
-      videos: videos
-        .filter((video) => !isShortsLink(video.url))
-        .slice(0, videoCount),
-      uploadsPerWeek: uploadsPerWeek(
-        videos
-          .map((video) => video.publishedAt)
-          .filter((date): date is Date => !!date)
-      ),
-    }
-  } catch (error) {
-    logger.info('youtube: could not resolve channel', { value, error })
+  const target = await attempt('finding the channel address', { value }, () =>
+    channelPageFor(value)
+  )
+  if (target.failed) {
+    throw new YouTubeUnavailableError('YouTube did not answer')
+  }
+  if (!target.value) {
     return undefined
+  }
+  const { page: pageUrl } = target.value
+  let channelId = target.value.channelId
+  let unreachable = false
+
+  // The app interface first, then the channel's web page.
+  let page: ChannelPage = {}
+  if (!channelId && pageUrl) {
+    const resolved = await attempt('resolving the channel', { pageUrl }, () =>
+      resolveChannelId(pageUrl)
+    )
+    channelId = resolved.value
+    unreachable = resolved.failed
+  }
+  if (!channelId && pageUrl) {
+    const scraped = await attempt('reading the channel page', { pageUrl }, () =>
+      fetchPage(pageUrl).then(readChannelPage)
+    )
+    page = scraped.value ?? {}
+    channelId = page.channelId
+    unreachable = unreachable && scraped.failed
+  }
+  if (!channelId || !CHANNEL_ID.test(channelId)) {
+    if (unreachable) {
+      throw new YouTubeUnavailableError('YouTube did not answer')
+    }
+    return undefined
+  }
+
+  const feedUrl = channelFeedUrl(channelId)
+  const [info, feed] = await Promise.all([
+    attempt('loading the channel', { channelId }, () =>
+      channelInfo(channelId as string, videoCount)
+    ),
+    attempt('loading the channel feed', { feedUrl }, () =>
+      fetchChannelFeed(feedUrl)
+    ),
+  ])
+  if (!info.value && !feed.value && !page.title) {
+    if (info.failed || feed.failed) {
+      throw new YouTubeUnavailableError('YouTube did not answer')
+    }
+    return undefined
+  }
+
+  const feedVideos = feed.value ? videosFromFeed(feed.value) : []
+  const videos = feedVideos.length
+    ? feedVideos.filter((video) => !isShortsLink(video.url))
+    : info.value?.videos ?? []
+
+  return {
+    channelId,
+    feedUrl,
+    title: info.value?.title || page.title || feed.value?.title || channelId,
+    handle: info.value?.handle || page.handle,
+    avatar: info.value?.avatar || page.avatar,
+    videos: videos.slice(0, videoCount),
+    uploadsPerWeek: uploadsPerWeek(
+      feedVideos
+        .map((video) => video.publishedAt)
+        .filter((date): date is Date => !!date)
+    ),
+  }
+}
+
+const UNIT_MS: Record<string, number> = {
+  second: 1000,
+  minute: 60 * 1000,
+  hour: 60 * 60 * 1000,
+  day: 24 * 60 * 60 * 1000,
+  week: 7 * 24 * 60 * 60 * 1000,
+  month: 30 * 24 * 60 * 60 * 1000,
+  year: 365 * 24 * 60 * 60 * 1000,
+}
+
+// "3 hours ago" or "Streamed 2 days ago" as a date. YouTube only gives the app
+// interface relative times, so this is as close as it gets.
+export const dateFromAge = (age: string | undefined, now = Date.now()) => {
+  const match = age?.match(
+    /(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/i
+  )
+  if (!match) {
+    return undefined
+  }
+  return new Date(now - Number(match[1]) * UNIT_MS[match[2].toLowerCase()])
+}
+
+export type ChannelUpload = {
+  id: string
+  title: string
+  description?: string
+  publishedAt?: Date
+}
+
+// The channel's latest uploads from the app interface, for when its feed
+// can't be read. Shorts and live streams are on other tabs, so never here.
+export const channelUploads = async (
+  channelId: string
+): Promise<{ title: string; uploads: ChannelUpload[] } | undefined> => {
+  const channel = await innertube.getChannel(channelId)
+  if (!channel) {
+    return undefined
+  }
+  const videos = await channel.videos.next()
+  const now = Date.now()
+  return {
+    title: channel.name || channelId,
+    uploads: videos
+      .filter((video) => !video.isLive)
+      .map((video) => ({
+        id: video.id,
+        title: video.title,
+        description: video.description || undefined,
+        publishedAt: dateFromAge(video.uploadDate, now),
+      })),
   }
 }
 
@@ -355,7 +518,9 @@ export const videoDocument = (args: {
   <head><title>${title}</title>
   <meta property="og:image" content="${videoThumbnail(args.videoId)}" />
   <meta property="og:title" content="${title}" />
-  <meta property="og:description" content="${_.escape(args.description || '')}" />
+  <meta property="og:description" content="${_.escape(
+    args.description || ''
+  )}" />
   <meta property="og:article:author" content="${channel}" />
   <meta property="og:site_name" content="YouTube" />
   <meta property="og:type" content="video" />

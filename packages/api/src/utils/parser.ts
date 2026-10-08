@@ -40,7 +40,7 @@ import {
 import { createImageProxyUrl } from './imageproxy'
 import { logger, LogRecord } from './logger'
 
-interface Feed {
+export interface Feed {
   title: string
   url: string
   type: string

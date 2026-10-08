@@ -56,15 +56,30 @@ import { analytics } from '../../utils/analytics'
 import { enqueueRssFeedFetch } from '../../utils/createTask'
 import { authorized } from '../../utils/gql-utils'
 import { getAbsoluteUrl, keysToCamelCase } from '../../utils/helpers'
-import { parseFeed, parseOpml, rssParserConfig } from '../../utils/parser'
+import { Feed, parseFeed, parseOpml, rssParserConfig } from '../../utils/parser'
 import {
   channelIdFromFeedUrl,
   isYouTubeUrl,
   resolveYouTubeChannel,
+  YouTubeUnavailableError,
 } from '../../utils/youtubeChannel'
 import { isArray } from 'lodash'
 
 type PartialSubscription = Omit<Subscription, 'newsletterEmail'>
+
+// A YouTube channel described from YouTube itself, for when its feed can't be
+// read.
+const youtubeChannelFeed = async (feedUrl: string): Promise<Feed | null> => {
+  const channel = await resolveYouTubeChannel(feedUrl, 0).catch(() => undefined)
+  return channel
+    ? {
+        url: feedUrl,
+        title: channel.title,
+        type: 'rss',
+        thumbnail: channel.avatar,
+      }
+    : null
+}
 
 export type SubscriptionsSuccessPartial = Merge<
   SubscriptionsSuccess,
@@ -217,8 +232,11 @@ export const subscribeResolver = authorized<
       }
     }
 
-    // validate rss feed
-    const feed = await parseFeed(feedUrl)
+    // validate rss feed. A YouTube channel can be followed even when its feed
+    // is briefly unavailable, as long as YouTube knows the channel.
+    const feed =
+      (await parseFeed(feedUrl)) ||
+      (channelIdFromFeedUrl(feedUrl) ? await youtubeChannelFeed(feedUrl) : null)
     if (!feed) {
       return {
         errorCodes: [SubscribeErrorCode.NotFound],
@@ -227,7 +245,9 @@ export const subscribeResolver = authorized<
 
     // A YouTube feed has no picture of its own, so use the channel's avatar.
     if (channelIdFromFeedUrl(feedUrl) && !feed.thumbnail) {
-      const channel = await resolveYouTubeChannel(feedUrl, 0)
+      const channel = await resolveYouTubeChannel(feedUrl, 0).catch(
+        () => undefined
+      )
       feed.thumbnail = channel?.avatar
       feed.title = channel?.title || feed.title
     }
@@ -464,7 +484,7 @@ export const scanFeedsResolver = authorized<
 
   // A YouTube channel or video leads to the channel's feed.
   if (isYouTubeUrl(url)) {
-    const channel = await resolveYouTubeChannel(url, 0)
+    const channel = await resolveYouTubeChannel(url, 0).catch(() => undefined)
     return {
       feeds: channel
         ? [{ url: channel.feedUrl, title: channel.title, type: 'rss' }]
@@ -547,11 +567,18 @@ export const youtubeChannelResolver = authorized<
   if (!isYouTubeUrl(url)) {
     return { errorCodes: [YouTubeChannelErrorCode.BadRequest] }
   }
-  const channel = await resolveYouTubeChannel(url)
-  if (!channel) {
-    return { errorCodes: [YouTubeChannelErrorCode.NotFound] }
+  try {
+    const channel = await resolveYouTubeChannel(url)
+    if (!channel) {
+      return { errorCodes: [YouTubeChannelErrorCode.NotFound] }
+    }
+    return { channel }
+  } catch (error) {
+    if (error instanceof YouTubeUnavailableError) {
+      return { errorCodes: [YouTubeChannelErrorCode.Unavailable] }
+    }
+    throw error
   }
-  return { channel }
 })
 
 export const subscriptionResolver = authorized<

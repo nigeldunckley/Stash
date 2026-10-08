@@ -2939,6 +2939,7 @@ const schema = gql`
     BAD_REQUEST
     NOT_FOUND
     UNAUTHORIZED
+    UNAVAILABLE
   }
 
   type YouTubeChannelError {
