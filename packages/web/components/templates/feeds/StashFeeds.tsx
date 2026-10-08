@@ -1,4 +1,5 @@
 import {
+  Archive,
   ArrowSquareOut,
   ArrowUp,
   Bookmark,
@@ -7,11 +8,11 @@ import {
   GearSix,
   Plus,
   Rss,
+  SidebarSimple,
 } from '@phosphor-icons/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import useLibraryItemActions from '../../../lib/hooks/useLibraryItemActions'
 import { State } from '../../../lib/networking/fragments/articleFragment'
 import {
   BulkAction,
@@ -22,7 +23,9 @@ import {
 import { Subscription } from '../../../lib/networking/queries/useGetSubscriptionsQuery'
 import {
   markItemsSeen,
+  moveItemToFolder,
   searchValue,
+  setItemArchived,
   subscriptionKey,
   subscriptionName,
 } from '../../../lib/networking/subscriptions/feeds'
@@ -39,13 +42,15 @@ import {
   PageTitle,
   Popover,
   SegmentedControl,
+  showUndoToast,
   SiteIcon,
   SwipeAction,
   UnseenDot,
 } from '../../elements/stash'
-import { motion } from '../../elements/stash/motion'
+import { ease, motion } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
 import { AddFeedPanel } from './AddFeedPanel'
+import { FeedPeekPane, FeedPeekSheet, PEEK_INLINE } from './FeedPeek'
 import { SourceSettings } from './SourceSettings'
 
 const Page = styled('main', {
@@ -68,6 +73,22 @@ const Panes = styled('div', {
   gap: '28px',
   alignItems: 'start',
   '@mdDown': { gridTemplateColumns: 'minmax(0, 1fr)' },
+  variants: {
+    // With the peek open, sources fold into a rail of icons.
+    peeking: {
+      true: {
+        gridTemplateColumns: '36px minmax(0, 1fr)',
+        gap: '20px',
+      },
+    },
+    // On wide screens the peek is a third column rather than floating.
+    inline: {
+      true: {
+        maxWidth: '1440px',
+        gridTemplateColumns: '36px minmax(0, 1fr) minmax(400px, 500px)',
+      },
+    },
+  },
 })
 
 const Sources = styled('nav', {
@@ -78,6 +99,44 @@ const Sources = styled('nav', {
   maxHeight: 'calc(100vh - 48px)',
   overflowY: 'auto',
   '@mdDown': { display: 'none' },
+})
+
+// The collapsed sources column: icons only, with a dot for unseen items.
+const rail = {
+  width: '36px',
+  overflow: 'hidden',
+  '& > div:first-child': { display: 'none' },
+  '& > button': {
+    gridTemplateColumns: '1fr',
+    justifyItems: 'center',
+    position: 'relative',
+    padding: 0,
+  },
+  '& > button > span:nth-child(2)': { display: 'none' },
+  '& > button > span:nth-child(3)': {
+    position: 'absolute',
+    top: '6px',
+    right: '5px',
+    width: '5px',
+    height: '5px',
+    padding: 0,
+    borderRadius: '50%',
+    fontSize: 0,
+  },
+  '& > button > span:nth-child(3):not(:empty)': { background: '$stAccent' },
+}
+
+// Rows saved from the list fold away before they leave it.
+const Leaving = styled('div', {
+  display: 'grid',
+  gridTemplateRows: '1fr',
+  transition: `grid-template-rows 220ms ${ease}, opacity 180ms ${ease}`,
+  '& > *': { minHeight: 0, overflow: 'hidden' },
+  variants: {
+    leaving: {
+      true: { gridTemplateRows: '0fr', opacity: 0 },
+    },
+  },
 })
 
 const SourcesHeading = styled('div', {
@@ -242,6 +301,18 @@ const MobileSources = styled('div', {
 
 type View = 'unseen' | 'all'
 
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(false)
+  useEffect(() => {
+    const list = window.matchMedia(query)
+    const update = () => setMatches(list.matches)
+    update()
+    list.addEventListener('change', update)
+    return () => list.removeEventListener('change', update)
+  }, [query])
+  return matches
+}
+
 const isVisible = (item: LibraryItemNode) =>
   item.state !== State.ARCHIVED && item.state !== State.DELETED
 
@@ -284,6 +355,7 @@ function SourceList(props: {
       <Source
         aria-current={!props.selected}
         onClick={() => props.onSelect(undefined)}
+        title="All feeds"
       >
         <AllIcon aria-hidden="true">
           <Rss size={11} weight="bold" />
@@ -318,7 +390,6 @@ export function StashFeeds(): JSX.Element {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { data: viewer } = useGetViewer()
-  const { moveItem } = useLibraryItemActions()
   const bulkAction = useBulkActions()
   const { data: allSubscriptions, isPending: subscriptionsPending } =
     useGetSubscriptions({})
@@ -337,6 +408,19 @@ export function StashFeeds(): JSX.Element {
   const [view, setView] = useState<View>('unseen')
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  const isPhone = useMediaQuery('(max-width: 768px)')
+  const peekInline = useMediaQuery(PEEK_INLINE)
+
+  // The item open in the peek. A copy is kept so the peek stays put even if
+  // the list refreshes underneath it.
+  const [peekItem, setPeekItem] = useState<LibraryItemNode>()
+  // Items saved to the Library this visit. They leave the list, except the
+  // one still open in the peek.
+  const [saved, setSaved] = useState<Set<string>>(new Set())
+  // Items archived this visit. They leave the list straight away.
+  const [archived, setArchived] = useState<Set<string>>(new Set())
+  const [leaving, setLeaving] = useState<Set<string>>(new Set())
+  const [focusId, setFocusId] = useState<string | undefined>()
 
   const select = useCallback(
     (subscription?: Subscription) => {
@@ -350,6 +434,7 @@ export function StashFeeds(): JSX.Element {
         shallow: true,
       })
       setSourcesOpen(false)
+      setPeekItem(undefined)
       window.scrollTo({ top: 0 })
     },
     [router]
@@ -374,6 +459,16 @@ export function StashFeeds(): JSX.Element {
         .map((edge) => edge.node)
         .filter(isVisible),
     [itemsQuery.data]
+  )
+  const listed = useMemo(
+    () =>
+      items.filter(
+        (item) =>
+          leaving.has(item.id) ||
+          item.id == peekItem?.id ||
+          (!archived.has(item.id) && !saved.has(item.id))
+      ),
+    [items, saved, archived, leaving, peekItem]
   )
   const total = itemsQuery.data?.pages[0]?.pageInfo.totalCount
 
@@ -548,12 +643,168 @@ export function StashFeeds(): JSX.Element {
     [router, viewer, markSeen]
   )
 
+  // The Library, Home and the source counts need to hear about saves; the
+  // feed list keeps its own state.
+  const refreshElsewhere = useCallback(() => {
+    queryClient.invalidateQueries({
+      predicate: (query) =>
+        query.queryKey[0] == 'libraryItems' &&
+        typeof query.queryKey[1] == 'string' &&
+        (!query.queryKey[1].startsWith('feeds-') ||
+          query.queryKey[1].startsWith('feeds-count-')),
+    })
+  }, [queryClient])
+
+  const toggle = (set: Set<string>, id: string, on: boolean) => {
+    const next = new Set(set)
+    if (on) {
+      next.add(id)
+    } else {
+      next.delete(id)
+    }
+    return next
+  }
+
+  // A row that was saved or archived stays in the list while it folds away.
+  const fold = (id: string) => {
+    setLeaving((current) => toggle(current, id, true))
+    setTimeout(() => setLeaving((current) => toggle(current, id, false)), 220)
+  }
+
   const save = useCallback(
     async (item: LibraryItemNode) => {
-      setSeen((current) => new Set(current).add(item.id))
-      await moveItem(item.id, item.slug)
+      if (saved.has(item.id)) {
+        return
+      }
+      markSeen([item.id])
+      if (item.id == peekItem?.id) {
+        setSaved((current) => toggle(current, item.id, true))
+      } else {
+        setSaved((current) => toggle(current, item.id, true))
+        fold(item.id)
+      }
+      try {
+        await moveItemToFolder(item.id, 'inbox')
+        refreshElsewhere()
+        showUndoToast('Saved to Library', async () => {
+          try {
+            await moveItemToFolder(item.id, 'following')
+            setSaved((current) => toggle(current, item.id, false))
+            refreshElsewhere()
+          } catch {
+            showErrorToast('Could not move it back to Feeds', {
+              position: 'bottom-center',
+            })
+          }
+        })
+      } catch {
+        setSaved((current) => toggle(current, item.id, false))
+        setLeaving((current) => toggle(current, item.id, false))
+        showErrorToast('Could not save to Library', {
+          position: 'bottom-center',
+        })
+      }
     },
-    [moveItem]
+    [saved, peekItem, markSeen, refreshElsewhere]
+  )
+
+  const openPeek = useCallback(
+    (item: LibraryItemNode) => {
+      setPeekItem(item)
+      setFocusId(item.id)
+      markSeen([item.id])
+      const row = rowRefs.current.get(item.id)
+      row?.focus({ preventScroll: true })
+      row?.scrollIntoView({ block: 'nearest' })
+    },
+    [markSeen]
+  )
+
+  const closePeek = useCallback(() => {
+    if (peekItem) {
+      rowRefs.current.get(peekItem.id)?.focus({ preventScroll: true })
+    }
+    setPeekItem(undefined)
+  }, [peekItem])
+
+  const peekIndex = peekItem
+    ? listed.findIndex((item) => item.id == peekItem.id)
+    : -1
+  // A refresh can drop the peeked item from the list (it is seen, or saved).
+  // Its last place keeps Next and Previous moving from where it was.
+  const lastPeekIndex = useRef(0)
+  if (peekIndex >= 0) {
+    lastPeekIndex.current = peekIndex
+  }
+  const peekAnchor = peekIndex >= 0 ? peekIndex : lastPeekIndex.current
+  const peekAfter = peekIndex >= 0 ? peekIndex + 1 : lastPeekIndex.current
+
+  // Moving on from an item counts it as seen.
+  const step = useCallback(
+    (delta: 1 | -1) => {
+      if (!peekItem) {
+        return
+      }
+      const next = listed[delta > 0 ? peekAfter : peekAnchor - 1]
+      if (next) {
+        openPeek(next)
+      } else if (delta > 0 && isPhone) {
+        setPeekItem(undefined)
+        showUndoToast('You are all caught up')
+      }
+    },
+    [peekItem, peekAnchor, peekAfter, listed, openPeek, isPhone]
+  )
+
+  // Archiving the item in the peek moves on to the next one, as in Mail.
+  const archive = useCallback(
+    async (item: LibraryItemNode) => {
+      if (archived.has(item.id)) {
+        return
+      }
+      markSeen([item.id])
+      if (item.id == peekItem?.id) {
+        const next = listed[peekAfter] ?? listed[peekAnchor - 1]
+        setArchived((current) => toggle(current, item.id, true))
+        if (next && next.id != item.id) {
+          openPeek(next)
+        } else {
+          setPeekItem(undefined)
+        }
+      } else {
+        setArchived((current) => toggle(current, item.id, true))
+        fold(item.id)
+      }
+      try {
+        await setItemArchived(item.id, true)
+        refreshElsewhere()
+        showUndoToast('Archived', async () => {
+          try {
+            await setItemArchived(item.id, false)
+            setArchived((current) => toggle(current, item.id, false))
+            refreshElsewhere()
+          } catch {
+            showErrorToast('Could not unarchive it', {
+              position: 'bottom-center',
+            })
+          }
+        })
+      } catch {
+        setArchived((current) => toggle(current, item.id, false))
+        setLeaving((current) => toggle(current, item.id, false))
+        showErrorToast('Could not archive it', { position: 'bottom-center' })
+      }
+    },
+    [
+      archived,
+      peekItem,
+      peekAnchor,
+      peekAfter,
+      listed,
+      markSeen,
+      openPeek,
+      refreshElsewhere,
+    ]
   )
 
   const openOriginal = (item: LibraryItemNode) => {
@@ -561,7 +812,7 @@ export function StashFeeds(): JSX.Element {
     window.open(item.originalArticleUrl || item.url, '_blank', 'noreferrer')
   }
 
-  const unseenOnScreen = items.filter((item) => !isSeen(item))
+  const unseenOnScreen = listed.filter((item) => !isSeen(item))
   const markAllSeen = useCallback(async () => {
     const query = `in:following use:folders ${sourceQuery(selected)} -is:seen`
     try {
@@ -584,9 +835,8 @@ export function StashFeeds(): JSX.Element {
     }
   }, [bulkAction, selected, view, total, items])
 
-  // Keyboard: j and k move, o opens, s saves to the Library, v opens the
-  // original page.
-  const [focusId, setFocusId] = useState<string | undefined>()
+  // Keyboard: j and k move, space peeks, o opens in the Reader, s saves to
+  // the Library, e archives, m marks seen, v opens the original page.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement
@@ -598,8 +848,8 @@ export function StashFeeds(): JSX.Element {
       ) {
         return
       }
-      const index = items.findIndex((item) => item.id == focusId)
-      const current = index >= 0 ? items[index] : undefined
+      const index = listed.findIndex((item) => item.id == focusId)
+      const current = peekItem ?? (index >= 0 ? listed[index] : undefined)
       const move = (next?: LibraryItemNode) => {
         if (next) {
           setFocusId(next.id)
@@ -609,18 +859,41 @@ export function StashFeeds(): JSX.Element {
       switch (event.key) {
         case 'j':
           event.preventDefault()
+          if (peekItem) {
+            step(1)
+            break
+          }
           if (current) markSeen([current.id])
-          move(items[Math.min(items.length - 1, index + 1)])
+          move(listed[Math.min(listed.length - 1, index + 1)])
           break
         case 'k':
           event.preventDefault()
-          move(items[Math.max(0, index - 1)])
+          if (peekItem) {
+            step(-1)
+            break
+          }
+          move(listed[Math.max(0, index - 1)])
+          break
+        case ' ':
+          if (target.closest('button, a')) break
+          event.preventDefault()
+          if (peekItem) closePeek()
+          else if (current) openPeek(current)
+          break
+        case 'Escape':
+          if (peekItem) closePeek()
           break
         case 'o':
           if (current) open(current)
           break
         case 's':
           if (current) save(current)
+          break
+        case 'e':
+          if (current) archive(current)
+          break
+        case 'm':
+          if (current) markSeen([current.id], true)
           break
         case 'v':
           if (current) openOriginal(current)
@@ -629,6 +902,34 @@ export function StashFeeds(): JSX.Element {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
+  })
+
+  const sourceName = (item: LibraryItemNode) =>
+    subscriptionName(item.subscription, allSubscriptions) ||
+    siteName(item.originalArticleUrl, item.url, item.siteName)
+
+  const sourceIcon = (item: LibraryItemNode) =>
+    allSubscriptions?.find(
+      (subscription) =>
+        subscription.url == item.subscription ||
+        subscription.name == item.subscription
+    )?.icon
+
+  const peekProps = (item: LibraryItemNode) => ({
+    item,
+    username: viewer?.profile.username,
+    sourceName: sourceName(item),
+    sourceIcon: sourceIcon(item),
+    position: Math.min(peekAnchor + 1, listed.length),
+    count: listed.length,
+    saved: saved.has(item.id),
+    onSave: () => save(item),
+    onArchive: () => archive(item),
+    onNext: () => step(1),
+    onPrevious: () => step(-1),
+    onClose: closePeek,
+    onOpenOriginal: () => openOriginal(item),
+    onRead: () => open(item),
   })
 
   const title = selected?.name ?? 'All feeds'
@@ -651,8 +952,8 @@ export function StashFeeds(): JSX.Element {
 
   return (
     <Page>
-      <Panes>
-        <Sources aria-label="Sources">
+      <Panes peeking={!!peekItem} inline={!!peekItem && peekInline}>
+        <Sources aria-label="Sources" css={peekItem ? rail : undefined}>
           <SourcesHeading>
             Sources
             <Popover
@@ -703,6 +1004,7 @@ export function StashFeeds(): JSX.Element {
               onChange={(next) => {
                 setView(next)
                 setSeen(new Set())
+                setPeekItem(undefined)
               }}
               options={[
                 { value: 'unseen', label: 'Unseen' },
@@ -756,7 +1058,7 @@ export function StashFeeds(): JSX.Element {
                 <AddFeedPanel />
               </div>
             </Empty>
-          ) : !itemsQuery.isPending && items.length == 0 ? (
+          ) : !itemsQuery.isPending && listed.length == 0 ? (
             <Empty>
               {view == 'unseen'
                 ? 'You are all caught up.'
@@ -773,72 +1075,108 @@ export function StashFeeds(): JSX.Element {
                 </NewItemsBar>
               )}
               <ItemList>
-                {items.map((item) => {
+                {listed.map((item) => {
                   const itemSeen = isSeen(item)
                   return (
-                    <SwipeAction
-                      key={item.id}
-                      label="Save"
-                      icon={<Bookmark size={16} />}
-                      onAction={() => save(item)}
-                    >
-                      <ItemRow
-                        ref={rowRef(item.id)}
-                        leading={<UnseenDot hidden={itemSeen} />}
-                        title={item.title}
-                        image={item.image}
-                        subtitle={[
-                          selected
-                            ? undefined
-                            : subscriptionName(
+                    <Leaving key={item.id} leaving={leaving.has(item.id)}>
+                      <SwipeAction
+                        label="Save"
+                        icon={<Bookmark size={16} />}
+                        onAction={() => save(item)}
+                        start={{
+                          label: 'Archive',
+                          icon: <Archive size={16} />,
+                          onAction: () => archive(item),
+                        }}
+                      >
+                        <ItemRow
+                          ref={rowRef(item.id)}
+                          leading={<UnseenDot hidden={itemSeen} />}
+                          title={item.title}
+                          image={item.image}
+                          subtitle={[
+                            selected ? undefined : sourceName(item),
+                            item.author &&
+                            item.author !=
+                              subscriptionName(
                                 item.subscription,
                                 allSubscriptions
-                              ) ||
-                              siteName(
-                                item.originalArticleUrl,
-                                item.url,
-                                item.siteName
-                              ),
-                          item.author &&
-                          item.author !=
-                            subscriptionName(
-                              item.subscription,
-                              allSubscriptions
-                            )
-                            ? item.author
-                            : undefined,
-                          timeAgo(item.publishedAt || item.savedAt),
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                        excerpt={item.description}
-                        meta={formatMinutes(readingMinutes(item.wordsCount))}
-                        muted={itemSeen}
-                        selected={item.id == focusId}
-                        onOpen={() => open(item)}
-                        onFocus={() => setFocusId(item.id)}
-                        actions={
-                          <>
-                            <IconButton
-                              label="Save to Library"
-                              shortcut="s"
-                              size="sm"
-                              onClick={() => save(item)}
-                            >
-                              <Bookmark size={15} />
-                            </IconButton>
-                            <IconButton
-                              label="Open original"
-                              shortcut="v"
-                              size="sm"
-                              onClick={() => openOriginal(item)}
-                            >
-                              <ArrowSquareOut size={15} />
-                            </IconButton>
-                          </>
-                        }
-                      />
-                    </SwipeAction>
+                              )
+                              ? item.author
+                              : undefined,
+                            timeAgo(item.publishedAt || item.savedAt),
+                            saved.has(item.id) ? 'Saved' : undefined,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                          excerpt={item.description}
+                          meta={formatMinutes(readingMinutes(item.wordsCount))}
+                          muted={itemSeen}
+                          selected={
+                            peekItem
+                              ? item.id == peekItem.id
+                              : item.id == focusId
+                          }
+                          onOpen={() =>
+                            item.id == peekItem?.id
+                              ? closePeek()
+                              : openPeek(item)
+                          }
+                          onFocus={() => setFocusId(item.id)}
+                          actions={
+                            <>
+                              <IconButton
+                                label={
+                                  saved.has(item.id)
+                                    ? 'Saved to Library'
+                                    : 'Save to Library'
+                                }
+                                shortcut="s"
+                                size="sm"
+                                active={saved.has(item.id)}
+                                onClick={() => save(item)}
+                              >
+                                <Bookmark
+                                  size={15}
+                                  weight={
+                                    saved.has(item.id) ? 'fill' : 'regular'
+                                  }
+                                />
+                              </IconButton>
+                              <IconButton
+                                label="Archive"
+                                shortcut="e"
+                                size="sm"
+                                onClick={() => archive(item)}
+                              >
+                                <Archive size={15} />
+                              </IconButton>
+                              <IconButton
+                                label="Peek"
+                                shortcut="Space"
+                                size="sm"
+                                active={item.id == peekItem?.id}
+                                onClick={() =>
+                                  item.id == peekItem?.id
+                                    ? closePeek()
+                                    : openPeek(item)
+                                }
+                              >
+                                <SidebarSimple size={15} mirrored />
+                              </IconButton>
+                              <IconButton
+                                label="Open original"
+                                shortcut="v"
+                                size="sm"
+                                onClick={() => openOriginal(item)}
+                              >
+                                <ArrowSquareOut size={15} />
+                              </IconButton>
+                            </>
+                          }
+                        />
+                      </SwipeAction>
+                    </Leaving>
                   )
                 })}
               </ItemList>
@@ -846,7 +1184,10 @@ export function StashFeeds(): JSX.Element {
           )}
           <div ref={sentinel} style={{ height: 1 }} />
         </section>
+
+        {peekItem && !isPhone && <FeedPeekPane {...peekProps(peekItem)} />}
       </Panes>
+      {isPhone && peekItem && <FeedPeekSheet open {...peekProps(peekItem)} />}
     </Page>
   )
 }
