@@ -921,6 +921,7 @@ export enum BulkAction {
   ADD_LABELS = 'ADD_LABELS',
   MARK_AS_READ = 'MARK_AS_READ',
   MOVE_TO_FOLDER = 'MOVE_TO_FOLDER',
+  MARK_AS_SEEN = 'MARK_AS_SEEN',
 }
 
 type BulkActionResult = {
@@ -1096,6 +1097,7 @@ export type LibraryItemNode = {
   siteIcon?: string
   subscription?: string
   readAt?: string
+  seenAt?: string
   savedAt?: string
   wordsCount?: number
   aiSummary?: string
