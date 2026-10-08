@@ -18,6 +18,8 @@ import {
 import { formatMinutes, readingMinutes } from '../../../lib/readingTime'
 import { shortTimeAgo } from '../../../lib/textFormatting'
 import { keyframes, styled } from '../../tokens/stitches.config'
+import { isVideoItem } from '../../../lib/youtube'
+import { PeekVideo } from './VideoPeek'
 import {
   CoverImage,
   IconButton,
@@ -551,6 +553,19 @@ function PeekArticle(props: FeedPeekProps): JSX.Element {
   )
 }
 
+// A video plays in the pane; anything else reads there.
+function PeekContent(props: FeedPeekProps & { flush?: boolean }): JSX.Element {
+  return isVideoItem(props.item) ? (
+    <PeekVideo
+      item={props.item}
+      channelName={props.sourceName}
+      flush={props.flush}
+    />
+  ) : (
+    <PeekArticle {...props} />
+  )
+}
+
 function Source(props: FeedPeekProps): JSX.Element {
   return (
     <>
@@ -559,6 +574,7 @@ function Source(props: FeedPeekProps): JSX.Element {
         fallbackSrc={props.sourceIconFallback}
         name={props.sourceName}
         size={16}
+        round={isVideoItem(props.item)}
       />
       <SourceName>{props.sourceName}</SourceName>
       <span>
@@ -607,7 +623,7 @@ export function FeedPeekPane(props: FeedPeekProps): JSX.Element {
         </IconButton>
       </Head>
       <Scroll key={props.item.id}>
-        <PeekArticle {...props} />
+        <PeekContent {...props} />
       </Scroll>
       <Fade />
       <Dock>
@@ -631,7 +647,7 @@ export function FeedPeekPane(props: FeedPeekProps): JSX.Element {
         </Button>
         <Divider />
         <IconButton
-          label="Open original"
+          label={isVideoItem(props.item) ? 'Open on YouTube' : 'Open original'}
           shortcut="v"
           size="sm"
           onClick={props.onOpenOriginal}
@@ -783,7 +799,7 @@ export function FeedPeekSheet(
             </Head>
           </Grab>
           <Scroll key={props.item.id} css={{ borderTop: '1px solid $stLine' }}>
-            <PeekArticle {...props} />
+            <PeekContent {...props} flush />
           </Scroll>
           <Fade />
           <SheetDock>

@@ -6,9 +6,12 @@ import {
   CaretDown,
   Checks,
   GearSix,
+  Play,
   Plus,
+  Rows,
   Rss,
   SidebarSimple,
+  SquaresFour,
 } from '@phosphor-icons/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/router'
@@ -45,7 +48,6 @@ import {
   ItemList,
   ItemRow,
   PageMeta,
-  PageTitle,
   Popover,
   SegmentedControl,
   showUndoToast,
@@ -55,7 +57,10 @@ import {
 } from '../../elements/stash'
 import { ease, motion } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
+import { dayGroup, isYouTubeFeedUrl } from '../../../lib/youtube'
+import { AddChannelPanel } from './AddChannelPanel'
 import { AddFeedPanel } from './AddFeedPanel'
+import { VideoCard, VideoGrid, VideoGroup } from './VideoCard'
 import {
   FeedPeekPane,
   FeedPeekSheet,
@@ -221,6 +226,14 @@ const AllIcon = styled('span', {
   fontWeight: 600,
 })
 
+const LayoutToggle = styled('div', {
+  display: 'flex',
+  gap: '2px',
+  padding: '2px',
+  border: '1px solid $stLine',
+  borderRadius: '$sm',
+})
+
 const Toolbar = styled('header', {
   display: 'flex',
   alignItems: 'center',
@@ -324,6 +337,7 @@ const MobileSources = styled('div', {
 type View = 'unseen' | 'all'
 
 const PEEK_WIDTH_KEY = 'feeds-peek-width'
+const LAYOUT_KEY = 'feeds-watch-layout'
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(false)
@@ -349,49 +363,158 @@ const isVisible = (item: LibraryItemNode) =>
 const byName = (a: Subscription, b: Subscription) =>
   a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
 
-const sourceQuery = (subscription?: Subscription) =>
-  subscription
-    ? `subscription:${searchValue(subscriptionKey(subscription))}`
-    : ''
+// Read holds articles and Watch holds videos, from YouTube channels or
+// anywhere else.
+type Tab = 'read' | 'watch'
+
+const tabQuery = (tab: Tab) => (tab == 'watch' ? 'type:video' : '-type:video')
+
+const sourceQuery = (tab: Tab, subscription?: Subscription) =>
+  [
+    subscription
+      ? `subscription:${searchValue(subscriptionKey(subscription))}`
+      : '',
+    tabQuery(tab),
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+const isChannel = (subscription: Subscription) =>
+  isYouTubeFeedUrl(subscription.url)
 
 // The unseen count for one source, shown in the sources list.
-function SourceCount(props: { subscription?: Subscription }): JSX.Element {
+function useUnseenCount(tab: Tab, subscription?: Subscription) {
   const query = useGetLibraryItems(
-    `feeds-count-${props.subscription?.id ?? 'all'}`,
+    `feeds-count-${subscription?.id ?? `all-${tab}`}`,
     'following',
     {
       limit: 1,
       sortDescending: true,
-      searchQuery: `${sourceQuery(props.subscription)} -is:seen`.trim(),
+      searchQuery: `${sourceQuery(tab, subscription)} -is:seen`,
       includeCount: true,
     },
     true,
     LIVE_CHECK * 2
   )
-  const count = query.data?.pages[0]?.pageInfo.totalCount
+  return query.data?.pages[0]?.pageInfo.totalCount
+}
+
+function SourceCount(props: {
+  tab: Tab
+  subscription?: Subscription
+}): JSX.Element {
+  const count = useUnseenCount(props.tab, props.subscription)
   if (!count) {
     return <Count />
   }
   return <Count unseen>{count > 999 ? '999+' : count}</Count>
 }
 
+// Read and Watch, as the page's title. Each shows its unseen count.
+const Tabs = styled('div', {
+  display: 'flex',
+  alignItems: 'baseline',
+  gap: '22px',
+  maxWidth: '1180px',
+  margin: '0 auto 18px',
+  '@mdDown': { gap: '18px', marginBottom: '12px' },
+  variants: {
+    wide: { true: { maxWidth: '1680px' } },
+  },
+})
+
+const TabButton = styled('button', {
+  all: 'unset',
+  display: 'inline-flex',
+  alignItems: 'baseline',
+  gap: '5px',
+  cursor: 'pointer',
+  fontFamily: '$inter',
+  fontSize: '26px',
+  fontWeight: 600,
+  lineHeight: 1.15,
+  letterSpacing: '-0.028em',
+  color: '$stMuted',
+  transition: `color ${motion.fast}`,
+  '&:hover': { color: '$stInk2' },
+  '&[aria-selected="true"]': { color: '$stInk' },
+  '&:focus-visible': {
+    outline: '2px solid $stAccent',
+    outlineOffset: '3px',
+    borderRadius: '4px',
+  },
+  '& > sup': {
+    position: 'relative',
+    top: '-0.55em',
+    fontFamily: '$mono',
+    fontSize: '11px',
+    fontWeight: 500,
+    letterSpacing: 0,
+    color: '$stMuted',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  '& > sup[data-unseen="true"]': { color: '$stAccentText' },
+  '@mdDown': { fontSize: '30px' },
+})
+
+function TabLabel(props: {
+  tab: Tab
+  label: string
+  current: Tab
+  onSelect: (tab: Tab) => void
+}): JSX.Element {
+  const count = useUnseenCount(props.tab)
+  return (
+    <TabButton
+      role="tab"
+      aria-selected={props.current == props.tab}
+      onClick={() => props.onSelect(props.tab)}
+    >
+      {props.label}
+      {count ? (
+        <sup data-unseen="true">{count > 999 ? '999+' : count}</sup>
+      ) : null}
+    </TabButton>
+  )
+}
+
+// The source's name above the list, smaller than the tabs.
+const ListTitle = styled('h1', {
+  margin: 0,
+  fontFamily: '$inter',
+  fontSize: '$ui',
+  fontWeight: 600,
+  letterSpacing: '-0.01em',
+  color: '$stInk',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  minWidth: 0,
+})
+
 function SourceList(props: {
+  tab: Tab
   subscriptions: Subscription[]
   selected?: Subscription
   onSelect: (subscription?: Subscription) => void
 }): JSX.Element {
+  const all = props.tab == 'watch' ? 'All channels' : 'All feeds'
   return (
     <>
       <Source
         aria-current={!props.selected}
         onClick={() => props.onSelect(undefined)}
-        title="All feeds"
+        title={all}
       >
         <AllIcon aria-hidden="true">
-          <Rss size={11} weight="bold" />
+          {props.tab == 'watch' ? (
+            <Play size={10} weight="fill" />
+          ) : (
+            <Rss size={11} weight="bold" />
+          )}
         </AllIcon>
-        <span>All feeds</span>
-        <SourceCount />
+        <span>{all}</span>
+        <SourceCount tab={props.tab} />
       </Source>
       {props.subscriptions.map((subscription) => (
         <Source
@@ -402,12 +525,15 @@ function SourceList(props: {
         >
           <SiteIcon
             src={subscription.icon}
-            fallbackSrc={faviconFor(subscription.url)}
+            fallbackSrc={
+              props.tab == 'watch' ? undefined : faviconFor(subscription.url)
+            }
             name={subscription.name}
             size={18}
+            round={props.tab == 'watch'}
           />
           <span>{subscription.name}</span>
-          <SourceCount subscription={subscription} />
+          <SourceCount tab={props.tab} subscription={subscription} />
         </Source>
       ))}
     </>
@@ -425,12 +551,19 @@ export function StashFeeds(): JSX.Element {
   const { data: allSubscriptions, isPending: subscriptionsPending } =
     useGetSubscriptions({})
 
+  const tab: Tab = router.query.tab == 'watch' ? 'watch' : 'read'
+
+  // The tab's sources: YouTube channels in Watch, every other feed in Read.
   const subscriptions = useMemo(
     () =>
       (allSubscriptions ?? [])
-        .filter((subscription) => subscription.status == 'ACTIVE')
+        .filter(
+          (subscription) =>
+            subscription.status == 'ACTIVE' &&
+            isChannel(subscription) == (tab == 'watch')
+        )
         .sort(byName),
-    [allSubscriptions]
+    [allSubscriptions, tab]
   )
   const selectedId =
     typeof router.query.source == 'string' ? router.query.source : undefined
@@ -483,6 +616,24 @@ export function StashFeeds(): JSX.Element {
     return () => clearInterval(timer)
   }, [])
 
+  // Watch shows videos as a grid of cards or as rows, kept between visits.
+  const [layout, setLayout] = useState<'grid' | 'rows'>('grid')
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(LAYOUT_KEY) == 'rows') setLayout('rows')
+    } catch {
+      // Storage is unavailable; use the grid.
+    }
+  }, [])
+  const changeLayout = (next: 'grid' | 'rows') => {
+    setLayout(next)
+    try {
+      window.localStorage.setItem(LAYOUT_KEY, next)
+    } catch {
+      // Storage is unavailable; the choice lasts until the page closes.
+    }
+  }
+
   const select = useCallback(
     (subscription?: Subscription) => {
       const query = { ...router.query }
@@ -501,15 +652,36 @@ export function StashFeeds(): JSX.Element {
     [router]
   )
 
+  const setTab = useCallback(
+    (next: Tab) => {
+      if (next == tab) return
+      const query = { ...router.query }
+      delete query.source
+      if (next == 'watch') {
+        query.tab = 'watch'
+      } else {
+        delete query.tab
+      }
+      router.replace({ pathname: router.pathname, query }, undefined, {
+        shallow: true,
+      })
+      setSourcesOpen(false)
+      setPeekItem(undefined)
+      setSeen(new Set())
+      window.scrollTo({ top: 0 })
+    },
+    [router, tab]
+  )
+
   const searchQuery = [
-    sourceQuery(selected),
+    sourceQuery(tab, selected),
     view == 'unseen' ? '-is:seen' : '',
     'sort:published-desc',
   ]
     .filter(Boolean)
     .join(' ')
   const itemsQuery = useGetLibraryItems(
-    `feeds-${selected?.id ?? 'all'}-${view}`,
+    `feeds-${selected?.id ?? `all-${tab}`}-${view}`,
     'following',
     { limit: 20, sortDescending: true, searchQuery, includeCount: true }
   )
@@ -538,12 +710,12 @@ export function StashFeeds(): JSX.Element {
   // at the most recently changed unseen item rather than the newest by
   // publish date, so items that arrive with an older date are noticed too.
   const latestQuery = useGetLibraryItems(
-    `feeds-latest-${selected?.id ?? 'all'}`,
+    `feeds-latest-${selected?.id ?? `all-${tab}`}`,
     'following',
     {
       limit: 1,
       sortDescending: true,
-      searchQuery: `${sourceQuery(selected)} -is:seen sort:updated-desc`.trim(),
+      searchQuery: `${sourceQuery(tab, selected)} -is:seen sort:updated-desc`,
     },
     true,
     LIVE_CHECK
@@ -902,7 +1074,10 @@ export function StashFeeds(): JSX.Element {
 
   const unseenOnScreen = listed.filter((item) => !isSeen(item))
   const markAllSeen = useCallback(async () => {
-    const query = `in:following use:folders ${sourceQuery(selected)} -is:seen`
+    const query = `in:following use:folders ${sourceQuery(
+      tab,
+      selected
+    )} -is:seen`
     try {
       await bulkAction.mutateAsync({
         action: BulkAction.MARK_AS_SEEN,
@@ -913,6 +1088,8 @@ export function StashFeeds(): JSX.Element {
       showSuccessToast(
         selected
           ? `Marked ${selected.name} as seen`
+          : tab == 'watch'
+          ? 'Marked all videos as seen'
           : 'Marked all feeds as seen',
         { position: 'bottom-right' }
       )
@@ -921,7 +1098,7 @@ export function StashFeeds(): JSX.Element {
         position: 'bottom-right',
       })
     }
-  }, [bulkAction, selected, view, total, items])
+  }, [bulkAction, selected, view, total, items, tab])
 
   // Keyboard: j and k move, space peeks, o opens in the Reader, s saves to
   // the Library, Backspace (or Delete) archives, m marks seen, v opens the
@@ -1029,7 +1206,8 @@ export function StashFeeds(): JSX.Element {
     onResize: resizePeek,
   })
 
-  const title = selected?.name ?? 'All feeds'
+  const title =
+    selected?.name ?? (tab == 'watch' ? 'All channels' : 'All feeds')
   const meta =
     total === undefined
       ? undefined
@@ -1037,8 +1215,11 @@ export function StashFeeds(): JSX.Element {
       ? `${total} unseen`
       : `${total} items`
 
+  const watching = tab == 'watch'
+
   const sourceList = (
     <SourceList
+      tab={tab}
       subscriptions={subscriptions}
       selected={selected}
       onSelect={select}
@@ -1047,8 +1228,187 @@ export function StashFeeds(): JSX.Element {
 
   const noFeeds = !subscriptionsPending && subscriptions.length == 0
 
+  // Watch's grid runs in day groups: Today, Yesterday, This week, then months.
+  const videoGroups = useMemo(() => {
+    const groups: { label: string; items: LibraryItemNode[] }[] = []
+    const today = new Date(now)
+    for (const item of listed) {
+      const label = dayGroup(item.publishedAt || item.savedAt, today)
+      const last = groups[groups.length - 1]
+      if (last?.label == label) {
+        last.items.push(item)
+      } else {
+        groups.push({ label, items: [item] })
+      }
+    }
+    return groups
+  }, [listed, now])
+
+  const addPanel = (onDone?: () => void) =>
+    watching ? (
+      <AddChannelPanel onDone={onDone && (() => onDone())} />
+    ) : (
+      <AddFeedPanel onDone={onDone} />
+    )
+  const addLabel = watching ? 'Add a channel' : 'Add a feed'
+
+  // One video as a card, for Watch's grid.
+  const cardFor = (item: LibraryItemNode) => (
+    <Leaving key={item.id} leaving={leaving.has(item.id)}>
+      <SwipeAction
+        label="Save"
+        icon={<Bookmark size={16} />}
+        onAction={() => save(item)}
+        start={{
+          label: 'Archive',
+          icon: <Archive size={16} />,
+          onAction: () => archive(item),
+        }}
+      >
+        <VideoCard
+          ref={rowRef(item.id)}
+          item={item}
+          channelName={sourceName(item)}
+          channelIcon={sourceIcon(item)}
+          showChannel={!selected}
+          age={
+            <time
+              dateTime={item.publishedAt || item.savedAt}
+              title={publishedLabel(item)}
+            >
+              {shortTimeAgo(item.publishedAt || item.savedAt, now)}
+            </time>
+          }
+          seen={isSeen(item)}
+          saved={saved.has(item.id)}
+          selected={peekItem ? item.id == peekItem.id : item.id == focusId}
+          onOpen={() =>
+            item.id == peekItem?.id ? closePeek() : openPeek(item)
+          }
+          onFocus={() => setFocusId(item.id)}
+          onSave={() => save(item)}
+          onArchive={() => archive(item)}
+          onOpenOriginal={() => openOriginal(item)}
+        />
+      </SwipeAction>
+    </Leaving>
+  )
+
+  // One item as a row, for Read and for Watch's list view.
+  const rowFor = (item: LibraryItemNode) => {
+    const itemSeen = isSeen(item)
+    return (
+      <Leaving key={item.id} leaving={leaving.has(item.id)}>
+        <SwipeAction
+          label="Save"
+          icon={<Bookmark size={16} />}
+          onAction={() => save(item)}
+          start={{
+            label: 'Archive',
+            icon: <Archive size={16} />,
+            onAction: () => archive(item),
+          }}
+        >
+          <ItemRow
+            ref={rowRef(item.id)}
+            leading={<UnseenDot hidden={itemSeen} />}
+            title={item.title}
+            image={item.image}
+            subtitle={
+              <RowSource>
+                {!selected && (
+                  <SiteIcon
+                    src={sourceIcon(item)}
+                    fallbackSrc={sourceIconFallback(item)}
+                    name={sourceName(item)}
+                    size={14}
+                  />
+                )}
+                {[
+                  selected ? undefined : sourceName(item),
+                  item.author &&
+                  item.author !=
+                    subscriptionName(item.subscription, allSubscriptions)
+                    ? item.author
+                    : undefined,
+                  saved.has(item.id) ? 'Saved' : undefined,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </RowSource>
+            }
+            excerpt={item.description}
+            meta={
+              <time
+                dateTime={item.publishedAt || item.savedAt}
+                title={publishedLabel(item)}
+              >
+                {shortTimeAgo(item.publishedAt || item.savedAt, now)}
+              </time>
+            }
+            muted={itemSeen}
+            selected={peekItem ? item.id == peekItem.id : item.id == focusId}
+            onOpen={() =>
+              item.id == peekItem?.id ? closePeek() : openPeek(item)
+            }
+            onFocus={() => setFocusId(item.id)}
+            actions={
+              <>
+                <IconButton
+                  label={
+                    saved.has(item.id) ? 'Saved to Library' : 'Save to Library'
+                  }
+                  shortcut="s"
+                  size="sm"
+                  active={saved.has(item.id)}
+                  onClick={() => save(item)}
+                >
+                  <Bookmark
+                    size={15}
+                    weight={saved.has(item.id) ? 'fill' : 'regular'}
+                  />
+                </IconButton>
+                <IconButton
+                  label="Archive"
+                  shortcut="⌫"
+                  size="sm"
+                  onClick={() => archive(item)}
+                >
+                  <Archive size={15} />
+                </IconButton>
+                <IconButton
+                  label="Peek"
+                  shortcut="Space"
+                  size="sm"
+                  active={item.id == peekItem?.id}
+                  onClick={() =>
+                    item.id == peekItem?.id ? closePeek() : openPeek(item)
+                  }
+                >
+                  <SidebarSimple size={15} mirrored />
+                </IconButton>
+                <IconButton
+                  label="Open original"
+                  shortcut="v"
+                  size="sm"
+                  onClick={() => openOriginal(item)}
+                >
+                  <ArrowSquareOut size={15} />
+                </IconButton>
+              </>
+            }
+          />
+        </SwipeAction>
+      </Leaving>
+    )
+  }
+
   return (
     <Page>
+      <Tabs role="tablist" aria-label="Feeds" wide={!!peekItem && peekInline}>
+        <TabLabel tab="read" label="Read" current={tab} onSelect={setTab} />
+        <TabLabel tab="watch" label="Watch" current={tab} onSelect={setTab} />
+      </Tabs>
       <Panes
         peeking={!!peekItem}
         inline={!!peekItem && peekInline}
@@ -1060,19 +1420,19 @@ export function StashFeeds(): JSX.Element {
       >
         <Sources aria-label="Sources" css={peekItem ? rail : undefined}>
           <SourcesHeading>
-            Sources
+            {watching ? 'Channels' : 'Sources'}
             <Popover
-              label="Add a feed"
+              label={addLabel}
               align="start"
               open={addOpen}
               onOpenChange={setAddOpen}
               trigger={
-                <IconButton label="Add a feed" size="sm">
+                <IconButton label={addLabel} size="sm">
                   <Plus size={14} />
                 </IconButton>
               }
             >
-              <AddFeedPanel onDone={() => setAddOpen(false)} />
+              {addPanel(() => setAddOpen(false))}
             </Popover>
           </SourcesHeading>
           {sourceList}
@@ -1080,18 +1440,20 @@ export function StashFeeds(): JSX.Element {
 
         <section aria-label={title}>
           <Toolbar>
-            <PageTitle css={{ '@mdDown': { display: 'none' } }}>
+            <ListTitle css={{ '@mdDown': { display: 'none' } }}>
               {title}
-            </PageTitle>
+            </ListTitle>
             <Popover
               label="Sources"
               align="start"
               open={sourcesOpen}
               onOpenChange={setSourcesOpen}
               trigger={
-                <TitleButton aria-label="Choose a source">
-                  <PageTitle>{title}</PageTitle>
-                  <CaretDown size={16} />
+                <TitleButton
+                  aria-label={watching ? 'Choose a channel' : 'Choose a source'}
+                >
+                  <ListTitle>{title}</ListTitle>
+                  <CaretDown size={14} />
                 </TitleButton>
               }
             >
@@ -1103,6 +1465,26 @@ export function StashFeeds(): JSX.Element {
               </PageMeta>
             )}
             <span style={{ flex: 1 }} />
+            {watching && (
+              <LayoutToggle role="group" aria-label="Layout">
+                <IconButton
+                  label="Grid"
+                  size="sm"
+                  active={layout == 'grid'}
+                  onClick={() => changeLayout('grid')}
+                >
+                  <SquaresFour size={15} />
+                </IconButton>
+                <IconButton
+                  label="List"
+                  size="sm"
+                  active={layout == 'rows'}
+                  onClick={() => changeLayout('rows')}
+                >
+                  <Rows size={15} />
+                </IconButton>
+              </LayoutToggle>
+            )}
             <SegmentedControl
               label="Show"
               value={view}
@@ -1144,14 +1526,14 @@ export function StashFeeds(): JSX.Element {
             ) : (
               <span style={{ display: 'contents' }}>
                 <Popover
-                  label="Add a feed"
+                  label={addLabel}
                   trigger={
-                    <IconButton label="Add a feed">
+                    <IconButton label={addLabel}>
                       <Plus size={16} />
                     </IconButton>
                   }
                 >
-                  <AddFeedPanel />
+                  {addPanel()}
                 </Popover>
               </span>
             )}
@@ -1159,16 +1541,26 @@ export function StashFeeds(): JSX.Element {
 
           {noFeeds ? (
             <Empty>
-              No feeds yet. Add a site or feed address, or import an OPML file
-              from another reader.
-              <div style={{ marginTop: 16, textAlign: 'left' }}>
-                <AddFeedPanel />
+              {watching
+                ? 'No channels yet. Follow a YouTube channel and its new videos land here.'
+                : 'No feeds yet. Add a site or feed address, or import an OPML file from another reader.'}
+              <div
+                style={{
+                  marginTop: 16,
+                  textAlign: 'left',
+                  display: 'flex',
+                  justifyContent: 'center',
+                }}
+              >
+                {addPanel()}
               </div>
             </Empty>
           ) : !itemsQuery.isPending && listed.length == 0 ? (
             <Empty>
               {view == 'unseen'
                 ? 'You are all caught up.'
+                : watching
+                ? 'No videos from this channel yet.'
                 : 'Nothing from this source yet.'}
             </Empty>
           ) : (
@@ -1177,137 +1569,20 @@ export function StashFeeds(): JSX.Element {
                 <NewItemsBar>
                   <button onClick={showNewItems}>
                     <ArrowUp size={13} weight="bold" />
-                    New items
+                    {watching ? 'New videos' : 'New items'}
                   </button>
                 </NewItemsBar>
               )}
-              <ItemList>
-                {listed.map((item) => {
-                  const itemSeen = isSeen(item)
-                  return (
-                    <Leaving key={item.id} leaving={leaving.has(item.id)}>
-                      <SwipeAction
-                        label="Save"
-                        icon={<Bookmark size={16} />}
-                        onAction={() => save(item)}
-                        start={{
-                          label: 'Archive',
-                          icon: <Archive size={16} />,
-                          onAction: () => archive(item),
-                        }}
-                      >
-                        <ItemRow
-                          ref={rowRef(item.id)}
-                          leading={<UnseenDot hidden={itemSeen} />}
-                          title={item.title}
-                          image={item.image}
-                          subtitle={
-                            <RowSource>
-                              {!selected && (
-                                <SiteIcon
-                                  src={sourceIcon(item)}
-                                  fallbackSrc={sourceIconFallback(item)}
-                                  name={sourceName(item)}
-                                  size={14}
-                                />
-                              )}
-                              {[
-                                selected ? undefined : sourceName(item),
-                                item.author &&
-                                item.author !=
-                                  subscriptionName(
-                                    item.subscription,
-                                    allSubscriptions
-                                  )
-                                  ? item.author
-                                  : undefined,
-                                saved.has(item.id) ? 'Saved' : undefined,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </RowSource>
-                          }
-                          excerpt={item.description}
-                          meta={
-                            <time
-                              dateTime={item.publishedAt || item.savedAt}
-                              title={publishedLabel(item)}
-                            >
-                              {shortTimeAgo(
-                                item.publishedAt || item.savedAt,
-                                now
-                              )}
-                            </time>
-                          }
-                          muted={itemSeen}
-                          selected={
-                            peekItem
-                              ? item.id == peekItem.id
-                              : item.id == focusId
-                          }
-                          onOpen={() =>
-                            item.id == peekItem?.id
-                              ? closePeek()
-                              : openPeek(item)
-                          }
-                          onFocus={() => setFocusId(item.id)}
-                          actions={
-                            <>
-                              <IconButton
-                                label={
-                                  saved.has(item.id)
-                                    ? 'Saved to Library'
-                                    : 'Save to Library'
-                                }
-                                shortcut="s"
-                                size="sm"
-                                active={saved.has(item.id)}
-                                onClick={() => save(item)}
-                              >
-                                <Bookmark
-                                  size={15}
-                                  weight={
-                                    saved.has(item.id) ? 'fill' : 'regular'
-                                  }
-                                />
-                              </IconButton>
-                              <IconButton
-                                label="Archive"
-                                shortcut="⌫"
-                                size="sm"
-                                onClick={() => archive(item)}
-                              >
-                                <Archive size={15} />
-                              </IconButton>
-                              <IconButton
-                                label="Peek"
-                                shortcut="Space"
-                                size="sm"
-                                active={item.id == peekItem?.id}
-                                onClick={() =>
-                                  item.id == peekItem?.id
-                                    ? closePeek()
-                                    : openPeek(item)
-                                }
-                              >
-                                <SidebarSimple size={15} mirrored />
-                              </IconButton>
-                              <IconButton
-                                label="Open original"
-                                shortcut="v"
-                                size="sm"
-                                onClick={() => openOriginal(item)}
-                              >
-                                <ArrowSquareOut size={15} />
-                              </IconButton>
-                            </>
-                          }
-                        />
-                      </SwipeAction>
-                    </Leaving>
-                  )
-                })}
-              </ItemList>
+              {tab == 'watch' && layout == 'grid' ? (
+                videoGroups.map((group) => (
+                  <section key={group.label} aria-label={group.label}>
+                    <VideoGroup>{group.label}</VideoGroup>
+                    <VideoGrid>{group.items.map(cardFor)}</VideoGrid>
+                  </section>
+                ))
+              ) : (
+                <ItemList>{listed.map(rowFor)}</ItemList>
+              )}
             </>
           )}
           <div ref={sentinel} style={{ height: 1 }} />

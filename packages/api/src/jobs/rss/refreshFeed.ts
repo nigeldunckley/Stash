@@ -475,6 +475,8 @@ const createYouTubeVideoItem = async (
         clientRequestId: '',
         author: youtube.channelName,
         previewImage: videoThumbnail(videoId),
+        // The video job sets the length; until then it is unknown.
+        wordCount: 0,
         labels: [{ name: 'RSS' }],
       },
       user

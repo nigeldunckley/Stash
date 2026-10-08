@@ -30,6 +30,7 @@ export interface UpdateSubscriptionInput {
   autoAddToLibrary?: boolean
   isPrivate?: boolean
   fetchContentType?: FetchContentType
+  includeShorts?: boolean
 }
 
 export async function updateSubscriptionMutation(

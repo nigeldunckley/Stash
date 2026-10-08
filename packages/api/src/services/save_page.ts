@@ -71,6 +71,9 @@ export type SavePageArgs = Merge<
     feedContent?: string
     previewImage?: string
     author?: string
+    // Overrides the word count worked out from the content, such as 0 for a
+    // video whose length isn't known yet.
+    wordCount?: number
   }
 >
 
@@ -139,6 +142,7 @@ export const savePage = async (
     preparedDocument,
     labelNames: input.labels?.map((label) => label.name),
     highlightAnnotations: parseResult.highlightData ? [''] : undefined,
+    wordCount: input.wordCount,
   })
   const isImported =
     input.source === 'csv-importer' || input.source === 'pocket'
@@ -214,6 +218,7 @@ export const parsedContentToLibraryItem = ({
   dir,
   labelNames,
   highlightAnnotations,
+  wordCount,
 }: {
   url: string
   userId: string
@@ -237,6 +242,7 @@ export const parsedContentToLibraryItem = ({
   dir?: string | null
   labelNames?: string[]
   highlightAnnotations?: string[]
+  wordCount?: number
 }): DeepPartial<LibraryItem> & { originalUrl: string } => {
   logger.info('save_page', { url, state, itemId })
   return {
@@ -275,9 +281,11 @@ export const parsedContentToLibraryItem = ({
     siteName: parsedContent?.siteName,
     itemLanguage: parsedContent?.language,
     siteIcon: parsedContent?.siteIcon,
-    wordCount: parsedContent?.textContent
-      ? wordsCount(parsedContent.textContent)
-      : wordsCount(parsedContent?.content || '', true),
+    wordCount:
+      wordCount ??
+      (parsedContent?.textContent
+        ? wordsCount(parsedContent.textContent)
+        : wordsCount(parsedContent?.content || '', true)),
     contentReader: contentReaderForLibraryItem(itemType, uploadFileId),
     subscription: rssFeedUrl,
     folder: folder || 'inbox',

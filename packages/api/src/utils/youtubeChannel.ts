@@ -355,6 +355,7 @@ export const videoDocument = (args: {
   <head><title>${title}</title>
   <meta property="og:image" content="${videoThumbnail(args.videoId)}" />
   <meta property="og:title" content="${title}" />
+  <meta property="og:description" content="${_.escape(args.description || '')}" />
   <meta property="og:article:author" content="${channel}" />
   <meta property="og:site_name" content="YouTube" />
   <meta property="og:type" content="video" />
