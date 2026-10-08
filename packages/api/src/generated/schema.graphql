@@ -1958,6 +1958,7 @@ type Query {
   recentSearches: RecentSearchesResult!
   rules(enabled: Boolean): RulesResult!
   scanFeeds(input: ScanFeedsInput!): ScanFeedsResult!
+  youtubeChannel(url: String!): YouTubeChannelResult!
   search(after: String, first: Int, format: String, includeContent: Boolean, query: String): SearchResult!
   sendInstallInstructions: SendInstallInstructionsResult!
   subscription(id: ID!): SubscriptionResult!
@@ -2835,6 +2836,7 @@ input SubscribeInput {
   fetchContent: Boolean
   fetchContentType: FetchContentType
   folder: String
+  includeShorts: Boolean
   isPrivate: Boolean
   subscriptionType: SubscriptionType
   url: String!
@@ -2855,6 +2857,7 @@ type Subscription {
   fetchContent: Boolean!
   fetchContentType: FetchContentType!
   folder: String!
+  includeShorts: Boolean!
   icon: String
   id: ID!
   isPrivate: Boolean
@@ -3287,6 +3290,7 @@ input UpdateSubscriptionInput {
   mostRecentItemDate: Date
   name: String
   refreshedAt: Date
+  includeShorts: Boolean
   scheduledAt: Date
   status: SubscriptionStatus
 }
@@ -3532,4 +3536,38 @@ union WebhooksResult = WebhooksError | WebhooksSuccess
 
 type WebhooksSuccess {
   webhooks: [Webhook!]!
+}
+
+type YouTubeChannel {
+  avatar: String
+  channelId: ID!
+  feedUrl: String!
+  handle: String
+  title: String!
+  uploadsPerWeek: Float
+  videos: [YouTubeChannelVideo!]!
+}
+
+type YouTubeChannelError {
+  errorCodes: [YouTubeChannelErrorCode!]!
+}
+
+enum YouTubeChannelErrorCode {
+  BAD_REQUEST
+  NOT_FOUND
+  UNAUTHORIZED
+}
+
+union YouTubeChannelResult = YouTubeChannelError | YouTubeChannelSuccess
+
+type YouTubeChannelSuccess {
+  channel: YouTubeChannel!
+}
+
+type YouTubeChannelVideo {
+  id: ID!
+  publishedAt: Date
+  thumbnail: String!
+  title: String!
+  url: String!
 }

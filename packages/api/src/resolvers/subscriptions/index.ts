@@ -41,6 +41,10 @@ import {
   UpdateSubscriptionError,
   UpdateSubscriptionErrorCode,
   UpdateSubscriptionSuccess,
+  QueryYoutubeChannelArgs,
+  YouTubeChannelError,
+  YouTubeChannelErrorCode,
+  YouTubeChannelSuccess,
 } from '../../generated/graphql'
 import { getRepository } from '../../repository'
 import { feedRepository } from '../../repository/feed'
@@ -53,6 +57,11 @@ import { enqueueRssFeedFetch } from '../../utils/createTask'
 import { authorized } from '../../utils/gql-utils'
 import { getAbsoluteUrl, keysToCamelCase } from '../../utils/helpers'
 import { parseFeed, parseOpml, rssParserConfig } from '../../utils/parser'
+import {
+  channelIdFromFeedUrl,
+  isYouTubeUrl,
+  resolveYouTubeChannel,
+} from '../../utils/youtubeChannel'
 import { isArray } from 'lodash'
 
 type PartialSubscription = Omit<Subscription, 'newsletterEmail'>
@@ -216,6 +225,13 @@ export const subscribeResolver = authorized<
       }
     }
 
+    // A YouTube feed has no picture of its own, so use the channel's avatar.
+    if (channelIdFromFeedUrl(feedUrl) && !feed.thumbnail) {
+      const channel = await resolveYouTubeChannel(feedUrl, 0)
+      feed.thumbnail = channel?.avatar
+      feed.title = channel?.title || feed.title
+    }
+
     // find existing subscription
     const existingSubscription = await getRepository(Subscription).findOneBy({
       url: In([feedUrl, input.url]), // check both user provided url and parsed url
@@ -237,6 +253,8 @@ export const subscribeResolver = authorized<
           : existingSubscription.fetchContentType,
         folder: input.folder ?? existingSubscription.folder,
         isPrivate: input.isPrivate,
+        includeShorts:
+          input.includeShorts ?? existingSubscription.includeShorts,
         status: SubscriptionStatus.Active,
       })
 
@@ -250,6 +268,7 @@ export const subscribeResolver = authorized<
         checksums: [updatedSubscription.lastFetchedChecksum || null],
         fetchContentTypes: [updatedSubscription.fetchContentType],
         folders: [updatedSubscription.folder || DEFAULT_SUBSCRIPTION_FOLDER],
+        includeShorts: [updatedSubscription.includeShorts],
       })
 
       return {
@@ -262,8 +281,8 @@ export const subscribeResolver = authorized<
 
     // limit number of rss subscriptions to max
     const results = (await getRepository(Subscription).query(
-      `insert into omnivore.subscriptions (name, url, description, type, user_id, icon, is_private, fetch_content_type, folder) 
-          select $1, $2, $3, $4, $5, $6, $7, $8, $9 from omnivore.subscriptions 
+      `insert into omnivore.subscriptions (name, url, description, type, user_id, icon, is_private, fetch_content_type, folder, include_shorts) 
+          select $1, $2, $3, $4, $5, $6, $7, $8, $9, $11 from omnivore.subscriptions 
           where user_id = $5 and type = 'RSS' and status = 'ACTIVE' 
           having count(*) < $10
           returning *;`,
@@ -278,6 +297,7 @@ export const subscribeResolver = authorized<
         input.fetchContentType ?? FetchContentType.Always,
         input.folder ?? 'following',
         MAX_RSS_SUBSCRIPTIONS,
+        input.includeShorts ?? false,
       ]
     )) as any[]
 
@@ -300,6 +320,7 @@ export const subscribeResolver = authorized<
       checksums: [null],
       fetchContentTypes: [newSubscription.fetchContentType],
       folders: [newSubscription.folder || DEFAULT_SUBSCRIPTION_FOLDER],
+      includeShorts: [newSubscription.includeShorts],
     })
 
     return {
@@ -441,6 +462,16 @@ export const scanFeedsResolver = authorized<
     }
   }
 
+  // A YouTube channel or video leads to the channel's feed.
+  if (isYouTubeUrl(url)) {
+    const channel = await resolveYouTubeChannel(url, 0)
+    return {
+      feeds: channel
+        ? [{ url: channel.feedUrl, title: channel.title, type: 'rss' }]
+        : [],
+    }
+  }
+
   // Ensure that we are not running a http request against local/private IPs.
   try {
     validateUrl(url)
@@ -504,6 +535,23 @@ export const scanFeedsResolver = authorized<
       errorCodes: [ScanFeedsErrorCode.BadRequest],
     }
   }
+})
+
+// Looks up a YouTube channel from a channel link, @handle or video link, with
+// its latest uploads, so it can be previewed before subscribing.
+export const youtubeChannelResolver = authorized<
+  YouTubeChannelSuccess,
+  YouTubeChannelError,
+  QueryYoutubeChannelArgs
+>(async (_, { url }) => {
+  if (!isYouTubeUrl(url)) {
+    return { errorCodes: [YouTubeChannelErrorCode.BadRequest] }
+  }
+  const channel = await resolveYouTubeChannel(url)
+  if (!channel) {
+    return { errorCodes: [YouTubeChannelErrorCode.NotFound] }
+  }
+  return { channel }
 })
 
 export const subscriptionResolver = authorized<
