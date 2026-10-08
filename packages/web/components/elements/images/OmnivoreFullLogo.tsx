@@ -1,4 +1,4 @@
-import { config } from '../../tokens/stitches.config'
+import { theme } from '../../tokens/stitches.config'
 import { OmnivoreLogoBase } from './OmnivoreLogoBase'
 import { StashMark } from './OmnivoreNameLogo'
 import { StyledText } from '../StyledText'
@@ -10,7 +10,7 @@ export type OmnivoreFullLogoProps = {
 }
 
 export function OmnivoreFullLogo(props: OmnivoreFullLogoProps): JSX.Element {
-  const fillColor = props.color || config.theme.colors.graySolid
+  const fillColor = props.color || theme.colors.thTextContrast.toString()
 
   return (
     <OmnivoreLogoBase {...props}>

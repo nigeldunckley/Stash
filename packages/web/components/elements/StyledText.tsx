@@ -7,7 +7,7 @@ const textVariants = {
       lineHeight: '1.50',
     },
     logoTitle: {
-      fontFamily: '$inter',
+      fontFamily: '$display',
       fontWeight: 600,
       fontSize: '19px',
       letterSpacing: '-0.02em',

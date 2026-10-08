@@ -111,7 +111,7 @@ export function OmnivoreApp({ Component, pageProps }: AppProps): JSX.Element {
         <link
           rel="apple-touch-icon"
           sizes="180x180"
-          href="/apple-touch-icon-180x180.png"
+          href="/apple-touch-icon-180x180.png?v=stash-folded-s"
         />
         <meta
           name="theme-color"

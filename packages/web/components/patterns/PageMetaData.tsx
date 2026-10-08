@@ -28,7 +28,8 @@ function openGraphType(ogImage: string | null): string {
 export function PageMetaData(props: PageMetaDataProps): JSX.Element {
   return (
     <Head>
-      <link rel="icon" href="/static/icons/favicon.ico" sizes="32x32" />
+      <link rel="icon" href="/favicon.ico?v=stash-folded-s" sizes="32x32" />
+      <link rel="icon" href="/favicon.svg?v=stash-folded-s" type="image/svg+xml" />
 
       <meta property="fb:app_id" content="3584400838451823" />
       <meta name="twitter:card" content="summary_large_image" />
