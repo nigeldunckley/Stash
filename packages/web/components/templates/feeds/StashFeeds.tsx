@@ -37,6 +37,7 @@ import {
   Popover,
   SegmentedControl,
   SiteIcon,
+  SwipeAction,
   UnseenDot,
 } from '../../elements/stash'
 import { motion } from '../../elements/stash/motion'
@@ -52,7 +53,7 @@ const Page = styled('main', {
   fontFamily: '$inter',
   padding: '24px 32px 80px',
   '@mdDown': {
-    padding: '72px 16px calc(80px + env(safe-area-inset-bottom, 0px))',
+    padding: 'calc(20px + env(safe-area-inset-top, 0px)) 16px 32px',
   },
 })
 
@@ -684,54 +685,60 @@ export function StashFeeds(): JSX.Element {
               {items.map((item) => {
                 const itemSeen = isSeen(item)
                 return (
-                  <ItemRow
+                  <SwipeAction
                     key={item.id}
-                    ref={rowRef(item.id)}
-                    leading={<UnseenDot hidden={itemSeen} />}
-                    title={item.title}
-                    subtitle={[
-                      selected
-                        ? undefined
-                        : item.subscription ||
-                          siteName(
-                            item.originalArticleUrl,
-                            item.url,
-                            item.siteName
-                          ),
-                      item.author && item.author != item.subscription
-                        ? item.author
-                        : undefined,
-                      timeAgo(item.publishedAt || item.savedAt),
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                    excerpt={item.description}
-                    meta={formatMinutes(readingMinutes(item.wordsCount))}
-                    muted={itemSeen}
-                    selected={item.id == focusId}
-                    onOpen={() => open(item)}
-                    onFocus={() => setFocusId(item.id)}
-                    actions={
-                      <>
-                        <IconButton
-                          label="Save to Library"
-                          shortcut="s"
-                          size="sm"
-                          onClick={() => save(item)}
-                        >
-                          <Bookmark size={15} />
-                        </IconButton>
-                        <IconButton
-                          label="Open original"
-                          shortcut="v"
-                          size="sm"
-                          onClick={() => openOriginal(item)}
-                        >
-                          <ArrowSquareOut size={15} />
-                        </IconButton>
-                      </>
-                    }
-                  />
+                    label="Save"
+                    icon={<Bookmark size={16} />}
+                    onAction={() => save(item)}
+                  >
+                    <ItemRow
+                      ref={rowRef(item.id)}
+                      leading={<UnseenDot hidden={itemSeen} />}
+                      title={item.title}
+                      subtitle={[
+                        selected
+                          ? undefined
+                          : item.subscription ||
+                            siteName(
+                              item.originalArticleUrl,
+                              item.url,
+                              item.siteName
+                            ),
+                        item.author && item.author != item.subscription
+                          ? item.author
+                          : undefined,
+                        timeAgo(item.publishedAt || item.savedAt),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                      excerpt={item.description}
+                      meta={formatMinutes(readingMinutes(item.wordsCount))}
+                      muted={itemSeen}
+                      selected={item.id == focusId}
+                      onOpen={() => open(item)}
+                      onFocus={() => setFocusId(item.id)}
+                      actions={
+                        <>
+                          <IconButton
+                            label="Save to Library"
+                            shortcut="s"
+                            size="sm"
+                            onClick={() => save(item)}
+                          >
+                            <Bookmark size={15} />
+                          </IconButton>
+                          <IconButton
+                            label="Open original"
+                            shortcut="v"
+                            size="sm"
+                            onClick={() => openOriginal(item)}
+                          >
+                            <ArrowSquareOut size={15} />
+                          </IconButton>
+                        </>
+                      }
+                    />
+                  </SwipeAction>
                 )
               })}
             </ItemList>

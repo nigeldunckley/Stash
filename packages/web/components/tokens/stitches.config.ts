@@ -546,6 +546,12 @@ export const globalStyles = globalCss({
     colorScheme: 'var(--colorScheme-colorScheme)',
     backgroundColor: '$readerBg',
   },
+  // Room for the iPhone tab bar (MobileTabBar).
+  '@media (max-width: 768px)': {
+    'body[data-tabbar="on"]': {
+      paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px))',
+    },
+  },
   // browser prefers this loaded here vs in the article styling css
   '.article-inner-css': {
     '::selection': {

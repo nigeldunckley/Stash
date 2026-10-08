@@ -16,11 +16,16 @@ import { sortedLabels } from '../../../lib/labelsSort'
 import { Box } from '../../elements/LayoutPrimitives'
 import { LoadingBar } from '../../elements/LoadingBar'
 import { ProgressBar } from '../../elements/ProgressBar'
-import { IconButton, ProgressRing, SiteIcon } from '../../elements/stash'
+import {
+  IconButton,
+  ProgressRing,
+  SiteIcon,
+  SwipeAction,
+} from '../../elements/stash'
 import { motion } from '../../elements/stash/motion'
 import { styled, theme } from '../../tokens/stitches.config'
 import { CardMenu } from '../CardMenu'
-import type { LinkedItemCardProps } from './CardTypes'
+import type { LinkedItemCardAction, LinkedItemCardProps } from './CardTypes'
 import { CardCheckbox, FLAIR_ICON_NAMES } from './LibraryCardStyles'
 
 const Actions = styled('div', {
@@ -160,122 +165,146 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
 
   const stop = (event: React.MouseEvent) => event.stopPropagation()
 
+  // On touch screens a left swipe runs the row's main action.
+  const swipe: {
+    label: string
+    icon: JSX.Element
+    action: LinkedItemCardAction
+  } =
+    item.folder == 'following'
+      ? { label: 'Save', icon: <Bookmark size={16} />, action: 'move-to-inbox' }
+      : item.state === State.ARCHIVED
+      ? { label: 'Unarchive', icon: <Archive size={16} />, action: 'unarchive' }
+      : { label: 'Archive', icon: <Archive size={16} />, action: 'archive' }
+
   return (
-    <Row
-      data-menu-open={menuOpen}
-      onClick={(event) => {
-        if (selecting) {
-          setIsChecked(item.id, !isChecked)
-          return
-        }
-        window.localStorage.setItem('nav-return', router.asPath)
-        const path = `/${props.viewer.profile.username}/${item.slug}`
-        if (event.metaKey || event.ctrlKey) {
-          window.open(path, '_blank')
-        } else {
-          router.push(path)
-        }
-      }}
+    <SwipeAction
+      label={swipe.label}
+      icon={swipe.icon}
+      onAction={() => props.handleAction(swipe.action)}
+      disabled={selecting || item.state == State.DELETED}
     >
-      <Leading>
-        {selecting && (
-          <CardCheckbox
-            isChecked={isChecked}
-            handleChanged={handleCheckChanged}
-          />
-        )}
-        <SiteIcon src={item.siteIcon} name={source || item.title} size={20} />
-      </Leading>
-      <Body>
-        <Title>{item.title}</Title>
-        <Subtitle>
-          <span>{[item.author, source].filter(Boolean).join(' · ')}</span>
-          {labels.slice(0, 3).map(({ name, color }) => (
-            <LabelDot key={name} style={{ ['--label-color' as string]: color }}>
-              {name}
-            </LabelDot>
-          ))}
-        </Subtitle>
-      </Body>
-      <div onClick={stop} style={{ display: 'flex', alignItems: 'center' }}>
-        {props.isLoading ? (
-          <Meta>Saving…</Meta>
-        ) : (
-          <Meta>
-            {left}
-            <ProgressRing percent={item.readingProgressPercent} />
-          </Meta>
-        )}
-        {!selecting && (
-          <Actions>
-            {item.folder == 'following' ? (
-              <IconButton
-                label="Save to Library"
-                size="sm"
-                onClick={() => props.handleAction('move-to-inbox')}
-              >
-                <Bookmark size={15} />
-              </IconButton>
-            ) : (
-              <IconButton
-                label={item.state === State.ARCHIVED ? 'Unarchive' : 'Archive'}
-                shortcut="e"
-                size="sm"
-                onClick={() =>
-                  props.handleAction(
-                    item.state === State.ARCHIVED ? 'unarchive' : 'archive'
-                  )
-                }
-              >
-                <Archive size={15} />
-              </IconButton>
-            )}
-            <IconButton
-              label="Labels"
-              shortcut="l"
-              size="sm"
-              onClick={() => props.handleAction('set-labels')}
-            >
-              <Tag size={15} />
-            </IconButton>
-            {item.state == State.DELETED ? (
-              <IconButton
-                label="Restore"
-                size="sm"
-                onClick={async () => {
-                  await restoreItem.mutateAsync({
-                    itemId: item.id,
-                    slug: item.slug,
-                  })
-                }}
-              >
-                <ArrowCounterClockwise size={15} />
-              </IconButton>
-            ) : (
-              <IconButton
-                label="Delete"
-                shortcut="#"
-                size="sm"
-                onClick={() => props.handleAction('delete')}
-              >
-                <Trash size={15} />
-              </IconButton>
-            )}
-            <CardMenu
-              item={item}
-              viewer={props.viewer}
-              onOpenChange={setMenuOpen}
-              actionHandler={props.handleAction}
-              triggerElement={
-                <MenuGlyph aria-label="More actions" title="More actions">
-                  <DotsThree size={16} weight="bold" />
-                </MenuGlyph>
-              }
+      <Row
+        data-menu-open={menuOpen}
+        onClick={(event) => {
+          if (selecting) {
+            setIsChecked(item.id, !isChecked)
+            return
+          }
+          window.localStorage.setItem('nav-return', router.asPath)
+          const path = `/${props.viewer.profile.username}/${item.slug}`
+          if (event.metaKey || event.ctrlKey) {
+            window.open(path, '_blank')
+          } else {
+            router.push(path)
+          }
+        }}
+      >
+        <Leading>
+          {selecting && (
+            <CardCheckbox
+              isChecked={isChecked}
+              handleChanged={handleCheckChanged}
             />
-          </Actions>
-        )}
-      </div>
-    </Row>
+          )}
+          <SiteIcon src={item.siteIcon} name={source || item.title} size={20} />
+        </Leading>
+        <Body>
+          <Title>{item.title}</Title>
+          <Subtitle>
+            <span>{[item.author, source].filter(Boolean).join(' · ')}</span>
+            {labels.slice(0, 3).map(({ name, color }) => (
+              <LabelDot
+                key={name}
+                style={{ ['--label-color' as string]: color }}
+              >
+                {name}
+              </LabelDot>
+            ))}
+          </Subtitle>
+        </Body>
+        <div onClick={stop} style={{ display: 'flex', alignItems: 'center' }}>
+          {props.isLoading ? (
+            <Meta>Saving…</Meta>
+          ) : (
+            <Meta>
+              {left}
+              <ProgressRing percent={item.readingProgressPercent} />
+            </Meta>
+          )}
+          {!selecting && (
+            <Actions>
+              {item.folder == 'following' ? (
+                <IconButton
+                  label="Save to Library"
+                  size="sm"
+                  onClick={() => props.handleAction('move-to-inbox')}
+                >
+                  <Bookmark size={15} />
+                </IconButton>
+              ) : (
+                <IconButton
+                  label={
+                    item.state === State.ARCHIVED ? 'Unarchive' : 'Archive'
+                  }
+                  shortcut="e"
+                  size="sm"
+                  onClick={() =>
+                    props.handleAction(
+                      item.state === State.ARCHIVED ? 'unarchive' : 'archive'
+                    )
+                  }
+                >
+                  <Archive size={15} />
+                </IconButton>
+              )}
+              <IconButton
+                label="Labels"
+                shortcut="l"
+                size="sm"
+                onClick={() => props.handleAction('set-labels')}
+              >
+                <Tag size={15} />
+              </IconButton>
+              {item.state == State.DELETED ? (
+                <IconButton
+                  label="Restore"
+                  size="sm"
+                  onClick={async () => {
+                    await restoreItem.mutateAsync({
+                      itemId: item.id,
+                      slug: item.slug,
+                    })
+                  }}
+                >
+                  <ArrowCounterClockwise size={15} />
+                </IconButton>
+              ) : (
+                <IconButton
+                  label="Delete"
+                  shortcut="#"
+                  size="sm"
+                  onClick={() => props.handleAction('delete')}
+                >
+                  <Trash size={15} />
+                </IconButton>
+              )}
+              <CardMenu
+                item={item}
+                viewer={props.viewer}
+                onOpenChange={setMenuOpen}
+                actionHandler={props.handleAction}
+                triggerElement={
+                  <MenuGlyph aria-label="More actions" title="More actions">
+                    <DotsThree size={16} weight="bold" />
+                  </MenuGlyph>
+                }
+              />
+            </Actions>
+          )}
+        </div>
+      </Row>
+    </SwipeAction>
   )
 }
 

@@ -28,6 +28,7 @@ import {
   ProgressRing,
   SectionHeader,
   SiteIcon,
+  SwipeAction,
   UnseenDot,
 } from '../../elements/stash'
 import { motion } from '../../elements/stash/motion'
@@ -43,7 +44,7 @@ const Page = styled('main', {
   fontFamily: '$inter',
   padding: '24px 32px 80px',
   '@mdDown': {
-    padding: '72px 16px calc(80px + env(safe-area-inset-bottom, 0px))',
+    padding: 'calc(20px + env(safe-area-inset-top, 0px)) 16px 32px',
   },
 })
 
@@ -454,32 +455,38 @@ export function StashHome(): JSX.Element {
             />
             <ItemList>
               {feedItems.map((item) => (
-                <ItemRow
+                <SwipeAction
                   key={item.id}
-                  ref={rowRef(item.id)}
-                  leading={<UnseenDot />}
-                  title={item.title}
-                  subtitle={[
-                    item.subscription || sourceOf(item),
-                    item.savedAt ? timeAgo(item.savedAt) : undefined,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                  meta={formatMinutes(readingMinutes(item.wordsCount))}
-                  selected={item.id === selectedId}
-                  onOpen={() => open(item)}
-                  onFocus={() => setSelectedId(item.id)}
-                  actions={
-                    <IconButton
-                      label="Save to Library"
-                      shortcut="s"
-                      size="sm"
-                      onClick={() => moveItem(item.id, item.slug)}
-                    >
-                      <Bookmark size={15} />
-                    </IconButton>
-                  }
-                />
+                  label="Save"
+                  icon={<Bookmark size={16} />}
+                  onAction={() => moveItem(item.id, item.slug)}
+                >
+                  <ItemRow
+                    ref={rowRef(item.id)}
+                    leading={<UnseenDot />}
+                    title={item.title}
+                    subtitle={[
+                      item.subscription || sourceOf(item),
+                      item.savedAt ? timeAgo(item.savedAt) : undefined,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    meta={formatMinutes(readingMinutes(item.wordsCount))}
+                    selected={item.id === selectedId}
+                    onOpen={() => open(item)}
+                    onFocus={() => setSelectedId(item.id)}
+                    actions={
+                      <IconButton
+                        label="Save to Library"
+                        shortcut="s"
+                        size="sm"
+                        onClick={() => moveItem(item.id, item.slug)}
+                      >
+                        <Bookmark size={15} />
+                      </IconButton>
+                    }
+                  />
+                </SwipeAction>
               ))}
             </ItemList>
           </Section>
@@ -496,57 +503,65 @@ export function StashHome(): JSX.Element {
               {recent.map((item) => {
                 const source = sourceOf(item)
                 return (
-                  <ItemRow
+                  <SwipeAction
                     key={item.id}
-                    ref={rowRef(item.id)}
-                    leading={<SiteIcon src={item.siteIcon} name={source} />}
-                    title={item.title}
-                    subtitle={[item.author, source].filter(Boolean).join(' · ')}
-                    meta={
-                      <>
-                        {formatMinutes(
-                          minutesLeft(
-                            item.wordsCount,
-                            item.readingProgressPercent
-                          )
-                        )}
-                        <ProgressRing percent={item.readingProgressPercent} />
-                      </>
-                    }
-                    selected={item.id === selectedId}
-                    onOpen={() => open(item)}
-                    onFocus={() => setSelectedId(item.id)}
-                    actions={
-                      <>
-                        <IconButton
-                          label="Archive"
-                          shortcut="e"
-                          size="sm"
-                          onClick={() => archiveItem(item.id, item.slug)}
-                        >
-                          <Archive size={15} />
-                        </IconButton>
-                        <IconButton
-                          label="Labels"
-                          shortcut="l"
-                          size="sm"
-                          onClick={() => setLabelsTarget(item)}
-                        >
-                          <Tag size={15} />
-                        </IconButton>
-                        <IconButton
-                          label="Delete"
-                          shortcut="#"
-                          size="sm"
-                          onClick={() =>
-                            deleteItem(item.id, item.slug, () => undefined)
-                          }
-                        >
-                          <Trash size={15} />
-                        </IconButton>
-                      </>
-                    }
-                  />
+                    label="Archive"
+                    icon={<Archive size={16} />}
+                    onAction={() => archiveItem(item.id, item.slug)}
+                  >
+                    <ItemRow
+                      ref={rowRef(item.id)}
+                      leading={<SiteIcon src={item.siteIcon} name={source} />}
+                      title={item.title}
+                      subtitle={[item.author, source]
+                        .filter(Boolean)
+                        .join(' · ')}
+                      meta={
+                        <>
+                          {formatMinutes(
+                            minutesLeft(
+                              item.wordsCount,
+                              item.readingProgressPercent
+                            )
+                          )}
+                          <ProgressRing percent={item.readingProgressPercent} />
+                        </>
+                      }
+                      selected={item.id === selectedId}
+                      onOpen={() => open(item)}
+                      onFocus={() => setSelectedId(item.id)}
+                      actions={
+                        <>
+                          <IconButton
+                            label="Archive"
+                            shortcut="e"
+                            size="sm"
+                            onClick={() => archiveItem(item.id, item.slug)}
+                          >
+                            <Archive size={15} />
+                          </IconButton>
+                          <IconButton
+                            label="Labels"
+                            shortcut="l"
+                            size="sm"
+                            onClick={() => setLabelsTarget(item)}
+                          >
+                            <Tag size={15} />
+                          </IconButton>
+                          <IconButton
+                            label="Delete"
+                            shortcut="#"
+                            size="sm"
+                            onClick={() =>
+                              deleteItem(item.id, item.slug, () => undefined)
+                            }
+                          >
+                            <Trash size={15} />
+                          </IconButton>
+                        </>
+                      }
+                    />
+                  </SwipeAction>
                 )
               })}
             </ItemList>

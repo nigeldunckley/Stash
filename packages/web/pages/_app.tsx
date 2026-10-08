@@ -2,6 +2,7 @@ import '../styles/globals.css'
 import '../styles/articleInnerStyling.css'
 
 import type { AppProps } from 'next/app'
+import Head from 'next/head'
 import { IdProvider } from '@radix-ui/react-id'
 import { NextRouter, useRouter } from 'next/router'
 import { ReactNode, useEffect, useState } from 'react'
@@ -97,6 +98,32 @@ export function OmnivoreApp({ Component, pageProps }: AppProps): JSX.Element {
 
   return (
     <ConditionalCaptchaProvider>
+      <Head>
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
+        {/* Lets Stash run full screen when added to the iPhone home screen. */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="Stash" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <link
+          rel="apple-touch-icon"
+          sizes="180x180"
+          href="/apple-touch-icon-180x180.png"
+        />
+        <meta
+          name="theme-color"
+          media="(prefers-color-scheme: light)"
+          content="#FAFAFA"
+        />
+        <meta
+          name="theme-color"
+          media="(prefers-color-scheme: dark)"
+          content="#111113"
+        />
+      </Head>
       <Toaster />
       <PersistQueryClientProvider
         client={queryClient}
