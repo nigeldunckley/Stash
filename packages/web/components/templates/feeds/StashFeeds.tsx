@@ -464,10 +464,11 @@ export function StashFeeds(): JSX.Element {
     () =>
       items.filter(
         (item) =>
-          !archived.has(item.id) &&
-          (!saved.has(item.id) || item.id == peekItem?.id)
+          leaving.has(item.id) ||
+          item.id == peekItem?.id ||
+          (!archived.has(item.id) && !saved.has(item.id))
       ),
-    [items, saved, archived, peekItem]
+    [items, saved, archived, leaving, peekItem]
   )
   const total = itemsQuery.data?.pages[0]?.pageInfo.totalCount
 
@@ -664,6 +665,12 @@ export function StashFeeds(): JSX.Element {
     return next
   }
 
+  // A row that was saved or archived stays in the list while it folds away.
+  const fold = (id: string) => {
+    setLeaving((current) => toggle(current, id, true))
+    setTimeout(() => setLeaving((current) => toggle(current, id, false)), 220)
+  }
+
   const save = useCallback(
     async (item: LibraryItemNode) => {
       if (saved.has(item.id)) {
@@ -673,11 +680,8 @@ export function StashFeeds(): JSX.Element {
       if (item.id == peekItem?.id) {
         setSaved((current) => toggle(current, item.id, true))
       } else {
-        setLeaving((current) => toggle(current, item.id, true))
-        setTimeout(() => {
-          setSaved((current) => toggle(current, item.id, true))
-          setLeaving((current) => toggle(current, item.id, false))
-        }, 220)
+        setSaved((current) => toggle(current, item.id, true))
+        fold(item.id)
       }
       try {
         await moveItemToFolder(item.id, 'inbox')
@@ -726,6 +730,14 @@ export function StashFeeds(): JSX.Element {
   const peekIndex = peekItem
     ? listed.findIndex((item) => item.id == peekItem.id)
     : -1
+  // A refresh can drop the peeked item from the list (it is seen, or saved).
+  // Its last place keeps Next and Previous moving from where it was.
+  const lastPeekIndex = useRef(0)
+  if (peekIndex >= 0) {
+    lastPeekIndex.current = peekIndex
+  }
+  const peekAnchor = peekIndex >= 0 ? peekIndex : lastPeekIndex.current
+  const peekAfter = peekIndex >= 0 ? peekIndex + 1 : lastPeekIndex.current
 
   // Moving on from an item counts it as seen.
   const step = useCallback(
@@ -733,7 +745,7 @@ export function StashFeeds(): JSX.Element {
       if (!peekItem) {
         return
       }
-      const next = listed[peekIndex < 0 ? 0 : peekIndex + delta]
+      const next = listed[delta > 0 ? peekAfter : peekAnchor - 1]
       if (next) {
         openPeek(next)
       } else if (delta > 0 && isPhone) {
@@ -741,7 +753,7 @@ export function StashFeeds(): JSX.Element {
         showUndoToast('You are all caught up')
       }
     },
-    [peekItem, peekIndex, listed, openPeek, isPhone]
+    [peekItem, peekAnchor, peekAfter, listed, openPeek, isPhone]
   )
 
   // Archiving the item in the peek moves on to the next one, as in Mail.
@@ -752,7 +764,7 @@ export function StashFeeds(): JSX.Element {
       }
       markSeen([item.id])
       if (item.id == peekItem?.id) {
-        const next = listed[peekIndex + 1] ?? listed[peekIndex - 1]
+        const next = listed[peekAfter] ?? listed[peekAnchor - 1]
         setArchived((current) => toggle(current, item.id, true))
         if (next && next.id != item.id) {
           openPeek(next)
@@ -760,11 +772,8 @@ export function StashFeeds(): JSX.Element {
           setPeekItem(undefined)
         }
       } else {
-        setLeaving((current) => toggle(current, item.id, true))
-        setTimeout(() => {
-          setArchived((current) => toggle(current, item.id, true))
-          setLeaving((current) => toggle(current, item.id, false))
-        }, 220)
+        setArchived((current) => toggle(current, item.id, true))
+        fold(item.id)
       }
       try {
         await setItemArchived(item.id, true)
@@ -789,7 +798,8 @@ export function StashFeeds(): JSX.Element {
     [
       archived,
       peekItem,
-      peekIndex,
+      peekAnchor,
+      peekAfter,
       listed,
       markSeen,
       openPeek,
@@ -910,7 +920,7 @@ export function StashFeeds(): JSX.Element {
     username: viewer?.profile.username,
     sourceName: sourceName(item),
     sourceIcon: sourceIcon(item),
-    position: peekIndex + 1,
+    position: Math.min(peekAnchor + 1, listed.length),
     count: listed.length,
     saved: saved.has(item.id),
     onSave: () => save(item),
