@@ -1,5 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import {
+  Archive,
   ArrowRight,
   ArrowSquareOut,
   Bookmark,
@@ -34,6 +35,7 @@ export type FeedPeekProps = {
   count: number
   saved: boolean
   onSave: () => void
+  onArchive: () => void
   onNext: () => void
   onPrevious: () => void
   onClose: () => void
@@ -472,6 +474,10 @@ export function FeedPeekPane(props: FeedPeekProps): JSX.Element {
         >
           <SaveLabel saved={props.saved} />
         </Button>
+        <Button onClick={props.onArchive} aria-label="Archive">
+          <Archive size={15} />
+          Archive <Kbd>E</Kbd>
+        </Button>
         <Button onClick={props.onNext} aria-label="Next">
           Next <Kbd>J</Kbd>
         </Button>
@@ -546,7 +552,7 @@ const SheetDock = styled('div', {
   right: '12px',
   bottom: 'calc(14px + env(safe-area-inset-bottom, 0px))',
   display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1fr) auto auto',
+  gridTemplateColumns: 'minmax(0, 1fr) auto auto auto',
   gap: '8px',
   zIndex: 2,
 })
@@ -640,6 +646,9 @@ export function FeedPeekSheet(
               onClick={props.saved ? undefined : props.onSave}
             >
               <SaveLabel saved={props.saved} touch />
+            </Button>
+            <Button touch square aria-label="Archive" onClick={props.onArchive}>
+              <Archive size={18} />
             </Button>
             <Button
               touch

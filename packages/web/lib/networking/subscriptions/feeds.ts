@@ -1,5 +1,9 @@
 import { gql } from 'graphql-request'
-import { GQL_BULK_ACTION, GQL_MOVE_ITEM_TO_FOLDER } from '../library_items/gql'
+import {
+  GQL_BULK_ACTION,
+  GQL_MOVE_ITEM_TO_FOLDER,
+  GQL_SET_LINK_ARCHIVED,
+} from '../library_items/gql'
 import { BulkAction } from '../library_items/useLibraryItems'
 import { gqlFetcher } from '../networkHelpers'
 import {
@@ -74,6 +78,19 @@ export async function moveItemToFolder(
   }
   if (data.moveToFolder.errorCodes?.length) {
     throw new Error(data.moveToFolder.errorCodes[0])
+  }
+}
+
+// Archives one item, or brings it back, without refetching the feed list.
+export async function setItemArchived(
+  id: string,
+  archived: boolean
+): Promise<void> {
+  const data = (await gqlFetcher(GQL_SET_LINK_ARCHIVED, {
+    input: { linkId: id, archived },
+  })) as { setLinkArchived: { errorCodes?: string[] } }
+  if (data.setLinkArchived.errorCodes?.length) {
+    throw new Error(data.setLinkArchived.errorCodes[0])
   }
 }
 

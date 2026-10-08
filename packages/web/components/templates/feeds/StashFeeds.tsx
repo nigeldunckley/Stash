@@ -1,9 +1,9 @@
 import {
+  Archive,
   ArrowSquareOut,
   ArrowUp,
   Bookmark,
   CaretDown,
-  Check,
   Checks,
   GearSix,
   Plus,
@@ -25,6 +25,7 @@ import {
   markItemsSeen,
   moveItemToFolder,
   searchValue,
+  setItemArchived,
   subscriptionKey,
   subscriptionName,
 } from '../../../lib/networking/subscriptions/feeds'
@@ -416,6 +417,8 @@ export function StashFeeds(): JSX.Element {
   // Items saved to the Library this visit. They leave the list, except the
   // one still open in the peek.
   const [saved, setSaved] = useState<Set<string>>(new Set())
+  // Items archived this visit. They leave the list straight away.
+  const [archived, setArchived] = useState<Set<string>>(new Set())
   const [leaving, setLeaving] = useState<Set<string>>(new Set())
   const [focusId, setFocusId] = useState<string | undefined>()
 
@@ -459,8 +462,12 @@ export function StashFeeds(): JSX.Element {
   )
   const listed = useMemo(
     () =>
-      items.filter((item) => !saved.has(item.id) || item.id == peekItem?.id),
-    [items, saved, peekItem]
+      items.filter(
+        (item) =>
+          !archived.has(item.id) &&
+          (!saved.has(item.id) || item.id == peekItem?.id)
+      ),
+    [items, saved, archived, peekItem]
   )
   const total = itemsQuery.data?.pages[0]?.pageInfo.totalCount
 
@@ -737,6 +744,59 @@ export function StashFeeds(): JSX.Element {
     [peekItem, peekIndex, listed, openPeek, isPhone]
   )
 
+  // Archiving the item in the peek moves on to the next one, as in Mail.
+  const archive = useCallback(
+    async (item: LibraryItemNode) => {
+      if (archived.has(item.id)) {
+        return
+      }
+      markSeen([item.id])
+      if (item.id == peekItem?.id) {
+        const next = listed[peekIndex + 1] ?? listed[peekIndex - 1]
+        setArchived((current) => toggle(current, item.id, true))
+        if (next && next.id != item.id) {
+          openPeek(next)
+        } else {
+          setPeekItem(undefined)
+        }
+      } else {
+        setLeaving((current) => toggle(current, item.id, true))
+        setTimeout(() => {
+          setArchived((current) => toggle(current, item.id, true))
+          setLeaving((current) => toggle(current, item.id, false))
+        }, 220)
+      }
+      try {
+        await setItemArchived(item.id, true)
+        refreshElsewhere()
+        showUndoToast('Archived', async () => {
+          try {
+            await setItemArchived(item.id, false)
+            setArchived((current) => toggle(current, item.id, false))
+            refreshElsewhere()
+          } catch {
+            showErrorToast('Could not unarchive it', {
+              position: 'bottom-center',
+            })
+          }
+        })
+      } catch {
+        setArchived((current) => toggle(current, item.id, false))
+        setLeaving((current) => toggle(current, item.id, false))
+        showErrorToast('Could not archive it', { position: 'bottom-center' })
+      }
+    },
+    [
+      archived,
+      peekItem,
+      peekIndex,
+      listed,
+      markSeen,
+      openPeek,
+      refreshElsewhere,
+    ]
+  )
+
   const openOriginal = (item: LibraryItemNode) => {
     markSeen([item.id])
     window.open(item.originalArticleUrl || item.url, '_blank', 'noreferrer')
@@ -766,7 +826,7 @@ export function StashFeeds(): JSX.Element {
   }, [bulkAction, selected, view, total, items])
 
   // Keyboard: j and k move, space peeks, o opens in the Reader, s saves to
-  // the Library, e marks seen, v opens the original page.
+  // the Library, e archives, m marks seen, v opens the original page.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement
@@ -820,6 +880,9 @@ export function StashFeeds(): JSX.Element {
           if (current) save(current)
           break
         case 'e':
+          if (current) archive(current)
+          break
+        case 'm':
           if (current) markSeen([current.id], true)
           break
         case 'v':
@@ -851,6 +914,7 @@ export function StashFeeds(): JSX.Element {
     count: listed.length,
     saved: saved.has(item.id),
     onSave: () => save(item),
+    onArchive: () => archive(item),
     onNext: () => step(1),
     onPrevious: () => step(-1),
     onClose: closePeek,
@@ -1009,15 +1073,11 @@ export function StashFeeds(): JSX.Element {
                         label="Save"
                         icon={<Bookmark size={16} />}
                         onAction={() => save(item)}
-                        start={
-                          itemSeen
-                            ? undefined
-                            : {
-                                label: 'Seen',
-                                icon: <Check size={16} />,
-                                onAction: () => markSeen([item.id], true),
-                              }
-                        }
+                        start={{
+                          label: 'Archive',
+                          icon: <Archive size={16} />,
+                          onAction: () => archive(item),
+                        }}
                       >
                         <ItemRow
                           ref={rowRef(item.id)}
@@ -1073,16 +1133,14 @@ export function StashFeeds(): JSX.Element {
                                   }
                                 />
                               </IconButton>
-                              {!itemSeen && (
-                                <IconButton
-                                  label="Mark seen"
-                                  shortcut="e"
-                                  size="sm"
-                                  onClick={() => markSeen([item.id], true)}
-                                >
-                                  <Check size={15} />
-                                </IconButton>
-                              )}
+                              <IconButton
+                                label="Archive"
+                                shortcut="e"
+                                size="sm"
+                                onClick={() => archive(item)}
+                              >
+                                <Archive size={15} />
+                              </IconButton>
                               <IconButton
                                 label="Peek"
                                 shortcut="Space"
