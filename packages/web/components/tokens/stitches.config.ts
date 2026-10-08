@@ -77,6 +77,15 @@ export const { styled, css, theme, getCssText, globalCss, keyframes, config } =
         4: '1.25em',
         5: '1.5em',
         6: '2em',
+        // Stash type scale, fixed pixel sizes for the redesigned screens
+        micro: '11px',
+        caption: '12px',
+        small: '13px',
+        body: '14px',
+        ui: '15px',
+        title: '20px',
+        headline: '28px',
+        display: '40px',
       },
       space: {
         1: '0.25em',
@@ -99,6 +108,9 @@ export const { styled, css, theme, getCssText, globalCss, keyframes, config } =
         2: '0.5em',
         3: '0.75em',
         round: '9999px',
+        sm: '6px',
+        md: '10px',
+        lg: '14px',
       },
       fontWeights: {},
       lineHeights: {},
@@ -248,6 +260,20 @@ export const { styled, css, theme, getCssText, globalCss, keyframes, config } =
 
         thFallbackImageForeground: '#3F3F46',
         thFallbackImageBackground: '#F4F4F5',
+
+        // Stash palette for the redesigned screens
+        stCanvas: '#FAFAFA',
+        stSurface: '#FFFFFF',
+        stSunken: '#F4F4F5',
+        stLine: '#E4E4E7',
+        stLineStrong: '#D4D4D8',
+        stInk: '#09090B',
+        stInk2: '#3F3F46',
+        stMuted: '#71717A',
+        stAccent: '#FF4F00',
+        stAccentText: '#C23A00',
+        stAccentTint: 'rgba(255, 79, 0, 0.10)',
+        stOnAccent: '#09090B',
 
         highlight_background_green: '85, 198, 137',
         highlight_background_blue: '106, 177, 255',
@@ -405,6 +431,19 @@ const darkThemeSpec = {
     thFallbackImageForeground: '#FAFAFA',
     thFallbackImageBackground: '#27272A',
 
+    stCanvas: '#09090B',
+    stSurface: '#111113',
+    stSunken: '#18181B',
+    stLine: '#27272A',
+    stLineStrong: '#3F3F46',
+    stInk: '#FAFAFA',
+    stInk2: '#D4D4D8',
+    stMuted: '#A1A1AA',
+    stAccent: '#FF5A14',
+    stAccentText: '#FF8A50',
+    stAccentTint: 'rgba(255, 90, 20, 0.14)',
+    stOnAccent: '#09090B',
+
     highlight_underline_alpha: '0.5',
     highlight_background_alpha: '0.35',
   },
@@ -442,6 +481,12 @@ const apolloThemeSpec = {
 
     thLibraryMultiselectHover: '#3F3F46',
     thLabelChipBackground: '#3F3F46',
+
+    stCanvas: '#18181B',
+    stSurface: '#1F1F23',
+    stSunken: '#27272A',
+    stLine: '#2E2E33',
+    stLineStrong: '#3F3F46',
   },
 }
 
