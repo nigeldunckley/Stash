@@ -544,24 +544,6 @@ export function ArticleContainer(props: ArticleContainerProps): JSX.Element {
           articleMutations={props.articleMutations}
           isAppleAppEmbed={props.isAppleAppEmbed}
         />
-        <Button
-          style="ghost"
-          css={{
-            p: 0,
-            my: '$4',
-            color: '$error',
-            fontSize: '$1',
-            '&:hover': {
-              opacity: 0.8,
-            },
-            '@media print': {
-              display: 'none',
-            },
-          }}
-          onClick={() => setShowReportIssuesModal(true)}
-        >
-          Report issues with this page -{'>'}
-        </Button>
         <Box css={{ height: '100px' }} />
       </Box>
       <HighlightsLayer

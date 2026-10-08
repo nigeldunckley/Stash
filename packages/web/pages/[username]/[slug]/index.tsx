@@ -17,6 +17,8 @@ import { useReaderSettings } from '../../../lib/hooks/useReaderSettings'
 import { SkeletonArticleContainer } from '../../../components/templates/article/SkeletonArticleContainer'
 import { useRegisterActions } from 'kbar'
 import { ReaderHeader } from '../../../components/templates/reader/ReaderHeader'
+import { StashReaderBar } from '../../../components/templates/reader/StashReaderBar'
+import { ReaderOutline } from '../../../components/templates/reader/ReaderOutline'
 import { EditArticleModal } from '../../../components/templates/homeFeed/EditItemModals'
 import { VerticalArticleActionsMenu } from '../../../components/templates/article/VerticalArticleActions'
 import { PdfHeaderSpacer } from '../../../components/templates/article/PdfHeaderSpacer'
@@ -121,6 +123,11 @@ export default function Reader(): JSX.Element {
     router.push(`/home?${query}`)
     // router.push(`/home`)
   }, [router, viewerData, libraryItem])
+
+  const goBack = useCallback(() => {
+    const navReturn = window.localStorage.getItem('nav-return')
+    router.push(navReturn ?? '/l/home', undefined, { scroll: false })
+  }, [router])
 
   const actionHandler = useCallback(
     async (action: string, arg?: unknown) => {
@@ -510,26 +517,29 @@ export default function Reader(): JSX.Element {
         document.body.removeEventListener('mousedown', preventHighlight)
       }
     }
-
   }, [readerSettings.fullPageScroll])
 
-
-  const doubleClickPageTurn = (e: React.MouseEvent<HTMLElement, MouseEvent>) => {
+  const doubleClickPageTurn = (
+    e: React.MouseEvent<HTMLElement, MouseEvent>
+  ) => {
     if (readerSettings.fullPageScroll) {
       const scrollDirection = e.clientX > window.innerWidth / 2 ? 1 : -1
       window.scroll(0, window.scrollY + window.innerHeight * scrollDirection)
 
       // Once we've finished scrolling, we need to calculate an offset.
-      const elementsIntersection = document.elementsFromPoint(window.innerWidth/2, 1);
+      const elementsIntersection = document.elementsFromPoint(
+        window.innerWidth / 2,
+        1
+      )
       const paragraph = elementsIntersection.find(
         (el) =>
           el.tagName != 'DIV' && el.hasAttribute('data-omnivore-anchor-idx')
       ) as HTMLElement
 
       if (paragraph) {
-        const lineHeight = parseInt(window
-          .getComputedStyle(paragraph)
-          .getPropertyValue('line-height'));
+        const lineHeight = parseInt(
+          window.getComputedStyle(paragraph).getPropertyValue('line-height')
+        )
 
         const { top } = paragraph.getBoundingClientRect()
         const diff = (top * -1) % lineHeight
@@ -537,7 +547,7 @@ export default function Reader(): JSX.Element {
         // It would be annoying to show the user the same line again when they double tap. Instead, we should go down to the
         // next line.
         const offset = lineHeight * 0.7 < diff ? (lineHeight - diff) * -1 : diff
-        window.scroll(0, window.scrollY - offset);
+        window.scroll(0, window.scrollY - offset)
       }
     }
   }
@@ -569,47 +579,43 @@ export default function Reader(): JSX.Element {
         src="/static/mathjax/tex-mml-chtml.js"
       />
 
-      <ReaderHeader
-        hideDisplaySettings={false}
-        showDisplaySettingsModal={
-          readerSettings.setShowEditDisplaySettingsModal
-        }
-        alwaysDisplayToolbar={libraryItem?.contentReader == 'PDF'}
-      >
-        <VerticalArticleActionsMenu
-          article={libraryItem}
-          layout="top"
-          showReaderDisplaySettings={libraryItem?.contentReader != 'PDF'}
-          articleActionHandler={actionHandler}
-        />
-      </ReaderHeader>
-
-      {libraryItem?.contentReader == 'PDF' && <PdfHeaderSpacer />}
-
-      <VStack
-        distribution="between"
-        alignment="center"
-        css={{
-          position: 'fixed',
-          flexDirection: 'row-reverse',
-          left: 8,
-          height: '100%',
-          width: '35px',
-          '@lgDown': {
-            display: 'none',
-          },
-        }}
-      >
-        {libraryItem?.contentReader !== 'PDF' ? (
-          <ArticleActionsMenu
-            article={libraryItem}
-            layout="side"
+      {libraryItem?.contentReader == 'PDF' ? (
+        <>
+          <ReaderHeader
+            hideDisplaySettings={false}
+            showDisplaySettingsModal={
+              readerSettings.setShowEditDisplaySettingsModal
+            }
+            alwaysDisplayToolbar={true}
+          >
+            <VerticalArticleActionsMenu
+              article={libraryItem}
+              layout="top"
+              showReaderDisplaySettings={false}
+              articleActionHandler={actionHandler}
+            />
+          </ReaderHeader>
+          <PdfHeaderSpacer />
+        </>
+      ) : (
+        <>
+          <StashReaderBar
+            item={libraryItem}
+            autoHide={true}
             readerSettings={readerSettings}
-            showReaderDisplaySettings={true}
-            articleActionHandler={actionHandler}
+            actionHandler={actionHandler}
+            onBack={goBack}
+            notebookOpen={showHighlightsModal}
+            onToggleNotebook={() =>
+              setShowHighlightsModal(!showHighlightsModal)
+            }
           />
-        ) : null}
-      </VStack>
+          {libraryItem?.contentReader == 'WEB' && (
+            <ReaderOutline contentKey={libraryItem.id} />
+          )}
+        </>
+      )}
+
       {libraryItem &&
         viewerData &&
         libraryItem.contentReader == 'PDF' &&
@@ -639,7 +645,11 @@ export default function Reader(): JSX.Element {
             height: '100%',
             background: '$readerBg',
             overflow: 'hidden',
-            paddingTop: '80px',
+            paddingTop: '84px',
+            '--reader-column': `${1024 - readerSettings.marginWidth}px`,
+            '& #article-container h2, & #article-container h3': {
+              scrollMarginTop: '72px',
+            },
             '@media print': {
               paddingTop: '0px',
             },

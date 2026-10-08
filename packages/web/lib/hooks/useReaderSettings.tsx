@@ -56,7 +56,7 @@ export const useReaderSettings = (): ReaderSettings => {
   })
   const [marginWidth, setMarginWidth] = usePersistedState({
     key: 'marginWidth',
-    initialValue: 200,
+    initialValue: 290,
   })
   const [fontFamily, setFontFamily] = usePersistedState({
     key: 'fontFamily',
