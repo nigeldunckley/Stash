@@ -6,52 +6,67 @@ export function navigationCommands(router: NextRouter | undefined): Action[] {
   return [
     {
       id: 'home',
-      section: 'Navigation',
-      name: 'Go to home',
+      section: { name: 'Go to', priority: 0 },
+      name: 'Edition',
       shortcut: ['g', 'h'],
-      keywords: 'go home',
+      keywords: 'go home edition',
       perform: () => {
-        console.log('go home')
         router?.push(`/home`)
       },
     },
     {
       id: 'library',
-      section: 'Navigation',
-      name: 'Go to library',
+      section: { name: 'Go to', priority: 0 },
+      name: 'Library',
       shortcut: ['g', 'l'],
       keywords: 'go library',
       perform: () => {
-        console.log('go library')
         router?.push(`/library`)
       },
     },
     {
       id: 'subscriptions',
-      section: 'Navigation',
-      name: 'Go to subscriptions',
+      section: { name: 'Go to', priority: 0 },
+      name: 'Feeds',
       shortcut: ['g', 's'],
-      keywords: 'go subscriptions',
+      keywords: 'go subscriptions feeds rss',
       perform: () => {
-        console.log('go subscriptions')
         router?.push(`/subscriptions`)
       },
     },
     {
       id: 'highlights',
-      section: 'Navigation',
-      name: 'Go to highlights',
+      section: { name: 'Go to', priority: 0 },
+      name: 'Highlights',
       shortcut: ['g', 'i'],
       keywords: 'go highlights',
       perform: () => {
-        console.log('go highlights')
         router?.push(`/highlights`)
       },
     },
     {
+      id: 'archive',
+      section: { name: 'Go to', priority: 0 },
+      name: 'Archive',
+      shortcut: ['g', 'a'],
+      keywords: 'go archive',
+      perform: () => {
+        router?.push(`/archive`)
+      },
+    },
+    {
+      id: 'settings',
+      section: { name: 'Go to', priority: 0 },
+      name: 'Settings',
+      keywords: 'go settings preferences account',
+      perform: () => {
+        router?.push(`/settings/account`)
+      },
+    },
+    {
       id: 'goback',
-      section: 'Navigation',
-      name: 'Go back',
+      section: { name: 'Go to', priority: 0 },
+      name: 'Back',
       shortcut: ['g', 'b'],
       keywords: 'go back',
       perform: () => {

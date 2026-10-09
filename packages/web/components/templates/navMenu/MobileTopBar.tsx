@@ -1,4 +1,5 @@
-import { DotsThreeOutline } from '@phosphor-icons/react'
+import { DotsThreeOutline, MagnifyingGlass } from '@phosphor-icons/react'
+import { useKBar } from 'kbar'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { motion, reducedMotion } from '../../elements/stash/motion'
@@ -98,6 +99,7 @@ export function MobileTopBar(props: {
   section: NavigationSection
   onMore: () => void
 }): JSX.Element {
+  const { query } = useKBar()
   const [hidden, setHidden] = useState(false)
   const lastY = useRef(0)
 
@@ -135,6 +137,9 @@ export function MobileTopBar(props: {
           </Tab>
         ))}
       </Tabs>
+      <More type="button" onClick={() => query.toggle()} aria-label="Search">
+        <MagnifyingGlass size={20} />
+      </More>
       <More type="button" onClick={props.onMore} aria-label="More">
         <DotsThreeOutline size={20} />
       </More>

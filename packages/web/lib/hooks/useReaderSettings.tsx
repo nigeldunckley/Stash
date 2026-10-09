@@ -233,6 +233,26 @@ export const useReaderSettings = (): ReaderSettings => {
         shortcut: ['['],
         perform: () => actionHandler('decrementMarginWidth'),
       },
+      ...['Newsreader', 'Literata', 'Geist'].map((font) => ({
+        id: `readerFont${font}`,
+        section: 'Reading',
+        name: `Reader font: ${font}`,
+        keywords: `font,typeface,${font}`,
+        perform: () => setFontFamily(font),
+      })),
+      ...(
+        [
+          ['Narrow', 480],
+          ['Standard', 420],
+          ['Wide', 300],
+        ] as const
+      ).map(([label, margin]) => ({
+        id: `readerWidth${label}`,
+        section: 'Reading',
+        name: `Reader width: ${label}`,
+        keywords: `width,column,margin,${label}`,
+        perform: () => setMarginWidth(margin),
+      })),
       {
         id: 'edit_labels',
         section: 'Article',
@@ -243,12 +263,12 @@ export const useReaderSettings = (): ReaderSettings => {
       {
         id: 'display_settings',
         section: 'Article',
-        name: 'Reader Preferences',
+        name: 'Reader settings',
         shortcut: ['d'],
         perform: () => setShowEditDisplaySettingsModal(true),
       },
     ],
-    [actionHandler]
+    [actionHandler, setFontFamily, setMarginWidth]
   )
 
   return {

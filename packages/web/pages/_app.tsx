@@ -4,25 +4,11 @@ import '../styles/articleInnerStyling.css'
 import type { AppProps } from 'next/app'
 import Head from 'next/head'
 import { IdProvider } from '@radix-ui/react-id'
-import { NextRouter, useRouter } from 'next/router'
 import { ReactNode, useEffect, useState } from 'react'
 import { HydrationBoundary } from '@tanstack/react-query'
 import TopBarProgress from 'react-topbar-progress-indicator'
-import {
-  KBarProvider,
-  KBarPortal,
-  KBarPositioner,
-  KBarAnimator,
-  KBarSearch,
-  Priority,
-} from 'kbar'
-import {
-  animatorStyle,
-  KBarResultsComponents,
-  searchStyle,
-} from '../components/elements/KBar'
-import { updateTheme } from '../lib/themeUpdater'
-import { ThemeId } from '../components/tokens/stitches.config'
+import { KBarProvider } from 'kbar'
+import { CommandBar } from '../components/elements/CommandBar'
 import { GoogleReCaptchaProvider } from '@google-recaptcha/react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { QueryClient } from '@tanstack/react-query'
@@ -52,29 +38,6 @@ TopBarProgress.config({
   barThickness: 2,
 })
 
-const generateActions = (router: NextRouter) => {
-  return [
-    {
-      id: 'lightTheme',
-      section: 'Preferences',
-      name: 'Change theme (light) ',
-      shortcut: ['v', 'l'],
-      keywords: 'light theme',
-      priority: Priority.LOW,
-      perform: () => updateTheme(ThemeId.Light),
-    },
-    {
-      id: 'darkTheme',
-      section: 'Preferences',
-      name: 'Change theme (dark) ',
-      shortcut: ['v', 'd'],
-      keywords: 'dark theme',
-      priority: Priority.LOW,
-      perform: () => updateTheme(ThemeId.Dark),
-    },
-  ]
-}
-
 const ConditionalCaptchaProvider = (props: {
   children: ReactNode
 }): JSX.Element => {
@@ -94,8 +57,6 @@ const ConditionalCaptchaProvider = (props: {
 }
 
 export function OmnivoreApp({ Component, pageProps }: AppProps): JSX.Element {
-  const router = useRouter()
-
   return (
     <ConditionalCaptchaProvider>
       <Head>
@@ -129,15 +90,8 @@ export function OmnivoreApp({ Component, pageProps }: AppProps): JSX.Element {
         client={queryClient}
         persistOptions={{ persister: asyncStoragePersister }}
       >
-        <KBarProvider actions={generateActions(router)}>
-          <KBarPortal>
-            <KBarPositioner style={{ zIndex: 100 }}>
-              <KBarAnimator style={animatorStyle}>
-                <KBarSearch style={searchStyle} />
-                <KBarResultsComponents />
-              </KBarAnimator>
-            </KBarPositioner>
-          </KBarPortal>
+        <KBarProvider>
+          <CommandBar />
           <IdProvider>
             <Component {...pageProps} />
           </IdProvider>
