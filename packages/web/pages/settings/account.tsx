@@ -40,8 +40,10 @@ const ACCOUNT_LIMIT = 50_000
 
 const StyledLabel = styled('label', {
   fontWeight: 600,
-  fontSize: '16px',
-  marginBottom: '5px',
+  fontSize: '15px',
+  letterSpacing: '-0.01em',
+  color: '$stInk',
+  marginBottom: '6px',
 })
 
 export const FormInput = styled('input', {
@@ -52,14 +54,14 @@ export const FormInput = styled('input', {
   fontFamily: '$inter',
   fontWeight: 'normal',
   lineHeight: '1.35',
-  borderRadius: '5px',
+  borderRadius: '8px',
   textIndent: '8px',
   marginBottom: '2px',
   height: '38px',
   color: '$grayTextContrast',
   '&:focus': {
-    border: '1px solid transparent',
-    outline: '2px solid $omnivoreCtaYellow',
+    border: '1px solid $stInk',
+    outline: 'none',
   },
 })
 
@@ -238,27 +240,30 @@ export default function Account(): JSX.Element {
       >
         <VStack
           css={{
-            padding: '24px',
             width: '100%',
             height: '100%',
-            gap: '25px',
+            gap: '16px',
             minWidth: '300px',
             maxWidth: '865px',
           }}
         >
           <Box>
-            <StyledText style="fixedHeadline" css={{ my: '6px' }}>
-              Account Details
-            </StyledText>
+            <SpanBox
+              as="h1"
+              css={{ m: 0, mb: '8px', fontSize: '28px', fontWeight: 500 }}
+            >
+              Account
+            </SpanBox>
           </Box>
           <VStack
             css={{
               padding: '24px',
               width: '100%',
               height: '100%',
-              bg: '$grayBg',
+              bg: '$stSurface',
+              border: '1px solid $stLine',
               gap: '5px',
-              borderRadius: '5px',
+              borderRadius: '8px',
             }}
             distribution="start"
             alignment="start"
@@ -298,9 +303,10 @@ export default function Account(): JSX.Element {
               padding: '24px',
               width: '100%',
               height: '100%',
-              bg: '$grayBg',
+              bg: '$stSurface',
+              border: '1px solid $stLine',
               gap: '5px',
-              borderRadius: '5px',
+              borderRadius: '8px',
             }}
           >
             <StyledLabel>Username</StyledLabel>
@@ -355,9 +361,10 @@ export default function Account(): JSX.Element {
               padding: '24px',
               width: '100%',
               height: '100%',
-              bg: '$grayBg',
+              bg: '$stSurface',
+              border: '1px solid $stLine',
               gap: '5px',
-              borderRadius: '5px',
+              borderRadius: '8px',
             }}
           >
             <StyledLabel>Email</StyledLabel>
@@ -406,9 +413,10 @@ export default function Account(): JSX.Element {
               padding: '24px',
               width: '100%',
               height: '100%',
-              bg: '$grayBg',
+              bg: '$stSurface',
+              border: '1px solid $stLine',
               gap: '10px',
-              borderRadius: '5px',
+              borderRadius: '8px',
             }}
           >
             <StyledLabel>Account Storage</StyledLabel>
@@ -449,15 +457,16 @@ export default function Account(): JSX.Element {
               padding: '24px',
               width: '100%',
               height: '100%',
-              bg: '$grayBg',
+              bg: '$stSurface',
+              border: '1px solid $stLine',
               gap: '20px',
-              borderRadius: '5px',
+              borderRadius: '8px',
             }}
           >
             <StyledLabel>Danger Zone</StyledLabel>
             <Button
               style="ctaDarkYellow"
-              css={{ color: 'white', background: 'red' }}
+              css={{ color: '$stAccentText' }}
               onClick={(event) => {
                 window.location.href = '/settings/delete-my-account'
               }}
@@ -499,9 +508,10 @@ const ExportSection = (): JSX.Element => {
         padding: '24px',
         width: '100%',
         height: '100%',
-        bg: '$grayBg',
+        bg: '$stSurface',
+              border: '1px solid $stLine',
         gap: '5px',
-        borderRadius: '5px',
+        borderRadius: '8px',
       }}
     >
       <StyledLabel>Export</StyledLabel>
@@ -586,9 +596,10 @@ const BetaFeaturesSection = (): JSX.Element => {
         padding: '24px',
         width: '100%',
         height: '100%',
-        bg: '$grayBg',
+        bg: '$stSurface',
+              border: '1px solid $stLine',
         gap: '10px',
-        borderRadius: '5px',
+        borderRadius: '8px',
       }}
     >
       <StyledLabel>Beta features</StyledLabel>
@@ -722,9 +733,10 @@ const DigestSection = (): JSX.Element => {
         padding: '24px',
         width: '100%',
         height: '100%',
-        bg: '$grayBg',
+        bg: '$stSurface',
+              border: '1px solid $stLine',
         gap: '10px',
-        borderRadius: '5px',
+        borderRadius: '8px',
       }}
     >
       <StyledLabel>Digest</StyledLabel>

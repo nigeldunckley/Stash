@@ -1,60 +1,86 @@
-import { Box, HStack, SpanBox, VStack } from '../elements/LayoutPrimitives'
-import { useRouter } from 'next/router'
-import { applyStoredTheme } from '../../lib/themeUpdater'
 import { useCallback, useEffect, useState } from 'react'
+import { styled } from '../tokens/stitches.config'
+import { applyStoredTheme } from '../../lib/themeUpdater'
 import { ConfirmationModal } from '../patterns/ConfirmationModal'
 import { KeyboardShortcutListModal } from './KeyboardShortcutListModal'
 import { PageMetaData } from '../patterns/PageMetaData'
-import { DEFAULT_HEADER_HEIGHT } from './homeFeed/HeaderSpacer'
 import { useLogout } from '../../lib/logout'
-import { SettingsMenu } from './navMenu/SettingsMenu'
-import { SettingsDropdown } from './navMenu/SettingsDropdown'
+import {
+  MOBILE_SETTINGS_BAR_HEIGHT,
+  SettingsMenu,
+  SETTINGS_GROUPS,
+  useSelectedSettingsItem,
+} from './navMenu/SettingsMenu'
 import { useVerifyAuth } from '../../lib/hooks/useVerifyAuth'
-import Link from 'next/link'
-import { CaretLeft } from '@phosphor-icons/react'
-import { DEFAULT_HOME_PATH } from '../../lib/navigations'
+import { LIBRARY_LEFT_MENU_WIDTH } from './navMenu/NavigationMenu'
 
 type SettingsLayoutProps = {
   title?: string
   children: React.ReactNode
 }
 
-const ReturnButton = (): JSX.Element => {
-  return (
-    <SpanBox
-      css={{
-        a: {
-          textDecorationColor: '$thLibraryMenuUnselected',
-        },
-        'a:visited': {
-          textDecorationColor: '$thLibraryMenuUnselected',
-        },
-      }}
-    >
-      <Link href={DEFAULT_HOME_PATH}>
-        <HStack
-          css={{
-            pl: '20px',
-            pb: '6px',
-            gap: '2px',
-            font: '$inter',
-            fontWeight: '500',
-            color: '$thLibraryMenuUnselected',
-          }}
-          alignment="center"
-        >
-          <CaretLeft />
-          Return to library
-        </HStack>
-      </Link>
-    </SpanBox>
-  )
-}
+const Page = styled('div', {
+  minHeight: '100vh',
+  width: '100%',
+  bg: '$thBackground',
+  paddingLeft: LIBRARY_LEFT_MENU_WIDTH,
+  '@mdDown': {
+    paddingLeft: 0,
+    paddingTop: `calc(${MOBILE_SETTINGS_BAR_HEIGHT}px + env(safe-area-inset-top, 0px))`,
+  },
+})
+
+// The settings pages came from Omnivore and each draws its own content.
+// This column gives them Stash's width, type and controls.
+const Content = styled('main', {
+  width: '100%',
+  maxWidth: '880px',
+  mx: 'auto',
+  padding: '36px 40px 120px',
+  boxSizing: 'border-box',
+  fontFamily: '$inter',
+  color: '$stInk2',
+  '@mdDown': { padding: '20px 16px 96px' },
+
+  '& h1, & h2, & h3': {
+    fontFamily: '$inter',
+    color: '$stInk',
+    letterSpacing: '-0.02em',
+  },
+  '& a': {
+    color: 'inherit',
+    textDecorationColor: '$stAccent',
+    textUnderlineOffset: '0.2em',
+  },
+  '& input:not([type=checkbox]):not([type=radio]), & textarea, & select': {
+    fontFamily: '$inter',
+    fontSize: '14px',
+    color: '$stInk',
+    bg: '$stSurface',
+    border: '1px solid $stLine',
+    borderRadius: '6px',
+    boxSizing: 'border-box',
+  },
+  '& input:focus, & textarea:focus, & select:focus': {
+    outline: 'none',
+    borderColor: '$stInk',
+    boxShadow: '0 0 0 3px $colors$stAccentTint',
+  },
+})
+
+const Kicker = styled('div', {
+  fontFamily: '$mono',
+  fontSize: '11px',
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  color: '$stMuted',
+  mb: '4px',
+  '@mdDown': { display: 'none' },
+})
 
 export function SettingsLayout(props: SettingsLayoutProps): JSX.Element {
   useVerifyAuth()
 
-  const router = useRouter()
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false)
   const [showKeyboardCommandsModal, setShowKeyboardCommandsModal] =
     useState(false)
@@ -75,56 +101,22 @@ export function SettingsLayout(props: SettingsLayoutProps): JSX.Element {
 
   const { logout } = useLogout()
 
-  return (
-    <VStack
-      alignment="start"
-      distribution="start"
-      css={{ width: '100%', height: '100%', minHeight: '100vh' }}
-    >
-      <PageMetaData path="settings" title="Settings" />
-      <VStack css={{ width: '100%', height: '100%' }}>
-        <Box
-          css={{
-            height: DEFAULT_HEADER_HEIGHT,
-            '@mdDown': {
-              display: 'none',
-            },
-          }}
-        ></Box>
-        <HStack
-          alignment="center"
-          distribution="start"
-          css={{
-            p: '15px',
-            display: 'none',
-            height: DEFAULT_HEADER_HEIGHT,
-            '@mdDown': {
-              display: 'flex',
-            },
-          }}
-        >
-          <SettingsDropdown />
-          <ReturnButton />
-        </HStack>
+  const selected = useSelectedSettingsItem()
+  const group = SETTINGS_GROUPS.find((group) =>
+    group.items.some((item) => item === selected)
+  )
 
-        <HStack css={{ width: '100%', height: '100%' }} distribution="start">
-          <SettingsMenu />
-          <VStack css={{ width: '100%', height: '100%' }}>
-            <SpanBox
-              css={{
-                marginTop: '-50px',
-                '@mdDown': {
-                  display: 'none',
-                },
-              }}
-            >
-              <ReturnButton />
-            </SpanBox>
-            {props.children}
-          </VStack>
-        </HStack>
-        <Box css={{ height: '120px', width: '100%' }} />
-      </VStack>
+  return (
+    <Page>
+      <PageMetaData
+        path="settings"
+        title={selected ? `${selected.name} · Settings` : 'Settings'}
+      />
+      <SettingsMenu />
+      <Content>
+        {group && <Kicker>Settings · {group.title}</Kicker>}
+        {props.children}
+      </Content>
       {showLogoutConfirmation ? (
         <ConfirmationModal
           message={'Are you sure you want to log out?'}
@@ -137,6 +129,6 @@ export function SettingsLayout(props: SettingsLayoutProps): JSX.Element {
           onOpenChange={() => setShowKeyboardCommandsModal(false)}
         />
       ) : null}
-    </VStack>
+    </Page>
   )
 }

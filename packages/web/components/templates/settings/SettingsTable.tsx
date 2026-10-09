@@ -70,8 +70,8 @@ const MoreOptions = (props: MoreOptionsProps) => (
         }}
       >
         <MoreOptionsIcon
-          size={24}
-          strokeColor={theme.colors.grayTextContrast.toString()}
+          size={22}
+          strokeColor={theme.colors.stMuted.toString()}
           orientation="horizontal"
         />
       </Box>
@@ -84,10 +84,10 @@ const MoreOptions = (props: MoreOptionsProps) => (
         }}
       >
         <HStack alignment={'center'} distribution={'start'}>
-          <Pencil size={24} color={theme.colors.omnivoreLightGray.toString()} />
+          <Pencil size={18} color={theme.colors.stInk2.toString()} />
           <SpanBox
             css={{
-              color: theme.colors.omnivoreLightGray.toString(),
+              color: '$stInk',
               marginLeft: '8px',
               border: 'none',
               backgroundColor: 'transparent',
@@ -110,10 +110,10 @@ const MoreOptions = (props: MoreOptionsProps) => (
         }}
       >
         <HStack alignment={'center'} distribution={'start'}>
-          <Trash size={24} color={theme.colors.omnivoreRed.toString()} />
+          <Trash size={18} color={theme.colors.stAccentText.toString()} />
           <SpanBox
             css={{
-              color: theme.colors.omnivoreRed.toString(),
+              color: '$stAccentText',
               marginLeft: '8px',
               border: 'none',
               backgroundColor: 'transparent',
@@ -140,17 +140,16 @@ export const EmptySettingsRow = (props: EmptySettingsRowProps): JSX.Element => {
   return (
     <Box
       css={{
-        backgroundColor: '$grayBg',
+        bg: '$stSurface',
         display: 'flex',
         alignItems: 'center',
-        padding: '10px 12px',
-        border: '0.5px solid $grayBgActive',
+        padding: '28px 16px',
+        border: '1px solid $stLine',
+        borderTop: 'none',
         width: '100%',
-        borderBottomLeftRadius: '5px',
-        borderBottomRightRadius: '5px',
-        '@md': {
-          paddingLeft: '0',
-        },
+        boxSizing: 'border-box',
+        fontSize: '14px',
+        color: '$stMuted',
         justifyContent: 'center',
       }}
     >
@@ -163,18 +162,20 @@ export const SettingsTableRow = (props: SettingsTableRowProps): JSX.Element => {
   return (
     <Box
       css={{
-        backgroundColor: '$grayBg',
+        bg: '$stSurface',
         display: 'flex',
         alignItems: 'center',
-        padding: '10px 12px',
-        border: '0.5px solid $grayBgActive',
+        padding: '12px 16px',
+        border: '1px solid $stLine',
+        borderTop: 'none',
         width: '100%',
+        boxSizing: 'border-box',
+        fontFamily: '$inter',
+        color: '$stInk2',
         cursor: !!props.onClick ? 'pointer' : 'unset',
         '&:hover': {
-          background: 'rgba(255, 234, 159, 0.12)',
+          bg: props.onClick ? '$stSunken' : '$stSurface',
         },
-        borderBottomLeftRadius: props.isLast ? '5px' : '',
-        borderBottomRightRadius: props.isLast ? '5px' : '',
         '@md': {
           paddingLeft: '0',
         },
@@ -187,7 +188,7 @@ export const SettingsTableRow = (props: SettingsTableRowProps): JSX.Element => {
           width: '100%',
           flexDirection: 'column',
           '@md': {
-            paddingLeft: '20px',
+            paddingLeft: '16px',
             flexDirection: 'row',
           },
         }}
@@ -206,11 +207,10 @@ export const SettingsTableRow = (props: SettingsTableRowProps): JSX.Element => {
             <SpanBox
               css={{
                 m: '0px',
-                fontSize: '18px',
-                '@mdDown': {
-                  fontSize: '12px',
-                  fontWeight: 'bold',
-                },
+                fontSize: '15px',
+                fontWeight: 500,
+                color: '$stInk',
+                letterSpacing: '-0.01em',
               }}
             >
               {props.title}
@@ -281,80 +281,58 @@ const CreateButton = (props: CreateButtonProps): JSX.Element => {
 export const SettingsTable = (props: SettingsTableProps): JSX.Element => {
   return (
     <SettingsLayout>
-      <HStack css={{ width: '100%' }} alignment="center">
-        <VStack
-          alignment="start"
-          distribution="center"
+      <VStack
+        alignment="start"
+        distribution="start"
+        css={{ width: '100%', fontFamily: '$inter' }}
+      >
+        <HStack
+          alignment="center"
+          distribution="between"
+          css={{ width: '100%', gap: '16px', mb: '20px' }}
+        >
+          <HStack alignment="center" css={{ gap: '8px' }}>
+            <SpanBox
+              as="h1"
+              css={{
+                m: 0,
+                fontSize: '28px',
+                fontWeight: 500,
+                letterSpacing: '-0.02em',
+                color: '$stInk',
+                '@mdDown': { fontSize: '24px' },
+              }}
+            >
+              {props.headerTitle}
+            </SpanBox>
+            {props.pageInfoLink && (
+              <InfoLink href={props.pageInfoLink}></InfoLink>
+            )}
+          </HStack>
+          {props.createAction && props.createTitle && (
+            <CreateButton
+              action={props.createAction}
+              title={props.createTitle}
+            />
+          )}
+        </HStack>
+        <Box
           css={{
-            mx: '10px',
             width: '100%',
-            height: '100%',
-            maxWidth: '865px',
-            color: '$grayText',
-            paddingBottom: '5rem',
-            paddingTop: '2rem',
-            alignSelf: 'center',
-            '@md': {
-              m: '16px',
-              alignSelf: 'center',
-              mx: '42px',
-              paddingTop: '0',
+            '& > *:first-child': {
+              borderTop: '1px solid $stLine',
+              borderTopLeftRadius: '8px',
+              borderTopRightRadius: '8px',
+            },
+            '& > *:last-child': {
+              borderBottomLeftRadius: '8px',
+              borderBottomRightRadius: '8px',
             },
           }}
         >
-          <Box
-            css={{
-              width: '100%',
-              '@md': {
-                display: 'block',
-              },
-            }}
-          >
-            <Box
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                marginBottom: '10px',
-                height: '60px',
-              }}
-            >
-              {props.createAction && props.createTitle && (
-                <CreateButton
-                  action={props.createAction}
-                  title={props.createTitle}
-                />
-              )}
-            </Box>
-            <Box
-              css={{
-                backgroundColor: '$grayBgActive',
-                border: '1px solid rgba(0, 0, 0, 0.06)',
-                borderBottom: 'unset',
-                alignItems: 'center',
-                padding: '10px 0 10px 20px',
-                borderRadius: '5px 5px 0px 0px',
-                width: '100%',
-              }}
-            >
-              <HStack alignment="start" distribution="start">
-                <StyledText
-                  style="menuTitle"
-                  css={{
-                    color: '$grayTextContrast',
-                  }}
-                >
-                  {props.headerTitle}
-                </StyledText>
-                {props.pageInfoLink && (
-                  <InfoLink href={props.pageInfoLink}></InfoLink>
-                )}
-              </HStack>
-            </Box>
-          </Box>
           {props.children}
-        </VStack>
-      </HStack>
-      <Box css={{ height: '120px' }} />
+        </Box>
+      </VStack>
     </SettingsLayout>
   )
 }

@@ -2,7 +2,6 @@ import { HStack, SpanBox, VStack } from './LayoutPrimitives'
 import { theme } from '../tokens/stitches.config'
 import { Button } from './Button'
 import { CloseIcon } from './icons/CloseIcon'
-import { HelpfulSlothImage } from './images/HelpfulSlothImage'
 import { ArrowSquareOut } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 
@@ -31,49 +30,32 @@ export const FeatureHelpBox = (props: FeatureHelpBoxProps) => {
   }
 
   return (
-    <HStack
+    <VStack
       css={{
-        gap: '10px',
-        my: '40px',
-        display: 'flex',
-        width: 'fit-content',
-        borderRadius: '5px',
-        background: '$thBackground5',
-        fontSize: '15px',
+        gap: '12px',
+        my: '24px',
+        width: '100%',
+        boxSizing: 'border-box',
+        border: '1px solid $stLine',
+        borderLeft: '2px solid $stAccent',
+        borderRadius: '8px',
+        bg: '$stSunken',
         fontFamily: '$inter',
-        fontWeight: '500',
-        color: '$grayText',
-        px: '20px',
-        py: '20px',
+        fontSize: '14px',
+        lineHeight: 1.5,
+        color: '$stInk2',
+        p: '16px 18px',
       }}
       alignment="start"
       distribution="start"
     >
-      <HStack css={{ gap: '30px' }}>
+      <HStack css={{ width: '100%', gap: '16px' }} distribution="between">
         <SpanBox
           css={{
-            pt: '7px',
-            alignSelf: 'center',
-            '@smDown': { display: 'none' },
-          }}
-        >
-          <HelpfulSlothImage />
-        </SpanBox>
-        <HelpSection {...props} />
-      </HStack>
-    </HStack>
-  )
-}
-
-const HelpSection = (props: FeatureHelpBoxProps) => {
-  return (
-    <VStack css={{ gap: '20px' }}>
-      <HStack css={{ width: '100%', gap: '20px' }} distribution="between">
-        <SpanBox
-          css={{
-            fontSize: '22px',
-            fontFamily: '$display',
-            color: '$thTextContrast2',
+            fontSize: '15px',
+            fontWeight: 600,
+            letterSpacing: '-0.01em',
+            color: '$stInk',
           }}
         >
           {props.helpTitle}
@@ -81,20 +63,16 @@ const HelpSection = (props: FeatureHelpBoxProps) => {
         <Button
           style="plainIcon"
           title="Hide this tip"
-          css={{ pt: '7px' }}
           onClick={(event) => {
             props.onDismiss()
             event.preventDefault()
           }}
         >
-          <CloseIcon
-            size={25}
-            color={theme.colors.thTextContrast2.toString()}
-          />
+          <CloseIcon size={20} color={theme.colors.stMuted.toString()} />
         </Button>
       </HStack>
       <SpanBox>{props.helpMessage}</SpanBox>
-      <HStack css={{ gap: '20px' }}>
+      <HStack css={{ gap: '8px' }}>
         {props.helpCTAText && props.onClickCTA && (
           <Button
             style="ctaDarkYellow"
@@ -110,20 +88,15 @@ const HelpSection = (props: FeatureHelpBoxProps) => {
           </Button>
         )}
         <Button
-          style="ctaLightGray"
+          style="ctaOutlineYellow"
           onClick={(event) => {
             window.open(props.docsDestination, '_blank', 'noreferrer')
             event.preventDefault()
           }}
-          css={{ display: 'flex', flexDirection: 'row', gap: '10px' }}
+          css={{ display: 'flex', alignItems: 'center', gap: '6px' }}
         >
           {props.docsMessage}
-          <SpanBox css={{ alignSelf: 'center' }}>
-            <ArrowSquareOut
-              size={12}
-              color={theme.colors.thTextContrast2.toString()}
-            />
-          </SpanBox>
+          <ArrowSquareOut size={12} />
         </Button>
       </HStack>
     </VStack>
