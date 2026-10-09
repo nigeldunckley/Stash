@@ -10,8 +10,7 @@ git -C .. pull --ff-only -q
 # Most merges only change app code, which reaches the server as new images
 # below. Only server setup (deploy/) and database migrations (packages/db/)
 # need the slower full update, which pulls everything and rebuilds.
-if git -C .. diff --name-only "$before" HEAD |
-   grep -qE '^(deploy|packages/db)/'; then
+if [ -n "$(git -C .. diff --name-only "$before" HEAD -- deploy packages/db)" ]; then
   echo "Server setup or database changes on main, running a full update."
   exec ./install.sh update
 fi
