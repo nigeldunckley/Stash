@@ -8,6 +8,8 @@ import {
 } from '../generated/graphql'
 import { redisDataSource } from '../redis_data_source'
 import { userRepository } from '../repository/user'
+import { LibraryItemState } from '../entity/library_item'
+import { findLibraryItemById } from '../services/library_item'
 import { saveFile } from '../services/save_file'
 import { savePage } from '../services/save_page'
 import { uploadFile } from '../services/upload_file'
@@ -259,6 +261,23 @@ export const savePageJob = async (data: Data, attemptsMade: number) => {
       logger.info('Downloaded original content from:', { filePath })
     }
 
+    // A feed item is listed from the feed before its page arrives, so the
+    // reader may already have archived it or saved it to the library. Keep
+    // that rather than putting it back.
+    let keptState = state as ArticleSavingRequestStatus | undefined
+    let keptFolder = folder
+    if (rssFeedUrl) {
+      const listed = await findLibraryItemById(articleSavingRequestId, userId, {
+        select: ['id', 'state', 'folder'],
+      })
+      if (listed?.state === LibraryItemState.Archived) {
+        keptState = ArticleSavingRequestStatus.Archived
+      } else if (listed?.state === LibraryItemState.Deleted) {
+        keptState = ArticleSavingRequestStatus.Deleted
+      }
+      keptFolder = listed?.folder || folder
+    }
+
     // for non-pdf content, we need to save the content
     const result = await savePage(
       {
@@ -266,13 +285,13 @@ export const savePageJob = async (data: Data, attemptsMade: number) => {
         clientRequestId: articleSavingRequestId,
         title,
         originalContent: content,
-        state: (state as ArticleSavingRequestStatus) || undefined,
+        state: keptState || undefined,
         labels,
         rssFeedUrl,
         savedAt,
         publishedAt: publishedAt ? new Date(publishedAt) : null,
         source,
-        folder,
+        folder: keptFolder,
       },
       user
     )

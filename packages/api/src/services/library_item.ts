@@ -857,6 +857,35 @@ export const findLibraryItemById = async (
   )
 }
 
+// Whether a feed entry is already in the library, in any state. The page it
+// was saved from may have a different address than the feed's link, so an
+// item from the same feed with the same title counts too.
+export const hasFeedItem = async (
+  userId: string,
+  feedUrl: string,
+  url: string,
+  title?: string
+): Promise<boolean> => {
+  const count = await authTrx(
+    async (tx) => {
+      const qb = tx
+        .createQueryBuilder(LibraryItem, 'library_item')
+        .where('library_item.user_id = :userId', { userId })
+      if (title) {
+        qb.andWhere(
+          '(md5(library_item.original_url) = md5(:url) OR (library_item.subscription = :feedUrl AND library_item.title = :title))',
+          { url, feedUrl, title }
+        )
+      } else {
+        qb.andWhere('md5(library_item.original_url) = md5(:url)', { url })
+      }
+      return qb.getCount()
+    },
+    { uid: userId, replicationMode: 'replica' }
+  )
+  return count > 0
+}
+
 export const findLibraryItemByUrl = async (
   url: string,
   userId: string
