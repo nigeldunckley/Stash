@@ -136,6 +136,75 @@ const MastSub = styled('div', {
   '@mdDown': { flexDirection: 'column', alignItems: 'flex-start', gap: '8px' },
 })
 
+const TimeRow = styled('div', {
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: '6px 14px',
+  marginTop: '12px',
+  fontSize: '$small',
+  color: '$stMuted',
+})
+
+const Chips = styled('div', {
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: '6px',
+  '& > span': { marginRight: '4px' },
+})
+
+const Chip = styled('button', {
+  all: 'unset',
+  boxSizing: 'border-box',
+  height: '28px',
+  padding: '0 11px',
+  display: 'inline-flex',
+  alignItems: 'center',
+  fontFamily: '$mono',
+  fontSize: '12px',
+  borderRadius: '999px',
+  border: '1px solid $stLine',
+  color: '$stInk2',
+  background: '$stSurface',
+  cursor: 'pointer',
+  transition: `background ${motion.fast}, color ${motion.fast}, border-color ${motion.fast}`,
+  '&:hover': { borderColor: '$stLineStrong' },
+  '&[aria-pressed="true"]': {
+    background: '$stInk',
+    color: '$stSurface',
+    borderColor: '$stInk',
+  },
+  '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '2px' },
+})
+
+const Fit = styled('span', {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '10px',
+  fontFamily: '$mono',
+  fontSize: '$micro',
+  '& > i': {
+    display: 'block',
+    width: '120px',
+    height: '4px',
+    borderRadius: '2px',
+    background: '$stLine',
+    overflow: 'hidden',
+  },
+  '& > i > b': {
+    display: 'block',
+    height: '100%',
+    background: '$stAccent',
+    transition: `width ${motion.base}`,
+  },
+})
+
+// Time you have, in minutes; null is the whole edition.
+const BUDGETS = [5, 15, 45] as const
+const minutesOf = (item: LibraryItemNode) =>
+  readingMinutes(item.wordsCount) ?? 4
+
 const fill = keyframes({
   from: { transform: 'scaleX(0.2)', opacity: 0.4 },
   to: { transform: 'none', opacity: 1 },
@@ -704,7 +773,42 @@ export function StashEdition(): JSX.Element {
     })
     return list
   }, [edition, items, skipped])
-  const inSlot = (slot: EditionSlot) => shown.filter((s) => s.slot === slot)
+
+  // "I have 15 min": keep the engine's order and take what fits, from the
+  // stories not read yet. The first that fits leads if the lead doesn't.
+  const [budget, setBudget] = useState<number | null>(null)
+  const fitted = useMemo(() => {
+    if (budget === null) return undefined
+    const chosen: Shown[] = []
+    let used = 0
+    // No one piece takes most of a longer slot, so it stays a mix.
+    const longest = Math.max(5, Math.round(budget * 0.6))
+    SLOT_ORDER.forEach((slot) =>
+      shown
+        .filter((s) => s.slot === slot && !isDone(s.item))
+        .forEach((s) => {
+          const minutes = minutesOf(s.item)
+          if (minutes <= longest && used + minutes <= budget) {
+            chosen.push(s)
+            used += minutes
+          }
+        })
+    )
+    return { chosen, used }
+  }, [budget, shown, isDone])
+  const visible = useMemo(() => {
+    if (!fitted) return shown
+    return fitted.chosen.map((s, i) =>
+      i === 0 && s.slot !== 'lead'
+        ? {
+            ...s,
+            slot: 'lead' as EditionSlot,
+            why: s.why ?? `Fits your ${budget} min`,
+          }
+        : s
+    )
+  }, [fitted, shown, budget])
+  const inSlot = (slot: EditionSlot) => visible.filter((s) => s.slot === slot)
 
   const stories = (edition?.entries ?? []).filter((e) => e.slot !== 'watch')
   const doneCount = stories.filter((entry) => {
@@ -718,10 +822,10 @@ export function StashEdition(): JSX.Element {
   // Keyboard order: lead, picks, popular, then the short list.
   const order = useMemo(
     () =>
-      SLOT_ORDER.flatMap((slot) => shown.filter((s) => s.slot === slot)).map(
+      SLOT_ORDER.flatMap((slot) => visible.filter((s) => s.slot === slot)).map(
         (s) => s.item
       ),
-    [shown]
+    [visible]
   )
   const [selectedId, setSelectedId] = useState<string>()
 
@@ -997,6 +1101,52 @@ export function StashEdition(): JSX.Element {
                 {doneCount} OF {stories.length}
               </Ticks>
             </MastSub>
+          )}
+          {index === 0 && edition && stories.length > 0 && (
+            <TimeRow>
+              <Chips role="group" aria-label="Time you have">
+                <span>I have</span>
+                {BUDGETS.map((minutes) => (
+                  <Chip
+                    key={minutes}
+                    type="button"
+                    aria-pressed={budget === minutes}
+                    onClick={() => {
+                      setBudget(budget === minutes ? null : minutes)
+                      setSelectedId(undefined)
+                    }}
+                  >
+                    {minutes} min
+                  </Chip>
+                ))}
+                <Chip
+                  type="button"
+                  aria-pressed={budget === null}
+                  onClick={() => setBudget(null)}
+                >
+                  All of it
+                </Chip>
+              </Chips>
+              {fitted && (
+                <Fit aria-live="polite">
+                  {fitted.chosen.length === 0
+                    ? 'NOTHING LEFT FITS'
+                    : `${fitted.chosen.length} ${
+                        fitted.chosen.length === 1 ? 'STORY' : 'STORIES'
+                      } · ${fitted.used} OF ${budget} MIN`}
+                  <i aria-hidden="true">
+                    <b
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.round((fitted.used / (budget ?? 1)) * 100)
+                        )}%`,
+                      }}
+                    />
+                  </i>
+                </Fit>
+              )}
+            </TimeRow>
           )}
         </Mast>
 
