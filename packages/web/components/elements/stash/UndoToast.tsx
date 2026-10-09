@@ -18,7 +18,7 @@ const Root = styled('div', {
   boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
   transition: `opacity ${motion.base}, transform ${motion.base}`,
   '&[data-visible="false"]': { opacity: 0, transform: 'translateY(8px)' },
-  '@mdDown': { marginBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' },
+  '@mdDown': { marginBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))' },
 })
 
 const Mark = styled('span', {

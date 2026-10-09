@@ -17,7 +17,7 @@ import { Button } from '../elements/Button'
 import { List } from '@phosphor-icons/react'
 import { LIBRARY_LEFT_MENU_WIDTH } from './navMenu/LibraryLegacyMenu'
 import { AddLinkModal } from './AddLinkModal'
-import { MobileTabBar } from './navMenu/MobileTabBar'
+import { MobileTopBar } from './navMenu/MobileTopBar'
 import useWindowDimensions from '../../lib/hooks/useGetWindowDimensions'
 import { useHandleAddUrl } from '../../lib/hooks/useHandleAddUrl'
 import { useGetViewer } from '../../lib/networking/viewer/useGetViewer'
@@ -161,7 +161,7 @@ export function NavigationLayout(props: NavigationLayoutProps): JSX.Element {
         </>
       )}
       {props.children}
-      <MobileTabBar
+      <MobileTopBar
         section={props.section}
         onMore={() => props.setShowNavigationMenu(!props.showNavigationMenu)}
       />
@@ -210,7 +210,7 @@ const Header = (props: HeaderProps): JSX.Element => {
         pt: '20px',
 
         height: '58px',
-        // The tab bar replaces the menu button on iPhone.
+        // The top bar replaces the menu button on iPhone.
         '@mdDown': { display: 'none' },
       }}
     >

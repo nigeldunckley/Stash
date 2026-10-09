@@ -145,7 +145,7 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
     >
       <NavButton
         {...props}
-        text="Home"
+        text="Edition"
         section="home"
         isSelected={props.section == 'home'}
         icon={<House size={18} />}
@@ -155,36 +155,28 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         text="Library"
         section="library"
         isSelected={props.section == 'library'}
-        icon={
-          <Books size={18} />
-        }
+        icon={<Books size={18} />}
       />
       <NavButton
         {...props}
         text="Discover"
         section="l/discover"
         isSelected={props.section == 'discover'}
-        icon={
-          <Compass size={18} />
-        }
+        icon={<Compass size={18} />}
       />
       <NavButton
         {...props}
         text="Feeds"
         section="subscriptions"
         isSelected={props.section == 'subscriptions'}
-        icon={
-          <Rss size={18} />
-        }
+        icon={<Rss size={18} />}
       />
       <NavButton
         {...props}
         text="Highlights"
         section="highlights"
         isSelected={props.section == 'highlights'}
-        icon={
-          <Highlighter size={18} />
-        }
+        icon={<Highlighter size={18} />}
       />
 
       <NavButton
@@ -192,18 +184,14 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         text="Archive"
         section="archive"
         isSelected={props.section == 'archive'}
-        icon={
-          <Archive size={18} />
-        }
+        icon={<Archive size={18} />}
       />
       <NavButton
         {...props}
         text="Trash"
         section="trash"
         isSelected={props.section == 'trash'}
-        icon={
-          <Trash size={18} />
-        }
+        icon={<Trash size={18} />}
       />
     </VStack>
   )
