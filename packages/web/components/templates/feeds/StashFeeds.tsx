@@ -82,9 +82,7 @@ const Page = styled('main', {
   color: '$stInk',
   fontFamily: '$inter',
   padding: '24px 32px 80px',
-  '@mdDown': {
-    padding: 'calc(20px + env(safe-area-inset-top, 0px)) 16px 32px',
-  },
+  '@mdDown': { padding: '16px 16px 32px' },
 })
 
 const Panes = styled('div', {
@@ -293,6 +291,8 @@ const NewItemsBar = styled('div', {
   position: 'sticky',
   // The pill sits on the list's top edge, and 12px below the top once stuck.
   top: '27px',
+  // Below the navigation bar on iPhone.
+  '@mdDown': { top: 'calc(60px + env(safe-area-inset-top, 0px))' },
   zIndex: 3,
   display: 'flex',
   justifyContent: 'center',

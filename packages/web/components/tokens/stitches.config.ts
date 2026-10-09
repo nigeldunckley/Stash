@@ -546,10 +546,10 @@ export const globalStyles = globalCss({
     colorScheme: 'var(--colorScheme-colorScheme)',
     backgroundColor: '$readerBg',
   },
-  // Room for the iPhone tab bar (MobileTabBar).
+  // Room for the iPhone navigation bar (MobileTopBar).
   '@media (max-width: 768px)': {
-    'body[data-tabbar="on"]': {
-      paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px))',
+    'body[data-topbar="on"]': {
+      paddingTop: 'calc(48px + env(safe-area-inset-top, 0px))',
     },
   },
   // browser prefers this loaded here vs in the article styling css

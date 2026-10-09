@@ -75,7 +75,6 @@ export function LibraryHeader(props: LibraryHeaderProps): JSX.Element {
           // No menu button on iPhone, so the search box can use the width.
           '@media (max-width: 768px)': {
             px: '16px',
-            pt: 'env(safe-area-inset-top, 0px)',
           },
         }}
       >

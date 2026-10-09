@@ -35,6 +35,7 @@ type CoverImageProps = {
   fallback?: ReactNode
   className?: string
   style?: CSSProperties
+  onClick?: () => void
 }
 
 // An item's picture, cropped to fill its frame. It fades in once loaded and
@@ -53,6 +54,7 @@ export function CoverImage(props: CoverImageProps): JSX.Element | null {
       aria-hidden="true"
       className={props.className}
       style={props.style}
+      onClick={props.onClick}
       data-loaded={usable && loadedSrc === props.src}
     >
       {usable ? (
