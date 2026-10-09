@@ -13,6 +13,7 @@ import {
   updateSubscription,
   updateSubscriptions,
 } from '../../services/update_subscription'
+import { hasFeedItem } from '../../services/library_item'
 import { findActiveUser } from '../../services/user'
 import createHttpTaskWithToken, {
   enqueueFetchContentJob,
@@ -128,9 +129,14 @@ export const isOldItem = (
     return publishedAt < new Date(Date.now() - firstLookBackMs)
   }
 
-  // don't fetch existing items for old feeds
-  return publishedAt <= new Date(mostRecentItemTimestamp)
+  // Items dated a little before the newest one already seen are still looked
+  // at: feeds often add a post late, dated when it was drafted or scheduled.
+  // processSubscription skips the ones already in the library.
+  return publishedAt <= new Date(mostRecentItemTimestamp - LATE_ITEM_WINDOW_MS)
 }
+
+// How far behind the newest item already seen a late feed item may be dated.
+export const LATE_ITEM_WINDOW_MS = 3 * 24 * 60 * 60 * 1000
 
 const feedFetchFailedRedisKey = (feedUrl: string) =>
   `feed-fetch-failure:${feedUrl}`
@@ -317,11 +323,11 @@ const addFetchContentTask = (
   fetchContentTasks: Map<string, FetchContentTask>,
   userId: string,
   folder: FolderType,
-  item: RssFeedItem
+  item: RssFeedItem,
+  libraryItemId = uuid()
 ) => {
   const url = item.link
   const task = fetchContentTasks.get(url)
-  const libraryItemId = uuid()
   const userConfig = { id: userId, folder, libraryItemId }
 
   if (!task) {
@@ -363,8 +369,25 @@ const createTask = async (
     return createItemWithFeedContent(userId, feedUrl, item, folder, feedContent)
   }
 
+  // List the item from the feed straight away, then fetch the full page into
+  // the same item. If the page can't be fetched (the site blocks it, times
+  // out, or its domain has failed too often) the item still shows, with what
+  // the feed carried, instead of never appearing.
+  const libraryItemId = await createItemWithFeedContent(
+    userId,
+    feedUrl,
+    item,
+    folder,
+    feedContent
+  )
   logger.info(`adding fetch content task ${userId}  ${item.link.trim()}`)
-  return addFetchContentTask(fetchContentTasks, userId, folder, item)
+  return addFetchContentTask(
+    fetchContentTasks,
+    userId,
+    folder,
+    item,
+    typeof libraryItemId == 'string' ? libraryItemId : undefined
+  )
 }
 
 const fetchContentAndCreateItem = async (
@@ -548,7 +571,8 @@ const createItemWithFeedContent = async (
       return false
     }
 
-    return true
+    // The saved item's id, so a page fetch can fill in the same item.
+    return ('clientRequestId' in result && result.clientRequestId) || true
   } catch (error) {
     logger.error('Error while saving feed item with feed content', error)
     return false
@@ -750,12 +774,15 @@ const processSubscription = async (
         feedUrl,
       })
 
-      if (!item.links || item.links.length === 0 || !guid) {
+      if (!guid) {
         throw new Error('Invalid feed item')
       }
 
       // fallback to guid if link is not available
-      const link = getLink(item.links, feedUrl) || guid
+      const link =
+        (item.links?.length ? getLink(item.links, feedUrl) : undefined) ||
+        (item.link ? getLink([item.link], feedUrl) : undefined) ||
+        guid
       if (!link) {
         throw new Error('Invalid feed item link')
       }
@@ -769,9 +796,15 @@ const processSubscription = async (
         creator,
       }
 
-      const publishedAt = feedItem.isoDate
+      // A date in the future (a wrong time zone, a scheduled post) would
+      // otherwise hold back every item dated before it.
+      const datedAt = feedItem.isoDate
         ? new Date(feedItem.isoDate)
-        : new Date()
+        : refreshedAt
+      const publishedAt =
+        isNaN(datedAt.getTime()) || datedAt > refreshedAt
+          ? refreshedAt
+          : datedAt
 
       if (youtube && isUnwantedShort(feedItem, youtube, includeShorts)) {
         logger.info(`Skipping YouTube Short ${feedItem.link}`)
@@ -798,6 +831,22 @@ const processSubscription = async (
       // skip old items
       if (isOldItem(feedItem, mostRecentItemDate, firstLookBackMs)) {
         logger.info(`Skipping old feed item ${feedItem.link}`)
+        continue
+      }
+
+      // An item dated before the newest one already seen may have been
+      // added to the feed late, and an undated one can't be told apart by
+      // date at all; either is new unless it is already saved.
+      if (
+        mostRecentItemDate &&
+        (!feedItem.isoDate || publishedAt.getTime() <= mostRecentItemDate) &&
+        (await hasFeedItem(
+          userId,
+          feedUrl,
+          cleanUrl(feedItem.link),
+          feedItem.title
+        ))
+      ) {
         continue
       }
 
@@ -851,15 +900,30 @@ const processSubscription = async (
       failedAt = new Date()
     }
 
-    lastItemFetchedAt = lastValidItem.isoDate
+    const datedAt = lastValidItem.isoDate
       ? new Date(lastValidItem.isoDate)
       : refreshedAt
+    lastItemFetchedAt =
+      isNaN(datedAt.getTime()) || datedAt > refreshedAt ? refreshedAt : datedAt
+  }
+
+  // A late item, or a check where every item failed, doesn't move the newest
+  // date seen backwards.
+  if (
+    mostRecentItemDate &&
+    (!lastItemFetchedAt || lastItemFetchedAt.getTime() < mostRecentItemDate)
+  ) {
+    lastItemFetchedAt = new Date(mostRecentItemDate)
   }
 
   // update subscription mostRecentItemDate and refreshedAt
   const updatedSubscription = await updateSubscription(userId, subscriptionId, {
     mostRecentItemDate: lastItemFetchedAt,
-    lastFetchedChecksum: updatedLastFetchedChecksum,
+    // When an item failed, the feed is read again at the next check even if
+    // it hasn't changed, so the item gets another try.
+    lastFetchedChecksum: failedAt
+      ? lastFetchedChecksum
+      : updatedLastFetchedChecksum,
     scheduledAt,
     refreshedAt,
     failedAt,
