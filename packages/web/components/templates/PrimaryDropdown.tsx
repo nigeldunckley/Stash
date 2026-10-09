@@ -196,6 +196,10 @@ export function PrimaryDropdown(props: PrimaryDropdownProps): JSX.Element {
       <DropdownSeparator />
       <ThemeSection {...props} />
       <DropdownOption
+        onSelect={() => router.push('/settings/save')}
+        title="Save from Safari"
+      />
+      <DropdownOption
         onSelect={() => router.push('/settings/installation')}
         title="Install"
       />
