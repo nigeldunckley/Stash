@@ -76,6 +76,13 @@ add_new_images() {
   done
 }
 
+# Each update leaves the previous images behind, and on a small disk they
+# soon fill it. Remove every image no container uses.
+prune_images() {
+  docker image prune -af >/dev/null
+  docker builder prune -af >/dev/null 2>&1 || true
+}
+
 # Runs auto-update.sh every five minutes, so merges reach the server
 # without anyone logging in.
 setup_autoupdate() {
@@ -195,8 +202,10 @@ case "${1:-}" in
   update)
     git -C .. pull --ff-only
     add_new_images
+    prune_images
     compose pull
     compose up -d --build
+    prune_images
     ensure_backup
     ;;
   ""|-h|--help)

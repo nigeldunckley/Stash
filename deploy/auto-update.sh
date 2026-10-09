@@ -14,6 +14,8 @@ fi
 
 # The images GitHub builds for Stash, by the container that runs each one.
 image() { grep -E "^$1=" .env | tail -n1 | cut -d= -f2- | tr -d '"'; }
+# Clear out unused images first so a full disk can't block the pull.
+docker image prune -af >/dev/null
 stale=no
 for pair in reader-web:WEB_IMAGE reader-api:API_IMAGE reader-queue-processor:QUEUE_IMAGE; do
   name=$(image "${pair#*:}")
@@ -28,4 +30,5 @@ done
 if [ "$stale" = yes ]; then
   echo "New Stash images, restarting the services that use them."
   docker compose up -d
+  docker image prune -af >/dev/null
 fi
