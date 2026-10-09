@@ -5,6 +5,7 @@
 #   sudo ./install.sh update               pull new images and restart
 #   sudo ./install.sh proxy [port]         run behind an existing web server
 #   sudo ./install.sh autoupdate [off]     update by itself after each merge
+#   sudo ./install.sh backup [now|off]     back up every night (on by default)
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -112,7 +113,64 @@ UNIT
   echo "five minutes. See what it did with: journalctl -u stash-update"
 }
 
+# Runs backup.sh every night. `update` turns this on by itself unless it
+# was switched off, so servers that update automatically get backups too.
+BACKUP_OFF_MARKER=/etc/stash-backup-off
+
+setup_backup() {
+  if [ "${1:-}" = off ]; then
+    systemctl disable --now stash-backup.timer 2>/dev/null || true
+    rm -f /etc/systemd/system/stash-backup.service \
+          /etc/systemd/system/stash-backup.timer
+    systemctl daemon-reload
+    touch "$BACKUP_OFF_MARKER"
+    echo "Nightly backups are off."
+    return
+  fi
+  rm -f "$BACKUP_OFF_MARKER"
+  cat > /etc/systemd/system/stash-backup.service <<UNIT
+[Unit]
+Description=Back up the Stash database and stored files
+After=docker.service
+
+[Service]
+Type=oneshot
+Nice=10
+IOSchedulingClass=idle
+ExecStart=$(pwd)/backup.sh
+UNIT
+  cat > /etc/systemd/system/stash-backup.timer <<UNIT
+[Unit]
+Description=Back up Stash every night
+
+[Timer]
+OnCalendar=*-*-* 03:30
+RandomizedDelaySec=20min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable --now stash-backup.timer
+  echo "Nightly backups are on. They are saved in /var/backups/stash."
+  echo "See the last one with: journalctl -u stash-backup"
+}
+
+ensure_backup() {
+  if [ ! -e "$BACKUP_OFF_MARKER" ] &&
+     [ ! -e /etc/systemd/system/stash-backup.timer ]; then
+    setup_backup
+  fi
+}
+
 case "${1:-}" in
+  backup)
+    case "${2:-}" in
+      now) ./backup.sh ;;
+      *) setup_backup "${2:-}" ;;
+    esac
+    ;;
   autoupdate)
     setup_autoupdate "${2:-}"
     ;;
@@ -139,9 +197,10 @@ case "${1:-}" in
     add_new_images
     compose pull
     compose up -d --build
+    ensure_backup
     ;;
   ""|-h|--help)
-    sed -n 2,6p "$0"
+    sed -n 2,7p "$0"
     exit 1
     ;;
   *)
@@ -152,6 +211,7 @@ case "${1:-}" in
     write_env "$domain"
     compose pull --ignore-buildable
     compose up -d --build
+    ensure_backup
     echo
     echo "Done. Open https://${domain} and create your account,"
     echo "then run: sudo ./install.sh lock"
