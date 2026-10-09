@@ -17,6 +17,16 @@ stamp=$(date +%Y-%m-%d-%H%M%S)
 dest="$BACKUP_DIR/$stamp"
 mkdir "$dest"
 
+# A failed step (often a full disk) must not leave a half-written file
+# taking up space, or a folder that looks like a good backup.
+cleanup() {
+  if [ $? -ne 0 ]; then
+    rm -f "$dest"/*.partial
+    [ -f "$dest/database.dump" ] || rm -rf "$dest"
+  fi
+}
+trap cleanup EXIT
+
 # Write to a .partial file and rename it, so a failed run never leaves a
 # truncated file that looks like a good backup.
 echo "Backing up the database..."
@@ -26,14 +36,18 @@ mv "$dest/database.dump.partial" "$dest/database.dump"
 
 cp .env "$dest/env"
 
-used=$(df --output=pcent "$BACKUP_DIR" | tail -n1 | tr -dc 0-9)
-if [ "$used" -lt 85 ]; then
+# Only archive the stored files when they fit with 1 GB to spare. Their
+# uncompressed size is the upper bound, since PDFs barely compress.
+files_kb=$(docker run --rm --volumes-from reader-storage:ro alpine \
+  du -sk /data | cut -f1)
+free_kb=$(df --output=avail -k "$BACKUP_DIR" | tail -n1 | tr -dc 0-9)
+if [ "$free_kb" -gt $((files_kb + 1024 * 1024)) ]; then
   echo "Backing up stored files..."
   docker run --rm --volumes-from reader-storage:ro alpine \
     tar czf - -C /data . > "$dest/files.tar.gz.partial"
   mv "$dest/files.tar.gz.partial" "$dest/files.tar.gz"
 else
-  echo "Disk is ${used}% full, skipping stored files this time."
+  echo "Not enough free disk space, skipping stored files this time."
 fi
 
 # Oldest first: drop database backups beyond KEEP_DB and file archives
