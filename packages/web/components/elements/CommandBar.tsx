@@ -214,13 +214,36 @@ function CommandResults(): JSX.Element {
   )
 }
 
+const THEME_ACTIONS = [
+  {
+    id: 'cmd-theme-light',
+    section: 'Appearance',
+    name: 'Light theme',
+    shortcut: ['v', 'l'],
+    keywords: 'theme,light,appearance',
+    icon: <Sun size={16} />,
+    priority: Priority.LOW,
+    perform: () => updateTheme(ThemeId.Light),
+  },
+  {
+    id: 'cmd-theme-dark',
+    section: 'Appearance',
+    name: 'Dark theme',
+    shortcut: ['v', 'd'],
+    keywords: 'theme,dark,appearance,night',
+    icon: <Moon size={16} />,
+    priority: Priority.LOW,
+    perform: () => updateTheme(ThemeId.Dark),
+  },
+]
+
 // ⌘K: one box to find articles and highlights, save a link and run
 // commands. On iPhone the search button in the top bar opens it.
 export function CommandBar(): JSX.Element {
   const router = useRouter()
   // Registered all the time so their shortcuts (g then l, and so on) work
   // with the bar closed.
-  useRegisterActions(navigationCommands(router), [])
+  useRegisterActions([...navigationCommands(router), ...THEME_ACTIONS], [])
 
   const { visible } = useKBar((state) => ({
     visible: state.visualState !== VisualState.hidden,
@@ -478,34 +501,9 @@ function CommandSources(): null {
       })
   }, [highlights, query, search, username])
 
-  const themeActions = useMemo(
-    () => [
-      {
-        id: 'cmd-theme-light',
-        section: 'Appearance',
-        name: 'Light theme',
-        keywords: 'theme,light,appearance',
-        icon: <Sun size={16} />,
-        priority: Priority.LOW,
-        perform: () => updateTheme(ThemeId.Light),
-      },
-      {
-        id: 'cmd-theme-dark',
-        section: 'Appearance',
-        name: 'Dark theme',
-        keywords: 'theme,dark,appearance,night',
-        icon: <Moon size={16} />,
-        priority: Priority.LOW,
-        perform: () => updateTheme(ThemeId.Dark),
-      },
-    ],
-    []
-  )
-
   useRegisterActions(saveActions, [saveActions])
   useRegisterActions(articleActions, [articleActions])
   useRegisterActions(highlightActions, [highlightActions])
-  useRegisterActions(themeActions, [])
 
   return null
 }

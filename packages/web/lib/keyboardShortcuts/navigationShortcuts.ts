@@ -5,7 +5,7 @@ import type { NextRouter } from 'next/router'
 export function navigationCommands(router: NextRouter | undefined): Action[] {
   return [
     {
-      id: 'home',
+      id: 'nav-home',
       section: { name: 'Go to', priority: 0 },
       name: 'Edition',
       shortcut: ['g', 'h'],
@@ -15,7 +15,7 @@ export function navigationCommands(router: NextRouter | undefined): Action[] {
       },
     },
     {
-      id: 'library',
+      id: 'nav-library',
       section: { name: 'Go to', priority: 0 },
       name: 'Library',
       shortcut: ['g', 'l'],
@@ -25,7 +25,7 @@ export function navigationCommands(router: NextRouter | undefined): Action[] {
       },
     },
     {
-      id: 'subscriptions',
+      id: 'nav-subscriptions',
       section: { name: 'Go to', priority: 0 },
       name: 'Feeds',
       shortcut: ['g', 's'],
@@ -35,7 +35,7 @@ export function navigationCommands(router: NextRouter | undefined): Action[] {
       },
     },
     {
-      id: 'highlights',
+      id: 'nav-highlights',
       section: { name: 'Go to', priority: 0 },
       name: 'Highlights',
       shortcut: ['g', 'i'],
@@ -45,7 +45,7 @@ export function navigationCommands(router: NextRouter | undefined): Action[] {
       },
     },
     {
-      id: 'archive',
+      id: 'nav-archive',
       section: { name: 'Go to', priority: 0 },
       name: 'Archive',
       shortcut: ['g', 'a'],
@@ -55,7 +55,7 @@ export function navigationCommands(router: NextRouter | undefined): Action[] {
       },
     },
     {
-      id: 'settings',
+      id: 'nav-settings',
       section: { name: 'Go to', priority: 0 },
       name: 'Settings',
       keywords: 'go settings preferences account',
@@ -64,7 +64,7 @@ export function navigationCommands(router: NextRouter | undefined): Action[] {
       },
     },
     {
-      id: 'goback',
+      id: 'nav-goback',
       section: { name: 'Go to', priority: 0 },
       name: 'Back',
       shortcut: ['g', 'b'],

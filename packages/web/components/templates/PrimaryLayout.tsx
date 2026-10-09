@@ -2,16 +2,12 @@ import { PageMetaData, PageMetaDataProps } from '../patterns/PageMetaData'
 import { Box } from '../elements/LayoutPrimitives'
 import { ReactNode, useEffect, useState, useCallback } from 'react'
 import { useKeyboardShortcuts } from '../../lib/keyboardShortcuts/useKeyboardShortcuts'
-import { useRouter } from 'next/router'
 import { ConfirmationModal } from '../patterns/ConfirmationModal'
 import { KeyboardShortcutListModal } from './KeyboardShortcutListModal'
 import { setupAnalytics } from '../../lib/analytics'
 import { primaryCommands } from '../../lib/keyboardShortcuts/navigationShortcuts'
 import { useLogout } from '../../lib/logout'
 import { useApplyLocalTheme } from '../../lib/hooks/useApplyLocalTheme'
-import { updateTheme } from '../../lib/themeUpdater'
-import { Priority, useRegisterActions } from 'kbar'
-import { ThemeId } from '../tokens/stitches.config'
 import { useGetViewer } from '../../lib/networking/viewer/useGetViewer'
 
 type PrimaryLayoutProps = {
@@ -28,7 +24,6 @@ export function PrimaryLayout(props: PrimaryLayoutProps): JSX.Element {
   useApplyLocalTheme()
 
   const { data: viewerData } = useGetViewer()
-  const router = useRouter()
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false)
   const [showKeyboardCommandsModal, setShowKeyboardCommandsModal] =
     useState(false)
@@ -41,38 +36,6 @@ export function PrimaryLayout(props: PrimaryLayoutProps): JSX.Element {
           break
       }
     })
-  )
-
-  useRegisterActions(
-    [
-      {
-        id: 'home',
-        section: 'Navigation',
-        name: 'Go to Home (Library) ',
-        shortcut: ['g h'],
-        keywords: 'go home',
-        perform: () => router?.push('/home'),
-      },
-      {
-        id: 'lightTheme',
-        section: 'Preferences',
-        name: 'Change theme (light) ',
-        shortcut: ['v', 'l'],
-        keywords: 'light theme',
-        priority: Priority.LOW,
-        perform: () => updateTheme(ThemeId.Light),
-      },
-      {
-        id: 'darkTheme',
-        section: 'Preferences',
-        name: 'Change theme (dark) ',
-        shortcut: ['v', 'd'],
-        keywords: 'dark theme',
-        priority: Priority.LOW,
-        perform: () => updateTheme(ThemeId.Dark),
-      },
-    ],
-    [router]
   )
 
   // Attempt to identify the user if they are logged in.
@@ -107,7 +70,7 @@ export function PrimaryLayout(props: PrimaryLayoutProps): JSX.Element {
           width: '100%',
           bg: '$thBackground2',
         }}
-        onDoubleClick={props.onDoubleClick ?? function (_evt){}}
+        onDoubleClick={props.onDoubleClick ?? function (_evt) {}}
       >
         {props.children}
         {showLogoutConfirmation ? (
