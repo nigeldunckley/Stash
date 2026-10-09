@@ -531,6 +531,7 @@ export function ArticleContainer(props: ArticleContainerProps): JSX.Element {
           initialReadingProgressTop={props.article.readingProgressTopPercent}
           articleMutations={props.articleMutations}
           isAppleAppEmbed={props.isAppleAppEmbed}
+          pageUrls={[props.article.originalArticleUrl, props.article.url]}
         />
         {props.footer}
         <Box css={{ height: '100px' }} />

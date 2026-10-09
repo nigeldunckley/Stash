@@ -121,9 +121,27 @@ const noteText = (element: Element, label: string): string => {
     : text
 }
 
-const targetFor = (root: HTMLElement, href: string): Element | null => {
+const withoutFragment = (url: string): string =>
+  url
+    .split('#')[0]
+    .replace(/\/+$/, '')
+    .replace(/^https?:\/\/(www\.)?/, '')
+
+// Only links to this same page count: a bare #fragment, or the article's
+// own address with one (extraction makes links absolute).
+const targetFor = (
+  root: HTMLElement,
+  href: string,
+  pageUrls: string[]
+): Element | null => {
   const at = href.indexOf('#')
   if (at == -1 || at == href.length - 1) {
+    return null
+  }
+  if (
+    at > 0 &&
+    !pageUrls.some((url) => withoutFragment(url) == withoutFragment(href))
+  ) {
     return null
   }
   let id = href.slice(at + 1)
@@ -146,10 +164,10 @@ const looksLikeReference = (link: HTMLAnchorElement): boolean => {
 
 // Finds footnote references, and quietly fixes the article's other
 // same-page links so they scroll here instead of opening a new tab.
-const collectNotes = (root: HTMLElement): Note[] => {
+const collectNotes = (root: HTMLElement, pageUrls: string[]): Note[] => {
   const notes: Note[] = []
   root.querySelectorAll<HTMLAnchorElement>('a[href*="#"]').forEach((link) => {
-    const target = targetFor(root, link.getAttribute('href') ?? '')
+    const target = targetFor(root, link.getAttribute('href') ?? '', pageUrls)
     if (!target) {
       return
     }
@@ -198,6 +216,8 @@ type MarginNotesProps = {
   contentRef: MutableRefObject<HTMLDivElement | null>
   // Changes when the article's HTML is replaced.
   contentKey: string
+  // The article's own addresses, to tell same-page links from others.
+  pageUrls: string[]
 }
 
 export function MarginNotes(props: MarginNotesProps): JSX.Element | null {
@@ -215,8 +235,9 @@ export function MarginNotes(props: MarginNotesProps): JSX.Element | null {
       return
     }
     markLede(root)
-    setNotes(collectNotes(root))
+    setNotes(collectNotes(root, props.pageUrls))
     setOpen(undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.contentRef, props.contentKey])
 
   // Decide whether there is room in the margin, then line each note up with
@@ -310,14 +331,18 @@ export function MarginNotes(props: MarginNotesProps): JSX.Element | null {
         }
         return
       }
-      targetFor(root, link.getAttribute('href') ?? '')?.scrollIntoView({
+      targetFor(
+        root,
+        link.getAttribute('href') ?? '',
+        props.pageUrls
+      )?.scrollIntoView({
         behavior: 'smooth',
         block: 'center',
       })
     }
     root.addEventListener('click', onClick, true)
     return () => root.removeEventListener('click', onClick, true)
-  }, [notes, inMargin, props.contentRef])
+  }, [notes, inMargin, props.contentRef, props.pageUrls])
 
   useEffect(() => {
     if (!active) {

@@ -37,6 +37,8 @@ export type ArticleProps = {
   highlightHref: MutableRefObject<string | null>
   articleMutations: ArticleMutations
   isAppleAppEmbed: boolean
+  // The article's own addresses, for telling same-page links apart.
+  pageUrls?: string[]
 }
 
 type PageCoordinates = {
@@ -409,7 +411,11 @@ export function Article(props: ArticleProps): JSX.Element {
           __html: props.content,
         }}
       />
-      <MarginNotes contentRef={articleContentRef} contentKey={props.content} />
+      <MarginNotes
+        contentRef={articleContentRef}
+        contentKey={props.content}
+        pageUrls={props.pageUrls ?? []}
+      />
       <SpanBox
         onClick={(event) => {
           event.stopPropagation()
