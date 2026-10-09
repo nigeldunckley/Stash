@@ -1,6 +1,8 @@
-import { Archive, ArrowRight } from '@phosphor-icons/react'
+import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'next/router'
 import { useMemo, useState } from 'react'
+import { loadEditionState } from '../../../lib/edition/store'
+import { editionDateFor } from '../../../lib/edition/engine'
 import { State } from '../../../lib/networking/fragments/articleFragment'
 import {
   ArticleAttributes,
@@ -48,8 +50,8 @@ const Kicker = styled('div', {
 })
 
 const Buttons = styled('div', {
-  display: 'flex',
-  flexWrap: 'wrap',
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
   gap: '8px',
 })
 
@@ -59,7 +61,8 @@ const Button = styled('button', {
   display: 'inline-flex',
   alignItems: 'center',
   gap: '8px',
-  height: '36px',
+  justifyContent: 'center',
+  height: '40px',
   padding: '0 14px',
   fontSize: '$small',
   fontWeight: 500,
@@ -91,9 +94,8 @@ const Next = styled('a', {
   alignItems: 'center',
   gap: '12px',
   padding: '12px',
-  margin: '0 -12px -12px',
-  borderTop: '1px solid $stLine',
-  borderRadius: '0 0 $md $md',
+  border: '1px solid $stLine',
+  borderRadius: '$md',
   color: 'inherit',
   textDecoration: 'none',
   cursor: 'pointer',
@@ -102,11 +104,13 @@ const Next = styled('a', {
 })
 
 const NextTitle = styled('div', {
-  fontSize: '$small',
-  fontWeight: 500,
-  whiteSpace: 'nowrap',
+  fontFamily: '$serif',
+  fontSize: '16px',
+  lineHeight: 1.3,
+  display: '-webkit-box',
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: 'vertical',
   overflow: 'hidden',
-  textOverflow: 'ellipsis',
 })
 
 const NextMeta = styled('div', {
@@ -117,14 +121,33 @@ const NextMeta = styled('div', {
   textOverflow: 'ellipsis',
 })
 
+const Keep = styled('button', {
+  all: 'unset',
+  justifySelf: 'center',
+  fontSize: '$caption',
+  color: '$stMuted',
+  cursor: 'pointer',
+  textDecoration: 'underline',
+  textDecorationColor: '$stLine',
+  textUnderlineOffset: '3px',
+  '&:hover': { color: '$stInk' },
+  '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '2px' },
+})
+
+const isOpen = (node: { state?: State; readingProgressPercent?: number }) =>
+  node.state != State.ARCHIVED &&
+  node.state != State.DELETED &&
+  (node.readingProgressPercent ?? 0) < 90
+
 type FinishCardProps = {
   item: ArticleAttributes
   username: string
   onDone: () => void
 }
 
-// Shown at the end of an article: what you read, and a way straight on to the
-// next thing in the inbox.
+// Shown at the end of an article. Stopping and carrying on get equal
+// weight, and "Next up" comes from today's edition when there is one, so
+// it is something chosen for you rather than simply the newest save.
 export function FinishCard(props: FinishCardProps): JSX.Element {
   const router = useRouter()
   const archiveItem = useArchiveItem()
@@ -132,45 +155,80 @@ export function FinishCard(props: FinishCardProps): JSX.Element {
   const { item } = props
   const archived = item.state == State.ARCHIVED
 
-  const nextQuery = useGetLibraryItems('reader-next', 'inbox', {
+  // The latest edition as stored; reading it never builds a new one.
+  const editionQuery = useQuery({
+    queryKey: ['edition-latest'],
+    queryFn: loadEditionState,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  })
+  // Only today's: an older one would offer stale picks as today's.
+  const latest = editionQuery.data?.editions[0]
+  const edition =
+    latest &&
+    editionQuery.data &&
+    latest.date == editionDateFor(new Date(), editionQuery.data.hour)
+      ? latest
+      : undefined
+  const entries = useMemo(
+    () =>
+      (edition?.entries ?? []).filter(
+        (entry) =>
+          entry.slot != 'watch' &&
+          entry.id != item.id &&
+          !edition?.skipped.includes(entry.id)
+      ),
+    [edition, item.id]
+  )
+  const editionItems = useGetLibraryItems(
+    `finish-edition-${edition?.date}`,
+    undefined,
+    {
+      limit: 30,
+      sortDescending: true,
+      searchQuery: `includes:${entries.map((entry) => entry.id).join(',')}`,
+    },
+    entries.length > 0
+  )
+
+  const inboxQuery = useGetLibraryItems('reader-next', 'inbox', {
     limit: 4,
     sortDescending: true,
     searchQuery: 'is:unread sort:saved-desc',
   })
-  const next = useMemo(
-    () =>
-      (nextQuery.data?.pages ?? [])
-        .flatMap((page) => page.edges)
-        .map((edge) => edge.node)
-        .find(
-          (node) =>
-            node.id != item.id &&
-            node.state != State.ARCHIVED &&
-            node.state != State.DELETED
-        ),
-    [nextQuery.data, item.id]
-  )
 
+  const next = useMemo(() => {
+    const found = new Map(
+      (editionItems.data?.pages ?? [])
+        .flatMap((page) => page.edges)
+        .map((edge) => [edge.node.id, edge.node])
+    )
+    for (const entry of entries) {
+      const node = found.get(entry.id)
+      if (node && isOpen(node)) {
+        return { node, why: 'From today’s edition' }
+      }
+    }
+    const node = (inboxQuery.data?.pages ?? [])
+      .flatMap((page) => page.edges)
+      .map((edge) => edge.node)
+      .find((node) => node.id != item.id && isOpen(node))
+    return node ? { node, why: 'Newest in your inbox' } : undefined
+  }, [editionItems.data, entries, inboxQuery.data, item.id])
+
+  const site = siteName(item.originalArticleUrl, item.url, item.siteName)
   const minutes = formatMinutes(readingMinutes(item.wordsCount))
-  const highlightCount =
-    item.highlights?.filter((h) => h.type == 'HIGHLIGHT').length ?? 0
-  const summary = [
-    'Finished',
-    minutes,
-    highlightCount == 1 ? '1 highlight' : `${highlightCount} highlights`,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  const summary = ['Finished', site, minutes].filter(Boolean).join(' · ')
 
   const openNext = () => {
     if (next) {
-      router.push(`/${props.username}/${next.slug}`)
+      router.push(`/${props.username}/${next.node.slug}`)
     } else {
       props.onDone()
     }
   }
 
-  const archiveAndNext = async () => {
+  const archiveThen = async (then: () => void) => {
     setBusy(true)
     try {
       if (!archived) {
@@ -180,7 +238,7 @@ export function FinishCard(props: FinishCardProps): JSX.Element {
           input: { linkId: item.id, archived: true },
         })
       }
-      openNext()
+      then()
     } catch {
       showErrorToast('Could not archive this item', {
         position: 'bottom-right',
@@ -194,37 +252,45 @@ export function FinishCard(props: FinishCardProps): JSX.Element {
     <Card aria-label="Finished reading">
       <Kicker>{summary}</Kicker>
       <Buttons>
-        <Button primary disabled={busy} onClick={archiveAndNext}>
-          {archived ? <ArrowRight size={16} /> : <Archive size={16} />}
-          {archived
-            ? next
-              ? 'Read next'
-              : 'Back to Stash'
-            : next
-            ? 'Archive and read next'
-            : 'Archive'}
+        <Button disabled={busy} onClick={() => archiveThen(props.onDone)}>
+          {archived ? 'Back to Stash' : 'Archive and close'}
         </Button>
-        {!archived && <Button onClick={props.onDone}>Keep in inbox</Button>}
+        {next && (
+          <Button primary disabled={busy} onClick={() => archiveThen(openNext)}>
+            {archived ? 'Read next' : 'Archive, read next'}
+          </Button>
+        )}
       </Buttons>
       {next && (
         <Next
-          href={`/${props.username}/${next.slug}`}
+          href={`/${props.username}/${next.node.slug}`}
           onClick={(event) => {
             event.preventDefault()
             openNext()
           }}
         >
           <SiteIcon
-            src={next.siteIcon}
-            name={siteName(next.originalArticleUrl, next.url, next.siteName)}
+            src={next.node.siteIcon}
+            name={siteName(
+              next.node.originalArticleUrl,
+              next.node.url,
+              next.node.siteName
+            )}
             size={20}
           />
           <div style={{ minWidth: 0 }}>
-            <NextMeta>Next up</NextMeta>
-            <NextTitle>{next.title}</NextTitle>
+            <NextMeta>Next up · {next.why}</NextMeta>
+            <NextTitle>{next.node.title}</NextTitle>
           </div>
-          <NextMeta>{formatMinutes(readingMinutes(next.wordsCount))}</NextMeta>
+          <NextMeta>
+            {formatMinutes(readingMinutes(next.node.wordsCount))}
+          </NextMeta>
         </Next>
+      )}
+      {!archived && (
+        <Keep type="button" onClick={props.onDone}>
+          or keep it in the inbox
+        </Keep>
       )}
     </Card>
   )
