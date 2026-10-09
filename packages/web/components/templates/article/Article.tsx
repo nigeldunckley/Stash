@@ -7,6 +7,7 @@ import {
   ScrollOffsetChangeset,
   useScrollWatcher,
 } from '../../../lib/hooks/useScrollWatcher'
+import { MarginNotes } from '../reader/MarginNotes'
 import {
   MutableRefObject,
   useCallback,
@@ -408,6 +409,7 @@ export function Article(props: ArticleProps): JSX.Element {
           __html: props.content,
         }}
       />
+      <MarginNotes contentRef={articleContentRef} contentKey={props.content} />
       <SpanBox
         onClick={(event) => {
           event.stopPropagation()

@@ -118,16 +118,18 @@ const FONTS = [
 ]
 
 // Width is stored as the reader's margin: a larger margin is a narrower column.
+// Column widths as margins (the column is 1024 minus this). Standard gives
+// about 66 characters a line in Newsreader at 20px.
 const WIDTHS = [
-  { label: 'Narrow', margin: 380 },
-  { label: 'Standard', margin: 290 },
-  { label: 'Wide', margin: 200 },
+  { label: 'Narrow', margin: 480 },
+  { label: 'Standard', margin: 420 },
+  { label: 'Wide', margin: 300 },
 ]
 
 const SPACINGS = [
-  { label: 'Tight', value: 135 },
-  { label: 'Normal', value: 150 },
-  { label: 'Loose', value: 175 },
+  { label: 'Tight', value: 145 },
+  { label: 'Normal', value: 160 },
+  { label: 'Loose', value: 180 },
 ]
 
 const MIN_SIZE = 14

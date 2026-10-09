@@ -1,10 +1,7 @@
 import { Article } from './../../../components/templates/article/Article'
 import { Box, HStack, SpanBox, VStack } from './../../elements/LayoutPrimitives'
 import { StyledText } from './../../elements/StyledText'
-import {
-  ArticleSubtitle,
-  ReaderSavedInfo,
-} from './../../patterns/ArticleSubtitle'
+import { ReaderArticleHead } from '../reader/ReaderArticleHead'
 import { theme, ThemeId } from './../../tokens/stitches.config'
 import { HighlightsLayer } from '../../templates/article/HighlightsLayer'
 import { Button } from '../../elements/Button'
@@ -402,6 +399,7 @@ export function ArticleContainer(props: ArticleContainerProps): JSX.Element {
         dir={textDirection}
         id="article-container"
         css={{
+          position: 'relative',
           padding: 30,
           minHeight: '100vh',
           maxWidth: maxWidthStyles.default,
@@ -418,6 +416,7 @@ export function ArticleContainer(props: ArticleContainerProps): JSX.Element {
           '--figure-margin': '1.6rem auto',
           '--hr-margin': '1em',
           '--font-color': styles.readerFontColor,
+          '--font-color-muted': `color-mix(in srgb, ${styles.readerFontColor} 60%, transparent)`,
           '--table-header-color': styles.readerTableHeaderColor,
           '@sm': {
             '--blockquote-padding': '1em 2em',
@@ -429,39 +428,21 @@ export function ArticleContainer(props: ArticleContainerProps): JSX.Element {
             maxWidth: maxWidthStyles.small,
             padding: 15,
           },
+          // A touch smaller on phones, where the same size reads larger.
+          '@smDown': {
+            '--text-font-size': `${Math.max(
+              14,
+              Math.round(styles.fontSize * 0.9)
+            )}px`,
+            maxWidth: '100%',
+            padding: '8px 22px',
+          },
         }}
       >
         <VStack alignment="start" distribution="start">
-          <ReaderSavedInfo
-            rawDisplayDate={
-              props.article.publishedAt ??
-              props.article.savedAt ??
-              props.article.createdAt
-            }
-            wordsCount={props.article.wordsCount}
-          />
-          <StyledText
-            style="articleTitle"
-            data-testid="article-headline"
-            css={{
-              color: styles.readerFontColor,
-              width: '100%',
-              wordWrap: 'break-word',
-              display: '-webkit-box',
-              '-webkit-box-orient': 'vertical',
-              '-webkit-line-clamp': '4',
-              overflow: 'hidden',
-              '@smDown': {
-                '-webkit-line-clamp': '6',
-              },
-            }}
+          <ReaderArticleHead
+            article={props.article}
             title={title ?? props.article.title}
-          >
-            {title ?? props.article.title}
-          </StyledText>
-          <ArticleSubtitle
-            author={props.article.author}
-            href={props.article.url}
           />
 
           {labels ? (
