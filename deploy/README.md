@@ -69,6 +69,37 @@ sudo ./install.sh autoupdate
 See what it has done with `journalctl -u stash-update`, and turn it off
 with `sudo ./install.sh autoupdate off`.
 
+## Backups
+
+Every night at about 03:30 the server saves a copy of Stash to
+`/var/backups/stash`. Each dated folder holds the database (articles,
+highlights, notes, feeds), the `.env` secrets, and, for the newest three,
+the stored files such as PDFs. Database copies are kept for two weeks.
+
+This turns on by itself the next time the server updates. To check or
+control it:
+
+```bash
+journalctl -u stash-backup      # what the last backup did
+sudo ./install.sh backup now    # take a backup right away
+sudo ./install.sh backup off    # stop nightly backups
+sudo ./install.sh backup        # start them again
+```
+
+The backups live on the same server, so they protect against mistakes
+and broken updates, not against losing the server itself. Copy a folder
+somewhere else now and then for that.
+
+To restore a database backup, stop the app, load the dump, and start it
+again (replace the folder name):
+
+```bash
+docker compose stop api queue-processor web
+docker exec -i reader-postgres pg_restore -U postgres -d omnivore --clean --if-exists \
+  < /var/backups/stash/2026-10-09-033000/database.dump
+docker compose up -d
+```
+
 ## Useful commands
 
 ```bash
