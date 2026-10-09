@@ -82,19 +82,25 @@ export const Button = styled('button', {
         },
       },
 
+      // Stash's standard secondary button.
       ctaDarkYellow: {
-        border: '1px solid transparent',
-        fontSize: '14px',
+        border: '1px solid $stLine',
+        fontSize: '13.5px',
         fontWeight: 500,
         fontFamily: '$inter',
-        borderRadius: '5px',
+        lineHeight: '18px',
+        borderRadius: '6px',
         cursor: 'pointer',
-        color: '$thTextContrast',
-        bg: '$thBackground2',
-        p: '10px 15px',
-        '&:hover, &:focus': {
-          bg: '$omnivoreCtaYellow',
-          outline: '1px solid $omnivoreCtaYellow',
+        color: '$stInk',
+        bg: '$stSurface',
+        p: '8px 14px',
+        '&:hover': {
+          bg: '$stSunken',
+          borderColor: '$stLineStrong',
+        },
+        '&:focus-visible': {
+          outline: '2px solid $stAccent',
+          outlineOffset: '1px',
         },
       },
       landingCta: {
@@ -161,17 +167,16 @@ export const Button = styled('button', {
       },
       ctaOutlineYellow: {
         boxSizing: 'border-box',
-        borderColor: 'unset',
-        border: '1px solid $omnivoreCtaYellow',
-        fontSize: '14px',
+        border: '1px solid $stLine',
+        fontSize: '13.5px',
         fontWeight: 500,
-        fontStyle: 'normal',
         fontFamily: '$inter',
-        borderRadius: '8px',
+        borderRadius: '6px',
         cursor: 'pointer',
-        color: '$utilityTextDefault',
+        color: '$stInk',
         bg: 'transparent',
-        p: '9px 12px',
+        p: '8px 12px',
+        '&:hover': { bg: '$stSunken', borderColor: '$stLineStrong' },
       },
       ctaLightGray: {
         border: 0,

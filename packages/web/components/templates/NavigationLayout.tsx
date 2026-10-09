@@ -1,7 +1,6 @@
 import { PageMetaData, PageMetaDataProps } from '../patterns/PageMetaData'
 import { HStack, SpanBox, VStack } from '../elements/LayoutPrimitives'
 import { ReactNode, useEffect, useState, useCallback } from 'react'
-import { navigationCommands } from '../../lib/keyboardShortcuts/navigationShortcuts'
 import { useKeyboardShortcuts } from '../../lib/keyboardShortcuts/useKeyboardShortcuts'
 import { useRouter } from 'next/router'
 import { ConfirmationModal } from '../patterns/ConfirmationModal'
@@ -10,7 +9,6 @@ import { setupAnalytics } from '../../lib/analytics'
 import { primaryCommands } from '../../lib/keyboardShortcuts/navigationShortcuts'
 import { useLogout } from '../../lib/logout'
 import { useApplyLocalTheme } from '../../lib/hooks/useApplyLocalTheme'
-import { useRegisterActions } from 'kbar'
 import { theme } from '../tokens/stitches.config'
 import { NavigationMenu } from './navMenu/NavigationMenu'
 import { Button } from '../elements/Button'
@@ -59,8 +57,6 @@ export function NavigationLayout(props: NavigationLayoutProps): JSX.Element {
     isError,
     status,
   } = useGetViewer()
-
-  useRegisterActions(navigationCommands(router))
 
   useKeyboardShortcuts(
     primaryCommands((action) => {
