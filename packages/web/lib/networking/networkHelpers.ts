@@ -109,7 +109,15 @@ export function ssrFetcher(
   variables?: unknown,
   requiresAuth = true
 ): Promise<unknown> {
-  const graphQLClient = new GraphQLClient(gqlEndpoint, {
+  // Public addresses can be empty at image build time. Server-side requests
+  // use the runtime Docker address, as the auth exchange endpoint does.
+  const apiBase = process.env.INTERNAL_API_URL
+  const endpoint = apiBase
+    ? `${apiBase.replace(/\/$/, '')}/graphql`
+    : gqlEndpoint.startsWith('http')
+    ? gqlEndpoint
+    : `${(process.env.SERVER_BASE_URL ?? '').replace(/\/$/, '')}/api/graphql`
+  const graphQLClient = new GraphQLClient(endpoint, {
     credentials: 'include',
     mode: 'cors',
   })
