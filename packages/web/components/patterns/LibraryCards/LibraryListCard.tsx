@@ -3,7 +3,6 @@ import {
   ArrowCounterClockwise,
   Bookmark,
   DotsThree,
-  Tag,
   Trash,
 } from '@phosphor-icons/react'
 import { useRouter } from 'next/router'
@@ -11,7 +10,7 @@ import { useCallback, useState } from 'react'
 import { State } from '../../../lib/networking/fragments/articleFragment'
 import { useRestoreItem } from '../../../lib/networking/library_items/useLibraryItems'
 import { formatMinutes, minutesLeft } from '../../../lib/readingTime'
-import { siteName } from '../../../lib/textFormatting'
+import { shortTimeAgo, siteName } from '../../../lib/textFormatting'
 import { sortedLabels } from '../../../lib/labelsSort'
 import { Box } from '../../elements/LayoutPrimitives'
 import { LoadingBar } from '../../elements/LoadingBar'
@@ -19,7 +18,6 @@ import { ProgressBar } from '../../elements/ProgressBar'
 import {
   CoverImage,
   IconButton,
-  ProgressRing,
   SiteIcon,
   SwipeAction,
 } from '../../elements/stash'
@@ -29,68 +27,112 @@ import { CardMenu } from '../CardMenu'
 import type { LinkedItemCardAction, LinkedItemCardProps } from './CardTypes'
 import { CardCheckbox, FLAIR_ICON_NAMES } from './LibraryCardStyles'
 
+const THUMB = { width: 92, height: 64, phoneWidth: 68, phoneHeight: 52 }
+
+// Actions float over the end of the row on hover, so the row itself stays
+// quiet: title, one line of summary and a few details.
 const Actions = styled('div', {
   display: 'none',
+  position: 'absolute',
+  top: '50%',
+  right: `${12 + THUMB.width + 16}px`,
+  transform: 'translateY(-50%)',
   alignItems: 'center',
   gap: '2px',
+  padding: '3px',
+  background: '$stSurface',
+  border: '1px solid $stLine',
+  borderRadius: '8px',
+  boxShadow: '0 6px 16px -10px rgba(9, 9, 11, 0.35)',
 })
 
-const Meta = styled('span', {
+const Meta = styled('div', {
   display: 'flex',
   alignItems: 'center',
   gap: '10px',
+  minWidth: 0,
+  marginTop: '6px',
   fontFamily: '$mono',
-  fontSize: '$micro',
+  fontSize: '11px',
   color: '$stMuted',
   whiteSpace: 'nowrap',
   fontVariantNumeric: 'tabular-nums',
+  '& > span': { flex: 'none' },
+  '& > span:first-of-type': {
+    flex: '0 1 auto',
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+})
+
+const Progress = styled('span', {
+  display: 'block',
+  width: '46px',
+  height: '3px',
+  borderRadius: '2px',
+  background: '$stLine',
+  overflow: 'hidden',
+  '& > i': {
+    display: 'block',
+    height: '100%',
+    background: '$stAccent',
+  },
 })
 
 const Thumb = styled(CoverImage, {
-  width: '72px',
-  height: '48px',
+  width: `${THUMB.width}px`,
+  height: `${THUMB.height}px`,
   borderRadius: '$sm',
-  '@smDown': { width: '56px', height: '42px' },
+  '@smDown': {
+    width: `${THUMB.phoneWidth}px`,
+    height: `${THUMB.phoneHeight}px`,
+  },
 })
 
-const Trailing = styled('div', {
-  display: 'flex',
-  alignItems: 'center',
+// Stands in for a missing image: the source's first letter, set in the
+// reading face, so rows without pictures still look finished.
+const LetterTile = styled('span', {
+  display: 'grid',
+  placeItems: 'center',
+  width: '100%',
+  height: '100%',
+  fontFamily: '$serif',
+  fontSize: '30px',
+  fontWeight: 500,
+  lineHeight: 1,
+  color: '$stInk2',
+  textTransform: 'uppercase',
+  '@smDown': { fontSize: '24px' },
 })
 
 const Row = styled('div', {
   position: 'relative',
   display: 'grid',
-  gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+  gridTemplateColumns: 'minmax(0, 1fr) auto',
   alignItems: 'center',
-  gap: '12px',
+  gap: '18px',
   width: '100%',
-  minHeight: '56px',
-  padding: '10px 12px',
+  padding: '14px 12px',
   boxSizing: 'border-box',
   cursor: 'pointer',
   color: '$stInk',
   fontFamily: '$inter',
   transition: `background ${motion.fast}`,
+  '&[data-selecting="true"]': {
+    gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+    gap: '14px',
+  },
+  '@smDown': { gap: '14px', padding: '12px 16px' },
   '@media (hover: hover)': {
     '&:hover': { background: '$stSunken' },
     [`&:hover ${Actions}`]: { display: 'flex' },
-    [`&:hover ${Meta}`]: { display: 'none' },
   },
   // Keyboard users reach the actions by tabbing to the card.
   [`.linkedItemCard:focus-within & ${Actions}`]: { display: 'flex' },
-  [`.linkedItemCard:focus-within & ${Meta}`]: { display: 'none' },
   [`&[data-menu-open="true"] ${Actions}`]: { display: 'flex' },
-  [`&[data-menu-open="true"] ${Meta}`]: { display: 'none' },
-  '@media (hover: none)': {
-    [`& ${Meta}`]: { display: 'flex' },
-  },
-  '&[data-image="true"]': {
-    gridTemplateColumns: 'auto minmax(0, 1fr) auto auto',
-    minHeight: '68px',
-    // Phones keep the actions but drop the meta to make room.
-    '@smDown': { [`& ${Meta}`]: { display: 'none' } },
-  },
+  // Touch screens use the swipe and the menu instead.
+  '@media (hover: none)': { [`& ${Actions}`]: { display: 'none' } },
 })
 
 // The dropdown supplies its own trigger button, so this is only the visual.
@@ -104,57 +146,48 @@ const MenuGlyph = styled('span', {
   color: '$stMuted',
   '&:hover': {
     color: '$stInk',
-    background: '$stSurface',
-    borderColor: '$stLine',
+    background: '$stSunken',
   },
 })
 
 const Leading = styled('div', {
   display: 'flex',
   alignItems: 'center',
-  gap: '10px',
-  minWidth: '20px',
   input: { margin: 0 },
 })
 
 const Body = styled('div', {
   minWidth: 0,
-  display: 'grid',
-  gap: '2px',
 })
 
 const Title = styled('div', {
-  fontSize: '$small',
+  fontFamily: '$serif',
+  fontSize: '18.5px',
   fontWeight: 500,
-  lineHeight: 1.35,
-  letterSpacing: '-0.005em',
+  lineHeight: 1.22,
+  letterSpacing: '-0.008em',
+  color: '$stInk',
+  display: '-webkit-box',
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+  '@smDown': { fontSize: '17px' },
+})
+
+const Summary = styled('div', {
+  marginTop: '4px',
+  fontSize: '13.5px',
+  lineHeight: 1.4,
+  color: '$stMuted',
   whiteSpace: 'nowrap',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
-})
-
-const Subtitle = styled('div', {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  minWidth: 0,
-  fontSize: '$caption',
-  lineHeight: 1.35,
-  color: '$stMuted',
-  '& > span:first-child': {
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
 })
 
 const LabelDot = styled('span', {
   display: 'inline-flex',
   alignItems: 'center',
   gap: '5px',
-  flex: 'none',
-  fontSize: '$micro',
-  color: '$stMuted',
   '&::before': {
     content: '""',
     width: '6px',
@@ -165,8 +198,22 @@ const LabelDot = styled('span', {
   '@smDown': { display: 'none' },
 })
 
-// A library item as a single dense row: favicon, title, author and source, and
-// read time with progress. Actions replace the read time on hover.
+// One line of summary, unless it only repeats the title.
+const summaryOf = (item: LinkedItemCardProps['item']): string | undefined => {
+  const text = item.description?.replace(/\s+/g, ' ').trim()
+  if (!text || text.length < 12) {
+    return undefined
+  }
+  const title = item.title.trim().toLowerCase()
+  if (text.toLowerCase().startsWith(title)) {
+    return undefined
+  }
+  return text
+}
+
+// A library item as a row: serif title, a line of summary, then source,
+// time left and progress in small mono. The picture sits at the end, or a
+// lettered tile when there isn't one. Actions appear on hover or swipe.
 export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
   const router = useRouter()
   const restoreItem = useRestoreItem()
@@ -174,12 +221,14 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
   const { item, isChecked, setIsChecked } = props
   const source = siteName(item.originalArticleUrl, item.url, item.siteName)
   const selecting = props.multiSelectMode !== 'off'
-  const left = formatMinutes(
-    minutesLeft(item.wordsCount, item.readingProgressPercent)
-  )
+  const progress = Math.round(item.readingProgressPercent ?? 0)
+  const started = progress > 0 && progress < 100
+  const left = formatMinutes(minutesLeft(item.wordsCount, progress))
+  const summary = summaryOf(item)
   const labels = sortedLabels(item.labels).filter(
     ({ name }) => FLAIR_ICON_NAMES.indexOf(name.toLocaleLowerCase()) == -1
   )
+  const letter = (source || item.title || '').replace(/^(www\.|the\s+)/i, '')[0]
 
   const handleCheckChanged = useCallback(() => {
     setIsChecked(item.id, !isChecked)
@@ -208,7 +257,7 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
     >
       <Row
         data-menu-open={menuOpen}
-        data-image={!!item.image}
+        data-selecting={selecting}
         onClick={(event) => {
           if (selecting) {
             setIsChecked(item.id, !isChecked)
@@ -223,20 +272,47 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
           }
         }}
       >
-        <Leading>
-          {selecting && (
+        {selecting && (
+          <Leading>
             <CardCheckbox
               isChecked={isChecked}
               handleChanged={handleCheckChanged}
             />
-          )}
-          <SiteIcon src={item.siteIcon} name={source || item.title} size={20} />
-        </Leading>
+          </Leading>
+        )}
         <Body>
           <Title>{item.title}</Title>
-          <Subtitle>
-            <span>{[item.author, source].filter(Boolean).join(' · ')}</span>
-            {labels.slice(0, 3).map(({ name, color }) => (
+          {summary && <Summary>{summary}</Summary>}
+          <Meta>
+            <SiteIcon
+              src={item.siteIcon}
+              name={source || item.title}
+              size={14}
+            />
+            {source && <span>{source}</span>}
+            {props.isLoading ? (
+              <span>Saving…</span>
+            ) : (
+              <>
+                {left && <span>{left}</span>}
+                {started ? (
+                  <Progress
+                    role="img"
+                    aria-label={`${progress}% read`}
+                    title={`${progress}% read`}
+                  >
+                    <i style={{ width: `${progress}%` }} />
+                  </Progress>
+                ) : (
+                  item.savedAt && (
+                    <span>
+                      Saved {shortTimeAgo(item.savedAt).toLowerCase()}
+                    </span>
+                  )
+                )}
+              </>
+            )}
+            {labels.slice(0, 2).map(({ name, color }) => (
               <LabelDot
                 key={name}
                 style={{ ['--label-color' as string]: color }}
@@ -244,89 +320,69 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
                 {name}
               </LabelDot>
             ))}
-          </Subtitle>
+          </Meta>
         </Body>
-        <Trailing onClick={stop}>
-          {props.isLoading ? (
-            <Meta>Saving…</Meta>
-          ) : (
-            <Meta>
-              {left}
-              <ProgressRing percent={item.readingProgressPercent} />
-            </Meta>
-          )}
-          {!selecting && (
-            <Actions>
-              {item.folder == 'following' ? (
-                <IconButton
-                  label="Save to Library"
-                  size="sm"
-                  onClick={() => props.handleAction('move-to-inbox')}
-                >
-                  <Bookmark size={15} />
-                </IconButton>
-              ) : (
-                <IconButton
-                  label={
-                    item.state === State.ARCHIVED ? 'Unarchive' : 'Archive'
-                  }
-                  shortcut="e"
-                  size="sm"
-                  onClick={() =>
-                    props.handleAction(
-                      item.state === State.ARCHIVED ? 'unarchive' : 'archive'
-                    )
-                  }
-                >
-                  <Archive size={15} />
-                </IconButton>
-              )}
+        <Thumb src={item.image} fallback={<LetterTile>{letter}</LetterTile>} />
+        {!selecting && (
+          <Actions onClick={stop}>
+            {item.folder == 'following' ? (
               <IconButton
-                label="Labels"
-                shortcut="l"
+                label="Save to Library"
                 size="sm"
-                onClick={() => props.handleAction('set-labels')}
+                onClick={() => props.handleAction('move-to-inbox')}
               >
-                <Tag size={15} />
+                <Bookmark size={15} />
               </IconButton>
-              {item.state == State.DELETED ? (
-                <IconButton
-                  label="Restore"
-                  size="sm"
-                  onClick={async () => {
-                    await restoreItem.mutateAsync({
-                      itemId: item.id,
-                      slug: item.slug,
-                    })
-                  }}
-                >
-                  <ArrowCounterClockwise size={15} />
-                </IconButton>
-              ) : (
-                <IconButton
-                  label="Delete"
-                  shortcut="#"
-                  size="sm"
-                  onClick={() => props.handleAction('delete')}
-                >
-                  <Trash size={15} />
-                </IconButton>
-              )}
-              <CardMenu
-                item={item}
-                viewer={props.viewer}
-                onOpenChange={setMenuOpen}
-                actionHandler={props.handleAction}
-                triggerElement={
-                  <MenuGlyph aria-label="More actions" title="More actions">
-                    <DotsThree size={16} weight="bold" />
-                  </MenuGlyph>
+            ) : (
+              <IconButton
+                label={item.state === State.ARCHIVED ? 'Unarchive' : 'Archive'}
+                shortcut="e"
+                size="sm"
+                onClick={() =>
+                  props.handleAction(
+                    item.state === State.ARCHIVED ? 'unarchive' : 'archive'
+                  )
                 }
-              />
-            </Actions>
-          )}
-        </Trailing>
-        {item.image && <Thumb src={item.image} />}
+              >
+                <Archive size={15} />
+              </IconButton>
+            )}
+            {item.state == State.DELETED ? (
+              <IconButton
+                label="Restore"
+                size="sm"
+                onClick={async () => {
+                  await restoreItem.mutateAsync({
+                    itemId: item.id,
+                    slug: item.slug,
+                  })
+                }}
+              >
+                <ArrowCounterClockwise size={15} />
+              </IconButton>
+            ) : (
+              <IconButton
+                label="Delete"
+                shortcut="#"
+                size="sm"
+                onClick={() => props.handleAction('delete')}
+              >
+                <Trash size={15} />
+              </IconButton>
+            )}
+            <CardMenu
+              item={item}
+              viewer={props.viewer}
+              onOpenChange={setMenuOpen}
+              actionHandler={props.handleAction}
+              triggerElement={
+                <MenuGlyph aria-label="More actions" title="More actions">
+                  <DotsThree size={16} weight="bold" />
+                </MenuGlyph>
+              }
+            />
+          </Actions>
+        )}
       </Row>
     </SwipeAction>
   )
