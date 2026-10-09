@@ -43,8 +43,39 @@ export type ReaderSettings = {
   setFullPageScroll: (set: boolean) => void
 }
 
+// The width and spacing presets moved when the reader's typography was
+// reworked. Map a stored old preset to its new value once, so a choice made
+// before keeps meaning the same thing.
+const PRESET_VERSION_KEY = 'readerPresetsVersion'
+const OLD_TO_NEW: Record<string, Record<number, number>> = {
+  marginWidth: { 380: 480, 290: 420, 200: 300 },
+  lineHeight: { 135: 145, 150: 160, 175: 180 },
+}
+
+const migrateReaderPresets = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+  try {
+    if (window.localStorage.getItem(PRESET_VERSION_KEY) == '2') {
+      return
+    }
+    for (const [key, map] of Object.entries(OLD_TO_NEW)) {
+      const stored = window.localStorage.getItem(key)
+      const next = stored ? map[Number(JSON.parse(stored))] : undefined
+      if (next) {
+        window.localStorage.setItem(key, JSON.stringify(next))
+      }
+    }
+    window.localStorage.setItem(PRESET_VERSION_KEY, '2')
+  } catch {
+    // Storage is unavailable; the defaults apply.
+  }
+}
+
 export const useReaderSettings = (): ReaderSettings => {
   applyStoredTheme()
+  migrateReaderPresets()
 
   const [fontSize, setFontSize] = usePersistedState({
     key: 'fontSize',
@@ -52,11 +83,11 @@ export const useReaderSettings = (): ReaderSettings => {
   })
   const [lineHeight, setLineHeight] = usePersistedState({
     key: 'lineHeight',
-    initialValue: 150,
+    initialValue: 160,
   })
   const [marginWidth, setMarginWidth] = usePersistedState({
     key: 'marginWidth',
-    initialValue: 290,
+    initialValue: 420,
   })
   const [fontFamily, setFontFamily] = usePersistedState({
     key: 'fontFamily',
@@ -153,8 +184,8 @@ export const useReaderSettings = (): ReaderSettings => {
         }
         case 'resetReaderSettings': {
           updateFontSize(20)
-          setMarginWidth(290)
-          setLineHeight(150)
+          setMarginWidth(420)
+          setLineHeight(160)
           setFontFamily(DEFAULT_FONT)
           break
         }

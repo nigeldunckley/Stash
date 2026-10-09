@@ -334,8 +334,8 @@ function BasicSettings(props: SettingsProps): JSX.Element {
           }}
           onClick={() => {
             readerSettings.setFontFamily('Newsreader')
-            readerSettings.setMarginWidth(290)
-            readerSettings.setLineHeight(150)
+            readerSettings.setMarginWidth(420)
+            readerSettings.setLineHeight(160)
             readerSettings.actionHandler('resetReaderSettings')
             showSuccessToast('Reader Preferences Reset', {
               position: 'bottom-right',

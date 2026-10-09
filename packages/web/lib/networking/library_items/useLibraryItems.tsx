@@ -980,6 +980,7 @@ export type ArticleAttributes = {
   headerImage?: string
   savedAt: string
   siteName?: string
+  siteIcon?: string
   createdAt: string
   publishedAt?: string
   description?: string

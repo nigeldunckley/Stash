@@ -69,35 +69,54 @@
   margin-left: 4px !important;
 }
 
+/* Headings inside an article are signposts, not a second title: the big
+   ones stay in the reading face, the rest switch to Geist so they read as
+   section labels. Sizes are relative to the body size the reader picked. */
 .article-inner-css h1,
 .article-inner-css h2,
 .article-inner-css h3,
 .article-inner-css h4,
 .article-inner-css h5,
 .article-inner-css h6 {
-  margin-block-start: 0.83em;
-  margin-block-end: 0.83em;
+  margin-block-start: 1.9em;
+  margin-block-end: 0.55em;
   margin-inline-start: 0px;
   margin-inline-end: 0px;
-  line-height: var(--line-height);
+  line-height: 1.25;
   font-size: var(--text-font-size);
-  font-weight: bold;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  text-wrap: balance;
+  color: var(--font-color);
 }
 .article-inner-css h1 {
-  font-size: 1.5em !important;
-  line-height: 1.4em !important;
+  font-size: 1.45em !important;
+  font-weight: 500;
+  line-height: 1.15 !important;
+  letter-spacing: -0.015em;
 }
 .article-inner-css h2 {
-  font-size: 1.43em !important;
+  font-size: 1.2em !important;
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 .article-inner-css h3 {
-  font-size: 1.0em !important;
+  font-family: var(--fonts-inter);
+  font-size: 0.8em !important;
 }
 .article-inner-css h4,
 .article-inner-css h5,
 .article-inner-css h6 {
-  font-size: 1em !important;
-  margin: 1em 0 !important;
+  font-family: var(--fonts-inter);
+  font-size: 0.68em !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--font-color-muted);
+  margin-block-start: 1.6em !important;
+}
+/* A heading straight after another heading needs no extra air. */
+.article-inner-css :is(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6) {
+  margin-block-start: 0.4em;
 }
 
 .article-inner-css .scrollable {
@@ -118,10 +137,11 @@
   text-align: var(--text-align);
 
   display: block;
-  margin-block-start: 1em;
-  margin-block-end: 1em;
+  margin-block-start: 0;
+  margin-block-end: 0.9em;
   margin-inline-start: 0px;
   margin-inline-end: 0px;
+  hanging-punctuation: first;
 
   > img {
     display: block;
@@ -142,20 +162,28 @@
 
 .article-inner-css blockquote {
   display: block;
-  border-left: 1px solid var(--font-color-transparent);
-  padding-left: 16px;
-  font-style: italic;
+  margin: 1.4em 0;
+  border-left: 2px solid var(--colors-stAccent);
+  padding-left: 1em;
+  font-size: 1.08em;
+  line-height: 1.5;
   margin-inline-start: 0px;
-  > * {
-    font-style: italic;
-  }
+  margin-inline-end: 0px;
   p:last-of-type {
     margin-bottom: 0;
   }
 }
 
 .article-inner-css a {
-  color: var(--font-color-readerFont);
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--colors-stAccent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.article-inner-css a:hover {
+  text-decoration-thickness: 2px;
 }
 
 .article-inner-css .highlight a {
@@ -172,19 +200,16 @@
   line-height: 1.5em;
 
   figcaption {
-    color: var(--font-color);
-    opacity: 0.7;
-    margin: 10px 20px 10px 0;
+    font-family: var(--fonts-inter);
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--font-color-muted);
+    margin: 8px 0 0;
+    text-align: start;
   }
 
   figcaption * {
-    color: var(--font-color);
-    opacity: 0.7;
-  }
-  figcaption a {
-    color: var(--font-color);
-    /* margin: 10px 20px 10px 0; */
-    opacity: 0.6;
+    color: var(--font-color-muted);
   }
 
   > div {
@@ -199,9 +224,13 @@
   align-items: center;
 }
 
+/* A section break: a short centred rule. */
 .article-inner-css hr {
-  margin-bottom: var(--hr-margin);
+  width: 3em;
+  height: 1px;
+  margin: 2.2em auto;
   border: none;
+  background: var(--font-color-muted);
 }
 
 .article-inner-css table {
@@ -211,10 +240,10 @@
 
   border-spacing: 0;
   border-collapse: collapse;
-  font-size: 0.8rem;
   margin: auto;
-  line-height: 1.5em;
-  font-size: 0.9em;
+  font-family: var(--fonts-inter);
+  line-height: 1.45;
+  font-size: 0.75em;
   max-width: -moz-fit-content;
   max-width: fit-content;
   margin: 0 auto;
@@ -236,21 +265,17 @@
 }
 
 .article-inner-css table th {
-  padding: 5px;
-
-  text-align: center;
-  vertical-align: middle;
-  border-color: var(--colors-thTextSubtle3);
-  border-style: solid;
-  border-width: 1px;
+  padding: 8px 12px;
+  text-align: start;
+  vertical-align: bottom;
+  font-weight: 600;
+  border-bottom: 1px solid var(--font-color-muted);
 }
 .article-inner-css table td {
-  text-align: center;
-  vertical-align: middle;
-  border-color: var(--colors-thTextSubtle3);
-  border-style: solid;
-  border-width: 1px;
-  padding: 10px;
+  text-align: start;
+  vertical-align: top;
+  border-bottom: 1px solid var(--colors-stLine);
+  padding: 8px 12px;
 }
 
 .article-inner-css ul,
@@ -259,8 +284,9 @@
   margin-block-end: 1em;
   margin-inline-start: 0px;
   margin-inline-end: 0px;
-  padding-inline-start: 40px;
-  margin-top: 18px;
+  padding-inline-start: 1.3em;
+  margin-top: 0;
+  margin-bottom: 0.9em;
 
   font-family: var(--text-font-family);
   font-style: normal;
@@ -274,6 +300,8 @@
 
 .article-inner-css li {
   word-break: break-word;
+  margin-bottom: 0.35em;
+  padding-inline-start: 0.2em;
   ol,
   ul {
     margin: 0;
@@ -291,10 +319,19 @@
     color: inherit;
     pointer-events: none;
   }
+  /* Footnote references are made clickable by the reader. */
+  a.st-fnref {
+    pointer-events: auto;
+    text-decoration: none;
+    font-family: var(--fonts-mono);
+    font-size: 0.9em;
+    color: var(--colors-stAccentText);
+    padding: 0 0 0 0.1em;
+  }
 }
 
 .article-inner-css sup {
-  top: -0.75em;
+  top: -0.6em;
 }
 
 .article-inner-css sub {
@@ -342,7 +379,8 @@
 .article-inner-css code {
   vertical-align: bottom;
   word-wrap: initial;
-  font-family: 'SF Mono', monospace !important;
+  font-family: var(--fonts-mono), 'SF Mono', monospace !important;
+  font-size: 0.8em;
   white-space: break-spaces;
   direction: ltr;
   unicode-bidi: embed;
@@ -675,5 +713,35 @@
 .youtubeplaceholder {
   border: 2px dashed #aaa;
   box-sizing: border-box;
+}
+
+
+/* Inline code gets a quiet chip; blocks get a sunken panel. */
+.article-inner-css :not(pre) > code {
+  padding: 0.1em 0.3em;
+  border: 1px solid var(--colors-stLine);
+  background: var(--colors-stSunken);
+}
+
+.article-inner-css pre {
+  margin: 1.2em 0;
+  padding: 14px 16px;
+  border: 1px solid var(--colors-stLine);
+  background: var(--colors-stSunken);
+  line-height: 1.55;
+}
+
+.article-inner-css pre code {
+  font-size: 1em;
+  border: 0;
+  padding: 0;
+  background: none;
+}
+
+/* The opening paragraph's first line in small caps, set by the reader on
+   a real paragraph of prose only. */
+.article-inner-css p.st-lede::first-line {
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.05em;
 }
 

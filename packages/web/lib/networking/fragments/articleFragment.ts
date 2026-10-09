@@ -22,6 +22,7 @@ export const articleFragment = gql`
     linkId
     state
     siteName
+    siteIcon
     wordsCount
   }
 `
@@ -57,6 +58,7 @@ export type ArticleFragmentData = {
   savedAt: string
   createdAt: string
   publishedAt?: string
+  siteIcon?: string
   contentReader?: ContentReader
   originalArticleUrl: string
   readingProgressPercent: number
