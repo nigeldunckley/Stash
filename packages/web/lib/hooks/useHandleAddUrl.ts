@@ -7,6 +7,7 @@ import {
   useDeleteItem,
 } from '../networking/library_items/useLibraryItems'
 import { gqlFetcher } from '../networking/networkHelpers'
+import { gqlSearchQuery } from '../networking/library_items/gql'
 import { formatMinutes, readingMinutes } from '../readingTime'
 import { showSaveToast } from '../../components/elements/stash/SaveToast'
 
@@ -24,13 +25,6 @@ const GQL_SAVING_STATUS = gql`
               username
             }
           }
-          article {
-            id
-            title
-            slug
-            wordsCount
-            readingProgressPercent
-          }
         }
       }
       ... on ArticleSavingRequestError {
@@ -44,12 +38,13 @@ type SaveStatus = {
   status?: string
   slug?: string
   user?: { profile?: { username?: string } }
-  article?: {
-    title?: string
-    slug?: string
-    wordsCount?: number
-    readingProgressPercent?: number
-  }
+}
+
+type SavedItem = {
+  title?: string
+  slug?: string
+  wordsCount?: number
+  readingProgressPercent?: number
 }
 
 type SaveStatusData = {
@@ -80,6 +75,21 @@ const waitForPage = async (id: string): Promise<SaveStatus | undefined> => {
     await sleep(POLL_EVERY_MS)
   }
   return last
+}
+
+// The saving request only reports status, so the title and length come
+// from the item itself.
+const fetchItem = async (id: string): Promise<SavedItem | undefined> => {
+  try {
+    const data = (await gqlFetcher(gqlSearchQuery(), {
+      first: 1,
+      query: `in:all includes:${id}`,
+      includeContent: false,
+    })) as { search?: { edges?: { node: SavedItem }[] } }
+    return data.search?.edges?.[0]?.node
+  } catch {
+    return undefined
+  }
 }
 
 const hostOf = (url: string): string => {
@@ -178,7 +188,7 @@ export const useHandleAddUrl = () => {
       async function finish(savedId: string) {
         const result = await waitForPage(savedId)
         const username = result?.user?.profile?.username
-        slug = result?.article?.slug ?? result?.slug ?? ''
+        slug = result?.slug ?? ''
         if (username && slug) {
           path = `/${username}/${slug}`
         }
@@ -205,7 +215,11 @@ export const useHandleAddUrl = () => {
           return
         }
 
-        const article = result?.article
+        const article = await fetchItem(savedId)
+        slug = article?.slug || slug
+        if (username && slug) {
+          path = `/${username}/${slug}`
+        }
         const title =
           article?.title && article.title != url ? article.title : undefined
         const minutes = formatMinutes(readingMinutes(article?.wordsCount))

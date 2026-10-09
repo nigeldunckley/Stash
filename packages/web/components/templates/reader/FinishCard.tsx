@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'next/router'
 import { useMemo, useState } from 'react'
 import { loadEditionState } from '../../../lib/edition/store'
+import { editionDateFor } from '../../../lib/edition/engine'
 import { State } from '../../../lib/networking/fragments/articleFragment'
 import {
   ArticleAttributes,
@@ -161,7 +162,14 @@ export function FinishCard(props: FinishCardProps): JSX.Element {
     staleTime: 5 * 60 * 1000,
     retry: false,
   })
-  const edition = editionQuery.data?.editions[0]
+  // Only today's: an older one would offer stale picks as today's.
+  const latest = editionQuery.data?.editions[0]
+  const edition =
+    latest &&
+    editionQuery.data &&
+    latest.date == editionDateFor(new Date(), editionQuery.data.hour)
+      ? latest
+      : undefined
   const entries = useMemo(
     () =>
       (edition?.entries ?? []).filter(

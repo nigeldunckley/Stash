@@ -261,20 +261,21 @@ export const savePageJob = async (data: Data, attemptsMade: number) => {
       logger.info('Downloaded original content from:', { filePath })
     }
 
-    // A feed item is listed from the feed before its page arrives, so the
-    // reader may already have archived it or saved it to the library. Keep
-    // that rather than putting it back.
+    // The item exists before its page arrives: a feed item is listed from
+    // the feed, and a saved link shows while it is processing. The reader
+    // may already have archived or deleted it (Undo on the save toast), so
+    // keep that rather than putting it back.
     let keptState = state as ArticleSavingRequestStatus | undefined
     let keptFolder = folder
+    const listed = await findLibraryItemById(articleSavingRequestId, userId, {
+      select: ['id', 'state', 'folder'],
+    })
+    if (listed?.state === LibraryItemState.Archived) {
+      keptState = ArticleSavingRequestStatus.Archived
+    } else if (listed?.state === LibraryItemState.Deleted) {
+      keptState = ArticleSavingRequestStatus.Deleted
+    }
     if (rssFeedUrl) {
-      const listed = await findLibraryItemById(articleSavingRequestId, userId, {
-        select: ['id', 'state', 'folder'],
-      })
-      if (listed?.state === LibraryItemState.Archived) {
-        keptState = ArticleSavingRequestStatus.Archived
-      } else if (listed?.state === LibraryItemState.Deleted) {
-        keptState = ArticleSavingRequestStatus.Deleted
-      }
       keptFolder = listed?.folder || folder
     }
 
