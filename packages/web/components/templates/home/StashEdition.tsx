@@ -778,7 +778,8 @@ export function StashEdition(): JSX.Element {
   // stories not read yet. The first that fits leads if the lead doesn't.
   const [budget, setBudget] = useState<number | null>(null)
   const fitted = useMemo(() => {
-    if (budget === null) return undefined
+    // The chips only show on today's edition, so earlier ones stay whole.
+    if (budget === null || index !== 0) return undefined
     const chosen: Shown[] = []
     let used = 0
     // No one piece takes most of a longer slot, so it stays a mix.
@@ -795,7 +796,7 @@ export function StashEdition(): JSX.Element {
         })
     )
     return { chosen, used }
-  }, [budget, shown, isDone])
+  }, [budget, index, shown, isDone])
   const visible = useMemo(() => {
     if (!fitted) return shown
     return fitted.chosen.map((s, i) =>
@@ -826,6 +827,15 @@ export function StashEdition(): JSX.Element {
         (s) => s.item
       ),
     [visible]
+  )
+  // Being up to date, and "mark the rest as seen", cover the whole edition,
+  // not just what fits the time chosen.
+  const fullOrder = useMemo(
+    () =>
+      SLOT_ORDER.flatMap((slot) => shown.filter((s) => s.slot === slot)).map(
+        (s) => s.item
+      ),
+    [shown]
   )
   const [selectedId, setSelectedId] = useState<string>()
 
@@ -1031,7 +1041,7 @@ export function StashEdition(): JSX.Element {
   const popular = inSlot('popular')
   const briefs = inSlot('brief')
   const watch = inSlot('watch')
-  const remaining = order.filter((item) => !isDone(item))
+  const remaining = fullOrder.filter((item) => !isDone(item))
 
   const making =
     stateQuery.isPending || (ids.length > 0 && itemsQuery.isPending)
