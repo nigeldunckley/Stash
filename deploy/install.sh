@@ -77,10 +77,10 @@ add_new_images() {
 }
 
 # Each update leaves the previous images behind, and on a small disk they
-# soon fill it. Remove every image no container uses.
+# soon fill it. Remove every image no container uses. The build cache is
+# kept, so the database migration image doesn't rebuild from scratch.
 prune_images() {
   docker image prune -af >/dev/null
-  docker builder prune -af >/dev/null 2>&1 || true
 }
 
 # Runs auto-update.sh every five minutes, so merges reach the server

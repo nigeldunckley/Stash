@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # Run every few minutes by the stash-update timer (sudo ./install.sh autoupdate).
-# Applies new commits on main and newly built Stash images, and does nothing
-# when there are neither.
+# Applies newly built Stash images, runs a full update when the server setup
+# or database changes, and does nothing when there's nothing new.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 before=$(git -C .. rev-parse HEAD)
 git -C .. pull --ff-only -q
-if [ "$(git -C .. rev-parse HEAD)" != "$before" ]; then
-  echo "New commits on main, running a full update."
+# Most merges only change app code, which reaches the server as new images
+# below. Only server setup (deploy/) and database migrations (packages/db/)
+# need the slower full update, which pulls everything and rebuilds.
+if git -C .. diff --name-only "$before" HEAD |
+   grep -qE '^(deploy|packages/db)/'; then
+  echo "Server setup or database changes on main, running a full update."
   exec ./install.sh update
 fi
 
