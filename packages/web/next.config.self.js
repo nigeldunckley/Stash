@@ -50,6 +50,12 @@ const moduleExports = {
       source: '/trash',
       destination: '/l/trash',
     })
+    // Paths under /api go to the API server (deploy/Caddyfile), so the
+    // web app's own version check is served from here.
+    rewrites.push({
+      source: '/_stash/version',
+      destination: '/api/stash/version',
+    })
     return rewrites
   },
 }

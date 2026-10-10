@@ -94,6 +94,10 @@ const moduleExports = {
       source: '/trash',
       destination: '/l/trash',
     })
+    rewrites.push({
+      source: '/_stash/version',
+      destination: '/api/stash/version',
+    })
     return rewrites
   },
   async headers() {

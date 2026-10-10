@@ -41,6 +41,7 @@ import { uploadServiceRouter } from './routers/svc/upload'
 import { userServiceRouter } from './routers/svc/user'
 import { webhooksServiceRouter } from './routers/svc/webhooks'
 import { taskRouter } from './routers/task_router'
+import { versionRouter } from './routers/version_router'
 import { textToSpeechRouter } from './routers/text_to_speech'
 import { sentryConfig } from './sentry'
 import { analytics } from './utils/analytics'
@@ -110,6 +111,7 @@ export const createApp = (): Express => {
   app.use('/api/digest', digestRouter())
   app.use('/api/content', contentRouter())
   app.use('/api/export', exportRouter())
+  app.use('/api/version', versionRouter())
 
   app.use('/svc/pubsub/content', contentServiceRouter())
   app.use('/svc/pubsub/links', linkServiceRouter())
