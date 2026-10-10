@@ -45,6 +45,18 @@ jobs:
       - name: Lowercase image name
         run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/stash-web" >> "$GITHUB_ENV"
 
+      # Recorded in the image so Settings > Developer can show which merge
+      # is running on the server.
+      - name: Describe this commit
+        run: |
+          {
+            echo "STASH_COMMIT=$(git log -1 --format=%H)"
+            echo "STASH_COMMIT_SUBJECT=$(git log -1 --format=%s | head -n1)"
+            echo "STASH_COMMIT_BODY=$(git log -1 --format=%b | sed '/^[[:space:]]*$/d' | head -n1)"
+            echo "STASH_COMMITTED_AT=$(git log -1 --format=%cI)"
+            echo "STASH_BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_ENV"
+
       - name: Log in to GitHub container registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
@@ -64,6 +76,12 @@ jobs:
           platforms: linux/amd64
           # Pull requests only check that the image builds.
           push: ${{ github.event_name != 'pull_request' }}
+          build-args: |
+            STASH_COMMIT=${{ env.STASH_COMMIT }}
+            STASH_COMMIT_SUBJECT=${{ env.STASH_COMMIT_SUBJECT }}
+            STASH_COMMIT_BODY=${{ env.STASH_COMMIT_BODY }}
+            STASH_COMMITTED_AT=${{ env.STASH_COMMITTED_AT }}
+            STASH_BUILT_AT=${{ env.STASH_BUILT_AT }}
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}

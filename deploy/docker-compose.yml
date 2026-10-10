@@ -84,6 +84,9 @@ services:
     env_file: .env
     environment:
       - INTERNAL_API_URL=http://api:8080/api
+    # What the last update did (deploy/status.sh), for Settings > Developer.
+    volumes:
+      - ./status:/stash-status:ro
     depends_on:
       api:
         condition: service_healthy

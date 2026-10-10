@@ -15,6 +15,7 @@ import {
 import { theme } from '../../tokens/stitches.config'
 import { usePersistedState } from '../../../lib/hooks/usePersistedState'
 import { NavMenuFooter } from './Footer'
+import { ServerVersionChip } from '../settings/ServerVersionChip'
 import { StashMark } from '../../elements/images/OmnivoreNameLogo'
 import { Dropdown, DropdownOption } from '../../elements/DropdownElements'
 import { useRouter } from 'next/router'
@@ -116,7 +117,18 @@ export function NavigationMenu(props: NavigationMenuProps): JSX.Element {
 
         <LibraryNav {...props} />
         <Shortcuts {...props} />
-        <NavMenuFooter {...props} showFullThemeSection={true} />
+        <Box
+          css={{
+            mt: 'auto',
+            position: 'sticky',
+            bottom: 0,
+            zIndex: 2,
+            bg: '$thLeftMenuBackground',
+          }}
+        >
+          <ServerVersionChip />
+          <NavMenuFooter {...props} showFullThemeSection={true} />
+        </Box>
       </Box>
     </>
   )

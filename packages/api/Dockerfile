@@ -48,4 +48,17 @@ COPY --from=builder /app/packages/utils/ /app/packages/utils/
 
 EXPOSE 8080
 
+# Which commit this image was built from, shown in Settings > Developer.
+# Set last so a new commit only changes this layer.
+ARG STASH_COMMIT=""
+ARG STASH_COMMIT_SUBJECT=""
+ARG STASH_COMMIT_BODY=""
+ARG STASH_COMMITTED_AT=""
+ARG STASH_BUILT_AT=""
+ENV STASH_COMMIT=$STASH_COMMIT \
+    STASH_COMMIT_SUBJECT=$STASH_COMMIT_SUBJECT \
+    STASH_COMMIT_BODY=$STASH_COMMIT_BODY \
+    STASH_COMMITTED_AT=$STASH_COMMITTED_AT \
+    STASH_BUILT_AT=$STASH_BUILT_AT
+
 CMD ["yarn", "workspace", "@omnivore/api", "start"]

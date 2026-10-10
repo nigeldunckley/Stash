@@ -41,6 +41,10 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { name: 'API keys', destination: '/settings/api' },
     ],
   },
+  {
+    title: 'Advanced',
+    items: [{ name: 'Developer', destination: '/settings/developer' }],
+  },
 ]
 
 export const SETTINGS_SECTION_1 = SETTINGS_GROUPS.slice(0, 3).flatMap(

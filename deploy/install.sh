@@ -207,6 +207,7 @@ case "${1:-}" in
     compose up -d --build
     prune_images
     ensure_backup
+    ./status.sh update full
     ;;
   ""|-h|--help)
     sed -n 2,7p "$0"
