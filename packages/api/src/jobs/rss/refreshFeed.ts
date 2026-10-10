@@ -1,6 +1,10 @@
 import axios from 'axios'
 import crypto from 'crypto'
+import dns from 'dns'
+import http from 'http'
+import https from 'https'
 import { parseHTML } from 'linkedom'
+import * as privateIpLib from 'private-ip'
 import Parser, { Item } from 'rss-parser'
 import { v4 as uuid } from 'uuid'
 import { FetchContentType } from '../../entity/subscription'
@@ -19,9 +23,9 @@ import createHttpTaskWithToken, {
   enqueueFetchContentJob,
   FetchContentJobData,
 } from '../../utils/createTask'
-import { cleanUrl } from '../../utils/helpers'
+import { cleanUrl, generateFingerprint, wordsCount } from '../../utils/helpers'
 import { logger } from '../../utils/logger'
-import { rssParserConfig } from '../../utils/parser'
+import { parsePreparedContent, rssParserConfig } from '../../utils/parser'
 import { videoIdFromYouTubeUrl } from '../../utils/youtube'
 import {
   channelIdFromFeedUrl,
@@ -369,8 +373,14 @@ const createTask = async (
     return createItemWithFeedContent(userId, feedUrl, item, folder, feedContent)
   }
 
-  // List the item from the feed straight away, then fetch the full page into
-  // the same item. If the page can't be fetched (the site blocks it, times
+  // Most article pages carry their full text without a browser, so read the
+  // page directly first.
+  if (await createItemFromPage(userId, feedUrl, item, folder, feedContent)) {
+    return true
+  }
+
+  // Otherwise list the item from the feed straight away, then fetch the full
+  // page into the same item with the browser. If the page can't be fetched (the site blocks it, times
   // out, or its domain has failed too often) the item still shows, with what
   // the feed carried, instead of never appearing.
   const libraryItemId = await createItemWithFeedContent(
@@ -515,6 +525,148 @@ const createYouTubeVideoItem = async (
     return true
   } catch (error) {
     logger.error('youtube: could not save video', error)
+    return false
+  }
+}
+
+// Feed links come from whoever publishes the feed, so article pages are only
+// fetched from public addresses: every connection, redirects included,
+// resolves its host here first.
+const publicLookup = ((
+  hostname: string,
+  options: dns.LookupOptions,
+  callback: (
+    error: NodeJS.ErrnoException | null,
+    address: string | dns.LookupAddress[],
+    family?: number
+  ) => void
+) => {
+  dns.lookup(hostname, { ...options, all: true }, (error, addresses) => {
+    if (error) {
+      return callback(error, [])
+    }
+    if (addresses.some((a) => privateIpLib.default(a.address))) {
+      return callback(new Error(`private address for ${hostname}`), [])
+    }
+    if (options.all) {
+      return callback(null, addresses)
+    }
+    callback(null, addresses[0].address, addresses[0].family)
+  })
+}) as unknown as typeof dns.lookup
+// Hosts written as an address skip the lookup, so they're checked directly.
+const isPrivateHost = (hostname: string) =>
+  !!privateIpLib.default(hostname.replace(/^\[|\]$/g, ''))
+const publicHttpAgent = new http.Agent({ lookup: publicLookup })
+const publicHttpsAgent = new https.Agent({ lookup: publicLookup })
+
+// The article's page, when it can be read without a browser.
+const fetchArticlePage = async (url: string) => {
+  try {
+    if (isPrivateHost(new URL(url).hostname)) {
+      return undefined
+    }
+    const fingerprint = generateFingerprint()
+    const response = await axios.get<string>(url, {
+      headers: {
+        'user-agent': fingerprint.headers['user-agent'],
+        accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+        'accept-language': 'en-GB,en;q=0.9',
+      },
+      responseType: 'text',
+      timeout: 20_000,
+      maxRedirects: 10,
+      maxContentLength: 10 * 1024 * 1024,
+      httpAgent: publicHttpAgent,
+      httpsAgent: publicHttpsAgent,
+      proxy: false,
+      beforeRedirect: (options: { hostname?: string }) => {
+        if (options.hostname && isPrivateHost(options.hostname)) {
+          throw new Error(`redirect to a private address: ${options.hostname}`)
+        }
+      },
+    })
+    const contentType = String(response.headers['content-type'] || '')
+    if (!contentType.includes('html') || typeof response.data != 'string') {
+      return undefined
+    }
+    return response.data
+  } catch (error) {
+    logger.info('rss: page could not be read directly', {
+      url,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return undefined
+  }
+}
+
+// Saves the full article from its page. Returns false, saving nothing, when
+// the page can't be read or holds no more than the feed already did, so the
+// browser can try instead.
+const createItemFromPage = async (
+  userId: string,
+  feedUrl: string,
+  item: RssFeedItem,
+  folder: FolderType,
+  feedContent?: string
+) => {
+  const url = cleanUrl(item.link)
+  const html = await fetchArticlePage(url)
+  if (!html) {
+    return false
+  }
+
+  try {
+    const parsed = await parsePreparedContent(url, {
+      document: html,
+      pageInfo: { canonicalUrl: url, title: item.title },
+    })
+    const pageWords = parsed.parsedContent?.textContent
+      ? wordsCount(parsed.parsedContent.textContent)
+      : 0
+    const feedWords = feedContent ? wordsCount(feedContent, true) : 0
+    if (pageWords < Math.max(100, feedWords * 0.8)) {
+      logger.info('rss: page holds no more than the feed', {
+        url,
+        pageWords,
+        feedWords,
+      })
+      return false
+    }
+
+    const user = await findActiveUser(userId)
+    if (!user) {
+      logger.error('User not found', { userId })
+      return false
+    }
+
+    const result = await savePage(
+      {
+        url,
+        feedContent,
+        title: item.title,
+        folder,
+        rssFeedUrl: feedUrl,
+        savedAt: item.isoDate,
+        publishedAt: item.isoDate,
+        originalContent: html,
+        source: 'rss-feeder',
+        clientRequestId: '',
+        author: item.creator,
+        previewImage: getThumbnail(item),
+        labels: [{ name: 'RSS' }],
+      },
+      user
+    )
+    if (result.__typename === 'SaveError') {
+      logger.error(`rss: could not save page: ${result.errorCodes[0]}`)
+      return false
+    }
+
+    logger.info('rss: saved full article from its page', { url, pageWords })
+    return true
+  } catch (error) {
+    logger.error('rss: could not save page', { url, error })
     return false
   }
 }
