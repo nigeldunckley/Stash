@@ -206,6 +206,58 @@ interface CachedPagesData {
   pages: LibraryItems[]
 }
 
+// The API refuses search queries over 255 characters, which is about six
+// ids in an includes: filter, so longer lists are fetched six at a time.
+const IDS_PER_QUERY = 6
+
+// Items by id, in the same cache (and data shape) as useGetLibraryItems, so
+// archive, move and progress updates reach them too.
+export function useGetLibraryItemsByIds(
+  section: string,
+  ids: string[],
+  enabled = true
+) {
+  return useQuery({
+    queryKey: ['libraryItems', section, ids.join(',')],
+    queryFn: async () => {
+      const chunks: string[][] = []
+      for (let i = 0; i < ids.length; i += IDS_PER_QUERY) {
+        chunks.push(ids.slice(i, i + IDS_PER_QUERY))
+      }
+      const results = await Promise.all(
+        chunks.map(async (chunk) => {
+          const response = (await gqlFetcher(gqlSearchQuery(), {
+            first: chunk.length,
+            query: `includes:${chunk.join(',')}`,
+            includeContent: false,
+          })) as LibraryItemsData
+          if (response.search.errorCodes?.length) {
+            throw new Error(response.search.errorCodes[0])
+          }
+          return response.search.edges
+        })
+      )
+      const edges = results.flat()
+      return {
+        pages: [
+          {
+            edges,
+            pageInfo: {
+              hasNextPage: false,
+              hasPreviousPage: false,
+              startCursor: '',
+              endCursor: String(edges.length),
+              totalCount: edges.length,
+            },
+          },
+        ],
+        pageParams: ['0'],
+      }
+    },
+    enabled: enabled && ids.length > 0,
+  })
+}
+
 export function useGetLibraryItems(
   section: string,
   folder: string | undefined,

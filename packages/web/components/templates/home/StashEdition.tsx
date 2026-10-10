@@ -26,6 +26,7 @@ import { State } from '../../../lib/networking/fragments/articleFragment'
 import {
   LibraryItemNode,
   useGetLibraryItems,
+  useGetLibraryItemsByIds,
 } from '../../../lib/networking/library_items/useLibraryItems'
 import {
   markItemsSeen,
@@ -719,14 +720,9 @@ export function StashEdition(): JSX.Element {
     () => edition?.entries.map((entry) => entry.id) ?? [],
     [edition]
   )
-  const itemsQuery = useGetLibraryItems(
+  const itemsQuery = useGetLibraryItemsByIds(
     `edition-${edition?.date}`,
-    undefined,
-    {
-      limit: 30,
-      sortDescending: true,
-      searchQuery: `includes:${ids.join(',')}`,
-    },
+    ids,
     ids.length > 0
   )
   const items = useMemo(() => {
@@ -1200,6 +1196,15 @@ export function StashEdition(): JSX.Element {
           </Notice>
         )}
 
+        {itemsQuery.isError && (
+          <Notice>
+            Stash couldn&apos;t load this edition&apos;s stories.
+            <Btn type="button" onClick={() => itemsQuery.refetch()}>
+              Try again
+            </Btn>
+          </Notice>
+        )}
+
         {!making && edition && stories.length === 0 && (
           <Notice>
             Nothing new since the last edition. Follow a few feeds or save some
@@ -1402,7 +1407,9 @@ export function StashEdition(): JSX.Element {
         {!making && edition && state && (
           <Colophon>
             <p>
-              {stories.length > 0 && remaining.length === 0
+              {stories.length > 0 &&
+              itemsQuery.isSuccess &&
+              remaining.length === 0
                 ? "You're up to date. "
                 : index === 0
                 ? "That's today's edition. "

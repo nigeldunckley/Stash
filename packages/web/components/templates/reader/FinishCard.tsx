@@ -8,6 +8,7 @@ import {
   ArticleAttributes,
   useArchiveItem,
   useGetLibraryItems,
+  useGetLibraryItemsByIds,
 } from '../../../lib/networking/library_items/useLibraryItems'
 import { formatMinutes, readingMinutes } from '../../../lib/readingTime'
 import { siteName } from '../../../lib/textFormatting'
@@ -180,14 +181,9 @@ export function FinishCard(props: FinishCardProps): JSX.Element {
       ),
     [edition, item.id]
   )
-  const editionItems = useGetLibraryItems(
+  const editionItems = useGetLibraryItemsByIds(
     `finish-edition-${edition?.date}`,
-    undefined,
-    {
-      limit: 30,
-      sortDescending: true,
-      searchQuery: `includes:${entries.map((entry) => entry.id).join(',')}`,
-    },
+    entries.map((entry) => entry.id),
     entries.length > 0
   )
 
