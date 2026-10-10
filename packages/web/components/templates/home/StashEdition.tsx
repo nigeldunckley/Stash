@@ -748,11 +748,12 @@ export function StashEdition(): JSX.Element {
     [continueQuery.data, ids]
   )
 
+  // Seen is not done: Feeds marks items seen as they scroll past, so only
+  // reading, skipping, saving or archiving counts.
   const isDone = useCallback(
     (item: LibraryItemNode) =>
       skipped.has(item.id) ||
       (item.readingProgressPercent ?? 0) >= 2 ||
-      !!item.seenAt ||
       item.state === State.ARCHIVED ||
       (!!item.subscription && !isFeedItem(item)),
     [skipped]
