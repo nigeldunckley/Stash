@@ -40,7 +40,15 @@ import {
   readingMinutes,
 } from '../../../lib/readingTime'
 import { faviconFor, shortTimeAgo, siteName } from '../../../lib/textFormatting'
-import { CoverImage, Kbd, ProgressLine, SiteIcon } from '../../elements/stash'
+import {
+  ContextMenu,
+  CoverImage,
+  Kbd,
+  linkEntries,
+  MenuEntry,
+  ProgressLine,
+  SiteIcon,
+} from '../../elements/stash'
 import { motion, reducedMotion } from '../../elements/stash/motion'
 import { keyframes, styled } from '../../tokens/stitches.config'
 
@@ -1019,6 +1027,29 @@ export function StashEdition(): JSX.Element {
     </Quiet>
   )
 
+  const menuFor = (item: LibraryItemNode): MenuEntry[] => [
+    {
+      label: isDone(item) ? 'Open' : 'Read',
+      shortcut: '↵',
+      onSelect: () => open(item),
+    },
+    ...(isFeedItem(item)
+      ? [
+          {
+            label: 'Save for later',
+            shortcut: 'L',
+            onSelect: () => later(item),
+          },
+        ]
+      : []),
+    {
+      label: 'Skip',
+      shortcut: '⌫',
+      onSelect: () => saveSkips([item.id]),
+    },
+    ...linkEntries(item.originalArticleUrl || item.url),
+  ]
+
   const doneMark = (item: LibraryItemNode) =>
     isDone(item) ? <Check size={13} weight="bold" aria-label="Done" /> : null
 
@@ -1214,46 +1245,48 @@ export function StashEdition(): JSX.Element {
         )}
 
         {!making && lead && (
-          <Lead
-            data-story={lead.item.id}
-            data-selected={selectedId === lead.item.id}
-            data-done={isDone(lead.item)}
-          >
-            <LeadCover
-              src={lead.item.headerImage ?? lead.item.image}
-              fallback={fallbackFor(lead.item, 40)}
-              onClick={() => open(lead.item)}
-            />
-            <LeadCopy>
-              {sourceLine(lead, lead.why ?? 'Lead story')}
-              <LeadTitle type="button" onClick={() => open(lead.item)}>
-                {lead.item.title}
-              </LeadTitle>
-              {lead.item.description && <Dek>{lead.item.description}</Dek>}
-              <Meta>
-                {[
-                  timeOf(lead.item),
-                  isFeedItem(lead.item) ? 'From your feeds' : 'Saved by you',
-                  shortTimeAgo(lead.item.publishedAt || lead.item.savedAt),
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </Meta>
-              <Actions>
-                <Btn primary type="button" onClick={() => open(lead.item)}>
-                  {isDone(lead.item) ? 'Open' : 'Read'} <Kbd>↵</Kbd>
-                </Btn>
-                {isFeedItem(lead.item) && (
-                  <Btn type="button" onClick={() => later(lead.item)}>
-                    Later <Kbd>L</Kbd>
+          <ContextMenu entries={menuFor(lead.item)}>
+            <Lead
+              data-story={lead.item.id}
+              data-selected={selectedId === lead.item.id}
+              data-done={isDone(lead.item)}
+            >
+              <LeadCover
+                src={lead.item.headerImage ?? lead.item.image}
+                fallback={fallbackFor(lead.item, 40)}
+                onClick={() => open(lead.item)}
+              />
+              <LeadCopy>
+                {sourceLine(lead, lead.why ?? 'Lead story')}
+                <LeadTitle type="button" onClick={() => open(lead.item)}>
+                  {lead.item.title}
+                </LeadTitle>
+                {lead.item.description && <Dek>{lead.item.description}</Dek>}
+                <Meta>
+                  {[
+                    timeOf(lead.item),
+                    isFeedItem(lead.item) ? 'From your feeds' : 'Saved by you',
+                    shortTimeAgo(lead.item.publishedAt || lead.item.savedAt),
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </Meta>
+                <Actions>
+                  <Btn primary type="button" onClick={() => open(lead.item)}>
+                    {isDone(lead.item) ? 'Open' : 'Read'} <Kbd>↵</Kbd>
                   </Btn>
-                )}
-                <Btn type="button" onClick={() => saveSkips([lead.item.id])}>
-                  Skip <Kbd>⌫</Kbd>
-                </Btn>
-              </Actions>
-            </LeadCopy>
-          </Lead>
+                  {isFeedItem(lead.item) && (
+                    <Btn type="button" onClick={() => later(lead.item)}>
+                      Later <Kbd>L</Kbd>
+                    </Btn>
+                  )}
+                  <Btn type="button" onClick={() => saveSkips([lead.item.id])}>
+                    Skip <Kbd>⌫</Kbd>
+                  </Btn>
+                </Actions>
+              </LeadCopy>
+            </Lead>
+          </ContextMenu>
         )}
 
         {!making && picks.length > 0 && (
@@ -1264,31 +1297,32 @@ export function StashEdition(): JSX.Element {
             </SectionHead>
             <Picks>
               {picks.map((entry) => (
-                <Story
-                  key={entry.id}
-                  data-story={entry.id}
-                  data-selected={selectedId === entry.id}
-                  data-done={isDone(entry.item)}
-                >
-                  <StoryCover
-                    src={entry.item.headerImage ?? entry.item.image}
-                    fallback={fallbackFor(entry.item)}
-                    onClick={() => open(entry.item)}
-                  />
-                  {sourceLine(entry)}
-                  <StoryTitle type="button" onClick={() => open(entry.item)}>
-                    {entry.item.title}
-                  </StoryTitle>
-                  {entry.item.description && (
-                    <StoryDek>{entry.item.description}</StoryDek>
-                  )}
-                  <StoryFoot>
-                    <Meta>
-                      {doneMark(entry.item)} {timeOf(entry.item)}
-                    </Meta>
-                    {quietActions(entry.item)}
-                  </StoryFoot>
-                </Story>
+                <ContextMenu key={entry.id} entries={menuFor(entry.item)}>
+                  <Story
+                    data-story={entry.id}
+                    data-selected={selectedId === entry.id}
+                    data-done={isDone(entry.item)}
+                  >
+                    <StoryCover
+                      src={entry.item.headerImage ?? entry.item.image}
+                      fallback={fallbackFor(entry.item)}
+                      onClick={() => open(entry.item)}
+                    />
+                    {sourceLine(entry)}
+                    <StoryTitle type="button" onClick={() => open(entry.item)}>
+                      {entry.item.title}
+                    </StoryTitle>
+                    {entry.item.description && (
+                      <StoryDek>{entry.item.description}</StoryDek>
+                    )}
+                    <StoryFoot>
+                      <Meta>
+                        {doneMark(entry.item)} {timeOf(entry.item)}
+                      </Meta>
+                      {quietActions(entry.item)}
+                    </StoryFoot>
+                  </Story>
+                </ContextMenu>
               ))}
             </Picks>
           </section>
@@ -1447,25 +1481,26 @@ export function StashEdition(): JSX.Element {
 
   function briefRow(entry: Shown) {
     return (
-      <BriefRow
-        key={entry.id}
-        data-story={entry.id}
-        data-selected={selectedId === entry.id}
-        data-done={isDone(entry.item)}
-      >
-        <div style={{ minWidth: 0 }}>
-          {sourceLine(entry)}
-          <BriefTitle type="button" onClick={() => open(entry.item)}>
-            {entry.item.title}
-          </BriefTitle>
-        </div>
-        <BriefEnd>
-          <Meta>
-            {doneMark(entry.item)} {timeOf(entry.item)}
-          </Meta>
-          {quietActions(entry.item)}
-        </BriefEnd>
-      </BriefRow>
+      <ContextMenu key={entry.id} entries={menuFor(entry.item)}>
+        <BriefRow
+          data-story={entry.id}
+          data-selected={selectedId === entry.id}
+          data-done={isDone(entry.item)}
+        >
+          <div style={{ minWidth: 0 }}>
+            {sourceLine(entry)}
+            <BriefTitle type="button" onClick={() => open(entry.item)}>
+              {entry.item.title}
+            </BriefTitle>
+          </div>
+          <BriefEnd>
+            <Meta>
+              {doneMark(entry.item)} {timeOf(entry.item)}
+            </Meta>
+            {quietActions(entry.item)}
+          </BriefEnd>
+        </BriefRow>
+      </ContextMenu>
     )
   }
 }

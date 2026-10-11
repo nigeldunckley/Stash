@@ -175,3 +175,32 @@ export const highlightColorVar = (name: string | undefined) => {
   }
   return 'var(--colors-highlightBackground)'
 }
+
+// Safari tints its toolbar, and the iPhone status bar of the Home Screen app,
+// with the page's theme-color. The meta tags only know the system setting,
+// so follow the theme chosen in Stash instead. Pages that sit on another
+// background (the reader's paper) pick their token with setThemeColorToken.
+let themeColorToken = 'stCanvas'
+
+export function syncThemeColor(): void {
+  if (typeof document === 'undefined') {
+    return
+  }
+  const color = getComputedStyle(document.documentElement)
+    .getPropertyValue(`--colors-${themeColorToken}`)
+    .trim()
+  if (!color) {
+    return
+  }
+  document
+    .querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')
+    .forEach((meta) => {
+      meta.removeAttribute('media')
+      meta.content = color
+    })
+}
+
+export function setThemeColorToken(token: string): void {
+  themeColorToken = token
+  syncThemeColor()
+}

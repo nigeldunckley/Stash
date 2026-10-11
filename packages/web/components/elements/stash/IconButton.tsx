@@ -1,6 +1,6 @@
 import { forwardRef, ReactNode } from 'react'
 import { styled } from '../../tokens/stitches.config'
-import { motion } from './motion'
+import { motion, pressable } from './motion'
 
 const Button = styled('button', {
   all: 'unset',
@@ -12,11 +12,25 @@ const Button = styled('button', {
   color: '$stMuted',
   border: '1px solid transparent',
   borderRadius: '$sm',
-  transition: `color ${motion.fast}, background ${motion.fast}, border-color ${motion.fast}`,
-  '&:hover': {
-    color: '$stInk',
-    background: '$stSurface',
-    borderColor: '$stLine',
+  position: 'relative',
+  transition: `color ${motion.fast}, background ${motion.fast}, border-color ${motion.fast}, transform ${motion.fast}`,
+  ...pressable,
+  // On touch screens the target is at least 44pt, whatever the drawn size.
+  '@media (pointer: coarse)': {
+    '&::before': {
+      content: '""',
+      position: 'absolute',
+      inset: 'min(-7px, calc((100% - 44px) / 2))',
+    },
+  },
+  // Hover only where there is a pointer, so a tap on iPhone doesn't leave
+  // the button lit.
+  '@media (hover: hover)': {
+    '&:hover': {
+      color: '$stInk',
+      background: '$stSurface',
+      borderColor: '$stLine',
+    },
   },
   '&:focus-visible': {
     outline: '2px solid $stAccent',

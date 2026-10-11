@@ -4,14 +4,21 @@ import {
   DotsThree,
   Notebook,
   Tag,
+  TextAa,
 } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { State } from '../../../lib/networking/fragments/articleFragment'
 import { ReaderSettings } from '../../../lib/hooks/useReaderSettings'
 import { formatMinutes, minutesLeft } from '../../../lib/readingTime'
 import { siteName } from '../../../lib/textFormatting'
-import { Dropdown, DropdownOption } from '../../elements/DropdownElements'
+import { setThemeColorToken } from '../../../lib/themeUpdater'
+import {
+  Dropdown,
+  DropdownOption,
+  DropdownSeparator,
+} from '../../elements/DropdownElements'
 import { IconButton, Popover, SiteIcon } from '../../elements/stash'
+import { glassFilter } from '../../elements/stash/material'
 import { motion, reducedMotion } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
 import { ReaderTextSettings } from './ReaderTextSettings'
@@ -44,10 +51,13 @@ const Bar = styled('header', {
   display: 'flex',
   alignItems: 'center',
   gap: '6px',
-  background: '$readerBg',
+  // Frosted over the article, in the reader's own paper colour.
+  background: 'color-mix(in srgb, $colors$readerBg 78%, transparent)',
+  backdropFilter: glassFilter,
+  WebkitBackdropFilter: glassFilter,
   borderBottom: '1px solid transparent',
   fontFamily: '$inter',
-  transition: `transform ${motion.base}, border-color ${motion.base}`,
+  transition: `transform ${motion.slow}, border-color ${motion.base}`,
   [reducedMotion]: { transition: 'none' },
   '@media print': { display: 'none' },
   'body[data-notebook="open"] &': {
@@ -89,12 +99,6 @@ const TimeLeft = styled('span', {
   '@smDown': { display: 'none' },
 })
 
-const TextButton = styled('span', {
-  fontFamily: '$serif',
-  fontSize: '16px',
-  lineHeight: 1,
-})
-
 const MenuGlyph = styled('span', {
   display: 'grid',
   placeItems: 'center',
@@ -103,10 +107,12 @@ const MenuGlyph = styled('span', {
   borderRadius: '$sm',
   border: '1px solid transparent',
   color: '$stMuted',
-  '&:hover': {
-    color: '$stInk',
-    background: '$stSurface',
-    borderColor: '$stLine',
+  '@media (hover: hover)': {
+    '&:hover': {
+      color: '$stInk',
+      background: '$stSurface',
+      borderColor: '$stLine',
+    },
   },
 })
 
@@ -142,6 +148,12 @@ export function StashReaderBar(props: StashReaderBarProps): JSX.Element {
   const [hidden, setHidden] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+
+  // Safari's toolbar takes the reader's paper colour while reading.
+  useEffect(() => {
+    setThemeColorToken('readerBg')
+    return () => setThemeColorToken('stCanvas')
+  }, [])
 
   useEffect(() => {
     let lastY = window.scrollY
@@ -213,14 +225,14 @@ export function StashReaderBar(props: StashReaderBarProps): JSX.Element {
             )
           }
         >
-          <Archive size={17} />
+          <Archive size={18} />
         </IconButton>
         <IconButton
           label="Labels"
           shortcut="l"
           onClick={() => props.readerSettings.setShowSetLabelsModal(true)}
         >
-          <Tag size={17} />
+          <Tag size={18} />
         </IconButton>
         <Popover
           label="Text settings"
@@ -228,7 +240,7 @@ export function StashReaderBar(props: StashReaderBarProps): JSX.Element {
           onOpenChange={setSettingsOpen}
           trigger={
             <IconButton label="Text settings" active={settingsOpen}>
-              <TextButton>Aa</TextButton>
+              <TextAa size={18} />
             </IconButton>
           }
         >
@@ -246,7 +258,7 @@ export function StashReaderBar(props: StashReaderBarProps): JSX.Element {
           active={props.notebookOpen}
           onClick={props.onToggleNotebook}
         >
-          <Notebook size={17} />
+          <Notebook size={18} />
         </IconButton>
         <Dropdown
           align="end"
@@ -274,10 +286,11 @@ export function StashReaderBar(props: StashReaderBarProps): JSX.Element {
             onSelect={() => props.actionHandler('mark-unread')}
             title="Mark as unread"
           />
+          <DropdownSeparator />
           <DropdownOption
             onSelect={() => props.actionHandler('delete')}
             title="Delete"
-            hideSeparator
+            destructive
           />
         </Dropdown>
       </Bar>

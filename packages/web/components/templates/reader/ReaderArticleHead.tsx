@@ -4,7 +4,7 @@ import { formattedLongDate } from '../../../lib/dateFormatting'
 import { formatMinutes, readingMinutes } from '../../../lib/readingTime'
 import {
   faviconFor,
-  shortTimeAgo,
+  timeAgoInSentence,
   shouldHideUrl,
   siteName,
 } from '../../../lib/textFormatting'
@@ -150,8 +150,7 @@ export function ReaderArticleHead(props: ReaderArticleHeadProps): JSX.Element {
   const dek = standfirst(article.description, props.title, article.content)
   const author = removeHTMLTags(article.author).trim()
   const showOriginal = !shouldHideUrl(article.originalArticleUrl)
-  const ago = shortTimeAgo(article.savedAt)
-  const saved = ago && ago.charAt(0).toLowerCase() + ago.slice(1)
+  const saved = timeAgoInSentence(article.savedAt)
 
   return (
     <Head>

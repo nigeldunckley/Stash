@@ -1,4 +1,4 @@
-import { shortTimeAgo } from './textFormatting'
+import { timeAgoInSentence } from './textFormatting'
 
 // What's running on the Stash server, for Settings > Developer. The API
 // route pages/api/stash/version.ts gathers it; image builds bake in the
@@ -71,8 +71,6 @@ export const lastServerUpdate = (
   return starts[starts.length - 1]
 }
 
-// "just now", "5 mins ago", "3 Oct", to follow "Updated".
-export const updatedAgo = (date: string, now = Date.now()): string => {
-  const ago = shortTimeAgo(date, now)
-  return ago == 'Just now' ? 'just now' : ago
-}
+// "just now", "5 min ago", "yesterday", "3 Oct", to follow "Updated".
+export const updatedAgo = (date: string, now = Date.now()): string =>
+  timeAgoInSentence(date, now)

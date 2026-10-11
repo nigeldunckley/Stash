@@ -1,12 +1,16 @@
 import * as RadixPopover from '@radix-ui/react-popover'
 import { ReactNode } from 'react'
 import { keyframes, styled } from '../../tokens/stitches.config'
-import { reducedMotion } from './motion'
+import { floatingShadow, glassStrong, hairlineEdge } from './material'
+import { reducedMotion, spring } from './motion'
 
+// Grows out of the button that opened it.
 const appear = keyframes({
-  from: { opacity: 0, transform: 'translateY(-4px)' },
-  to: { opacity: 1, transform: 'translateY(0)' },
+  from: { opacity: 0, transform: 'scale(0.96)' },
+  to: { opacity: 1, transform: 'scale(1)' },
 })
+
+const fade = keyframes({ from: { opacity: 0 }, to: { opacity: 1 } })
 
 const Content = styled(RadixPopover.Content, {
   zIndex: 30,
@@ -14,17 +18,17 @@ const Content = styled(RadixPopover.Content, {
   maxWidth: 'calc(100vw - 32px)',
   padding: '14px',
   boxSizing: 'border-box',
-  background: '$stSurface',
+  ...glassStrong,
+  ...hairlineEdge,
   color: '$stInk',
-  border: '1px solid $stLine',
   borderRadius: '$lg',
-  boxShadow:
-    '0 1px 2px rgba(9, 9, 11, 0.06), 0 12px 32px -8px rgba(9, 9, 11, 0.18)',
+  boxShadow: floatingShadow,
   fontFamily: '$inter',
   fontSize: '$small',
-  animation: `${appear} 160ms cubic-bezier(0.2, 0, 0, 1)`,
+  transformOrigin: 'var(--radix-popover-content-transform-origin)',
+  animation: `${appear} 240ms ${spring}`,
   '&:focus': { outline: 'none' },
-  [reducedMotion]: { animation: 'none' },
+  [reducedMotion]: { animation: `${fade} 150ms linear` },
 })
 
 type PopoverProps = {

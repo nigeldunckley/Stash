@@ -24,6 +24,7 @@ import {
   Sun,
 } from '@phosphor-icons/react'
 import { styled } from '../tokens/stitches.config'
+import { glassStrong, hairlineEdge } from './stash/material'
 import { gqlFetcher } from '../../lib/networking/networkHelpers'
 import { gqlSearchQuery } from '../../lib/networking/library_items/gql'
 import { LibraryItemNode } from '../../lib/networking/library_items/useLibraryItems'
@@ -48,10 +49,11 @@ const Animator = styled(KBarAnimator, {
   overflow: 'hidden',
   fontFamily: '$inter',
   color: '$stInk',
-  background: '$stSurface',
-  border: '1px solid $stLine',
-  borderRadius: '12px',
-  boxShadow: '0 30px 60px -30px rgba(9, 9, 11, 0.45)',
+  ...glassStrong,
+  ...hairlineEdge,
+  borderRadius: '14px',
+  boxShadow:
+    '0 1px 2px rgba(9, 9, 11, 0.06), 0 30px 70px -20px rgba(9, 9, 11, 0.45)',
 })
 
 const Query = styled('label', {
@@ -91,13 +93,14 @@ const Item = styled('div', {
   gridTemplateColumns: '20px minmax(0, 1fr) auto',
   alignItems: 'center',
   gap: '10px',
-  padding: '8px 16px',
+  margin: '0 6px',
+  padding: '8px 10px',
+  borderRadius: '8px',
   fontSize: '14px',
   cursor: 'pointer',
   '& > svg': { color: '$stMuted' },
   '&[data-active="true"]': {
     background: '$stSunken',
-    boxShadow: 'inset 2px 0 0 $colors$stAccent',
   },
 })
 
@@ -157,7 +160,7 @@ const Foot = styled('div', {
 
 const Results = styled('div', {
   // KBarResults virtualises its list and sets its own height.
-  '& > div': { maxHeight: 'min(420px, 60vh)' },
+  '& > div': { maxHeight: 'min(420px, 60vh)', overscrollBehavior: 'contain' },
 })
 
 // Wraps the first match of the search in a <mark>.
@@ -256,7 +259,9 @@ export function CommandBar(): JSX.Element {
         <KBarPositioner
           style={{
             zIndex: 100,
-            background: 'rgba(9, 9, 11, 0.24)',
+            background: 'var(--colors-stScrim)',
+            backdropFilter: 'blur(3px)',
+            WebkitBackdropFilter: 'blur(3px)',
             padding: '12vh 16px 16px',
           }}
         >

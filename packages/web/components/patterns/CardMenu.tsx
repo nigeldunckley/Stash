@@ -1,5 +1,9 @@
 import type { ReactNode } from 'react'
-import { Dropdown, DropdownOption } from '../elements/DropdownElements'
+import {
+  Dropdown,
+  DropdownOption,
+  DropdownSeparator,
+} from '../elements/DropdownElements'
 import {
   LibraryItemNode,
   useUpdateItemReadStatus,
@@ -32,7 +36,6 @@ export function CardMenu(props: CardMenuProps): JSX.Element {
     <Dropdown
       triggerElement={props.triggerElement}
       onOpenChange={props.onOpenChange}
-      css={{ bg: '$thNavMenuFooter' }}
     >
       {props.item.state != State.ARCHIVED ? (
         <DropdownOption
@@ -96,11 +99,13 @@ export function CardMenu(props: CardMenuProps): JSX.Element {
           title="Mark unread"
         />
       )}
+      <DropdownSeparator />
       <DropdownOption
         onSelect={() => {
           props.actionHandler('delete')
         }}
-        title="Remove"
+        title="Delete"
+        destructive
       />
       {/* {!!props.item.subscription && (
         <DropdownOption

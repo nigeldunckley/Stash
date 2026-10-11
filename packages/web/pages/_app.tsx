@@ -16,6 +16,7 @@ import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
 import React from 'react'
 import { Toaster } from 'react-hot-toast'
+import { syncThemeColor } from '../lib/themeUpdater'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -56,7 +57,27 @@ const ConditionalCaptchaProvider = (props: {
   return <>{props.children}</>
 }
 
+// Keeps Safari's toolbar colour in step with the theme as it changes.
+const useThemeColor = () => {
+  useEffect(() => {
+    syncThemeColor()
+    const observer = new MutationObserver(() => syncThemeColor())
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    })
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    media.addEventListener('change', syncThemeColor)
+    return () => {
+      observer.disconnect()
+      media.removeEventListener('change', syncThemeColor)
+    }
+  }, [])
+}
+
 export function OmnivoreApp({ Component, pageProps }: AppProps): JSX.Element {
+  useThemeColor()
+
   return (
     <ConditionalCaptchaProvider>
       <Head>
@@ -73,16 +94,6 @@ export function OmnivoreApp({ Component, pageProps }: AppProps): JSX.Element {
           rel="apple-touch-icon"
           sizes="180x180"
           href="/apple-touch-icon-180x180.png?v=stash-folded-s"
-        />
-        <meta
-          name="theme-color"
-          media="(prefers-color-scheme: light)"
-          content="#FAFAFA"
-        />
-        <meta
-          name="theme-color"
-          media="(prefers-color-scheme: dark)"
-          content="#111113"
         />
       </Head>
       <Toaster />

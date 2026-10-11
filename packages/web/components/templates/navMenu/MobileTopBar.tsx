@@ -1,4 +1,4 @@
-import { DotsThreeOutline, MagnifyingGlass } from '@phosphor-icons/react'
+import { DotsThree, MagnifyingGlass } from '@phosphor-icons/react'
 import { useKBar } from 'kbar'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
@@ -141,7 +141,7 @@ export function MobileTopBar(props: {
         <MagnifyingGlass size={20} />
       </More>
       <More type="button" onClick={props.onMore} aria-label="More">
-        <DotsThreeOutline size={20} />
+        <DotsThree size={22} weight="bold" />
       </More>
     </Bar>
   )

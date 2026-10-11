@@ -17,6 +17,17 @@ export default class Document extends NextDocument {
             dangerouslySetInnerHTML={{ __html: getCssText() }}
           />
           <link rel="manifest" href="/manifest.webmanifest" />
+          {/* Until the app knows the chosen theme (see syncThemeColor). */}
+          <meta
+            name="theme-color"
+            media="(prefers-color-scheme: light)"
+            content="#FAFAFA"
+          />
+          <meta
+            name="theme-color"
+            media="(prefers-color-scheme: dark)"
+            content="#09090B"
+          />
           <script async src="/static/scripts/intercom.js" />
           <script async src="/static/scripts/inject-sw.js" />
           <Script strategy={"beforeInteractive"} src={"/env.js"} />

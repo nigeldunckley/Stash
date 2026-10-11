@@ -1,4 +1,4 @@
-import { forwardRef, ReactNode } from 'react'
+import { forwardRef, HTMLAttributes, ReactNode } from 'react'
 import { styled } from '../../tokens/stitches.config'
 import { CoverImage } from './CoverImage'
 import { motion } from './motion'
@@ -178,46 +178,83 @@ type ItemRowProps = {
 // One item in a list: favicon or dot, title and source, a trailing area that
 // shows meta (read time, progress) at rest and actions on hover or selection,
 // and the item's picture at the end when it has one.
-export const ItemRow = forwardRef<HTMLDivElement, ItemRowProps>(
-  function ItemRow(props, ref) {
-    return (
-      <Root
-        ref={ref}
-        role="link"
-        tabIndex={0}
-        selected={props.selected}
-        muted={props.muted}
-        tall={!!props.excerpt}
-        withImage={!!props.image}
-        onClick={(event) => {
-          if ((event.target as HTMLElement).closest('button, a')) {
-            return
-          }
-          props.onOpen?.()
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && event.target === event.currentTarget) {
-            props.onOpen?.()
-          }
-        }}
-        onFocus={props.onFocus}
-        onMouseEnter={props.onMouseEnter}
-      >
-        <Leading>{props.leading}</Leading>
-        <Body>
-          <Title className="row-title">{props.title}</Title>
-          {props.subtitle && <Subtitle>{props.subtitle}</Subtitle>}
-          {props.excerpt && <Excerpt>{props.excerpt}</Excerpt>}
-        </Body>
-        <Trailing>
-          {props.meta && <Meta>{props.meta}</Meta>}
-          {props.actions && <Actions>{props.actions}</Actions>}
-        </Trailing>
-        {props.image && <Thumb src={props.image} />}
-      </Root>
-    )
+// Other attributes (a context menu's handlers, for one) go on the row itself.
+type ItemRowAttributes = Omit<
+  HTMLAttributes<HTMLDivElement>,
+  keyof ItemRowProps | 'onClick' | 'onKeyDown'
+>
+
+export const ItemRow = forwardRef<
+  HTMLDivElement,
+  ItemRowProps & ItemRowAttributes
+>(function ItemRow(allProps, ref) {
+  const {
+    leading,
+    title,
+    image,
+    subtitle,
+    excerpt,
+    meta,
+    actions,
+    selected,
+    muted,
+    onOpen,
+    onFocus,
+    onMouseEnter,
+    ...rest
+  } = allProps
+  const props = {
+    leading,
+    title,
+    image,
+    subtitle,
+    excerpt,
+    meta,
+    actions,
+    selected,
+    muted,
+    onOpen,
+    onFocus,
+    onMouseEnter,
   }
-)
+  return (
+    <Root
+      {...rest}
+      ref={ref}
+      role="link"
+      tabIndex={0}
+      selected={props.selected}
+      muted={props.muted}
+      tall={!!props.excerpt}
+      withImage={!!props.image}
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest('button, a')) {
+          return
+        }
+        props.onOpen?.()
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' && event.target === event.currentTarget) {
+          props.onOpen?.()
+        }
+      }}
+      onFocus={props.onFocus}
+      onMouseEnter={props.onMouseEnter}
+    >
+      <Leading>{props.leading}</Leading>
+      <Body>
+        <Title className="row-title">{props.title}</Title>
+        {props.subtitle && <Subtitle>{props.subtitle}</Subtitle>}
+        {props.excerpt && <Excerpt>{props.excerpt}</Excerpt>}
+      </Body>
+      <Trailing>
+        {props.meta && <Meta>{props.meta}</Meta>}
+        {props.actions && <Actions>{props.actions}</Actions>}
+      </Trailing>
+      {props.image && <Thumb src={props.image} />}
+    </Root>
+  )
+})
 
 // The bordered container that holds a run of ItemRows.
 export const ItemList = styled('div', {
