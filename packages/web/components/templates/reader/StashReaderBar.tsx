@@ -9,6 +9,7 @@ import {
 import { useEffect, useState } from 'react'
 import { State } from '../../../lib/networking/fragments/articleFragment'
 import { ReaderSettings } from '../../../lib/hooks/useReaderSettings'
+import { useMediaQuery } from '../../../lib/hooks/useMediaQuery'
 import { formatMinutes, minutesLeft } from '../../../lib/readingTime'
 import { siteName } from '../../../lib/textFormatting'
 import { setThemeColorToken } from '../../../lib/themeUpdater'
@@ -25,16 +26,51 @@ import { ReaderTextSettings } from './ReaderTextSettings'
 
 export const READER_BAR_HEIGHT = 52
 
+// Reading progress, drawn along the bar's bottom edge. When the bar slides
+// away the line is left showing at the very top of the screen.
 const Progress = styled('div', {
-  position: 'fixed',
-  top: 0,
+  position: 'absolute',
   left: 0,
+  bottom: '-2px',
   height: '2px',
-  zIndex: 6,
+  width: '100%',
+  transformOrigin: 'left',
   background: '$stAccent',
-  transition: `width ${motion.fast}`,
+  transition: `transform ${motion.fast}`,
   pointerEvents: 'none',
-  '@media print': { display: 'none' },
+  [reducedMotion]: { transition: 'none' },
+})
+
+// The headline, settling into the middle of the bar once the article's own
+// headline has scrolled out of view.
+const BarTitle = styled('div', {
+  position: 'absolute',
+  left: '50%',
+  bottom: 0,
+  height: `${READER_BAR_HEIGHT}px`,
+  display: 'flex',
+  alignItems: 'center',
+  maxWidth: 'min(52%, 560px)',
+  transform: 'translate(-50%, 6px)',
+  opacity: 0,
+  fontSize: '$small',
+  fontWeight: 600,
+  letterSpacing: '-0.01em',
+  color: '$stInk',
+  pointerEvents: 'none',
+  transition: `opacity ${motion.base}, transform ${motion.base}`,
+  [reducedMotion]: { transition: `opacity ${motion.fast}` },
+  span: {
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  '@smDown': { maxWidth: 'calc(100% - 200px)' },
+  variants: {
+    shown: {
+      true: { opacity: 1, transform: 'translate(-50%, 0)' },
+    },
+  },
 })
 
 const Bar = styled('header', {
@@ -58,6 +94,7 @@ const Bar = styled('header', {
   borderBottom: '1px solid transparent',
   fontFamily: '$inter',
   transition: `transform ${motion.slow}, border-color ${motion.base}`,
+  // Hidden, the bar keeps its progress line on screen.
   [reducedMotion]: { transition: 'none' },
   '@media print': { display: 'none' },
   'body[data-notebook="open"] &': {
@@ -81,12 +118,19 @@ const Source = styled('a', {
   fontSize: '$small',
   color: '$stMuted',
   textDecoration: 'none',
+  transition: `opacity ${motion.base}`,
   span: {
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
-  '&:hover': { color: '$stInk' },
+  '@media (hover: hover)': { '&:hover': { color: '$stInk' } },
+  variants: {
+    // Steps back while the headline sits in the middle of the bar.
+    receded: {
+      true: { opacity: 0, pointerEvents: 'none' },
+    },
+  },
 })
 
 const TimeLeft = styled('span', {
@@ -148,12 +192,45 @@ export function StashReaderBar(props: StashReaderBarProps): JSX.Element {
   const [hidden, setHidden] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [titleInBar, setTitleInBar] = useState(false)
+  const phone = useMediaQuery('(max-width: 575px)')
 
   // Safari's toolbar takes the reader's paper colour while reading.
   useEffect(() => {
     setThemeColorToken('readerBg')
     return () => setThemeColorToken('stCanvas')
   }, [])
+
+  // Watch the article's headline; once it scrolls up under the bar, the
+  // bar shows it instead.
+  const title = props.item?.title
+  useEffect(() => {
+    let observer: IntersectionObserver | undefined
+    let tries = 0
+    let timer: ReturnType<typeof setTimeout>
+    const watch = () => {
+      const headline = document.querySelector(
+        '[data-testid="article-headline"]'
+      )
+      if (!headline) {
+        if (tries++ < 20) timer = setTimeout(watch, 250)
+        return
+      }
+      observer = new IntersectionObserver(
+        ([entry]) =>
+          setTitleInBar(
+            !entry.isIntersecting && entry.boundingClientRect.top < 0
+          ),
+        { rootMargin: `-${READER_BAR_HEIGHT}px 0px 0px 0px` }
+      )
+      observer.observe(headline)
+    }
+    watch()
+    return () => {
+      clearTimeout(timer)
+      observer?.disconnect()
+    }
+  }, [title])
 
   useEffect(() => {
     let lastY = window.scrollY
@@ -198,13 +275,19 @@ export function StashReaderBar(props: StashReaderBarProps): JSX.Element {
 
   return (
     <>
-      <Progress style={{ width: `${percent}%` }} />
       <Bar hidden={hidden && !keepVisible} scrolled={percent > 0}>
+        <Progress
+          aria-hidden="true"
+          style={{ transform: `scaleX(${percent / 100})` }}
+        />
         <IconButton label="Back" shortcut="u" onClick={props.onBack}>
           <CaretLeft size={18} />
         </IconButton>
         {item && (
           <Source
+            receded={titleInBar || phone}
+            aria-hidden={phone || undefined}
+            tabIndex={phone ? -1 : undefined}
             href={item.originalArticleUrl || item.url}
             target="_blank"
             rel="noreferrer"
@@ -214,26 +297,35 @@ export function StashReaderBar(props: StashReaderBarProps): JSX.Element {
             <span>{source}</span>
           </Source>
         )}
+        {item && (
+          <BarTitle shown={titleInBar} aria-hidden={!titleInBar}>
+            <span>{item.title}</span>
+          </BarTitle>
+        )}
         <span style={{ flex: 1 }} />
         {left && left !== 'Read' && <TimeLeft>{left} left</TimeLeft>}
-        <IconButton
-          label={item?.state === State.ARCHIVED ? 'Unarchive' : 'Archive'}
-          shortcut="e"
-          onClick={() =>
-            props.actionHandler(
-              item?.state === State.ARCHIVED ? 'unarchive' : 'archive'
-            )
-          }
-        >
-          <Archive size={18} />
-        </IconButton>
-        <IconButton
-          label="Labels"
-          shortcut="l"
-          onClick={() => props.readerSettings.setShowSetLabelsModal(true)}
-        >
-          <Tag size={18} />
-        </IconButton>
+        {!phone && (
+          <>
+            <IconButton
+              label={item?.state === State.ARCHIVED ? 'Unarchive' : 'Archive'}
+              shortcut="e"
+              onClick={() =>
+                props.actionHandler(
+                  item?.state === State.ARCHIVED ? 'unarchive' : 'archive'
+                )
+              }
+            >
+              <Archive size={18} />
+            </IconButton>
+            <IconButton
+              label="Labels"
+              shortcut="l"
+              onClick={() => props.readerSettings.setShowSetLabelsModal(true)}
+            >
+              <Tag size={18} />
+            </IconButton>
+          </>
+        )}
         <Popover
           label="Text settings"
           open={settingsOpen}
@@ -252,14 +344,16 @@ export function StashReaderBar(props: StashReaderBarProps): JSX.Element {
             }}
           />
         </Popover>
-        <IconButton
-          label="Highlights and notes"
-          shortcut="t"
-          active={props.notebookOpen}
-          onClick={props.onToggleNotebook}
-        >
-          <Notebook size={18} />
-        </IconButton>
+        {!phone && (
+          <IconButton
+            label="Highlights and notes"
+            shortcut="t"
+            active={props.notebookOpen}
+            onClick={props.onToggleNotebook}
+          >
+            <Notebook size={18} />
+          </IconButton>
+        )}
         <Dropdown
           align="end"
           sideOffset={6}
@@ -270,9 +364,32 @@ export function StashReaderBar(props: StashReaderBarProps): JSX.Element {
             </MenuGlyph>
           }
         >
+          {phone && (
+            <>
+              <DropdownOption
+                onSelect={() =>
+                  props.actionHandler(
+                    item?.state === State.ARCHIVED ? 'unarchive' : 'archive'
+                  )
+                }
+                title={item?.state === State.ARCHIVED ? 'Unarchive' : 'Archive'}
+              />
+              <DropdownOption
+                onSelect={() =>
+                  props.readerSettings.setShowSetLabelsModal(true)
+                }
+                title="Labels…"
+              />
+              <DropdownOption
+                onSelect={props.onToggleNotebook}
+                title="Highlights and notes"
+              />
+              <DropdownSeparator />
+            </>
+          )}
           <DropdownOption
             onSelect={() => props.actionHandler('openOriginalArticle')}
-            title="Open original"
+            title={source ? `Open on ${source}` : 'Open original'}
           />
           <DropdownOption
             onSelect={() => props.actionHandler('showEditModal')}

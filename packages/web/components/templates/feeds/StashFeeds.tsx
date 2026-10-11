@@ -77,6 +77,7 @@ import {
   PEEK_WIDTH,
 } from './FeedPeek'
 import { SourceSettings } from './SourceSettings'
+import { navigateWithMorph } from '../../../lib/viewTransition'
 
 const Page = styled('main', {
   width: '100%',
@@ -914,7 +915,7 @@ export function StashFeeds(): JSX.Element {
       }
       markSeen([item.id], true)
       window.localStorage.setItem('nav-return', router.asPath)
-      router.push(`/${username}/${item.slug}`)
+      navigateWithMorph(router, `/${username}/${item.slug}`, item.id)
     },
     [router, viewer, markSeen]
   )
@@ -1349,6 +1350,7 @@ export function StashFeeds(): JSX.Element {
               ref={rowRef(item.id)}
               leading={<UnseenDot hidden={itemSeen} />}
               title={item.title}
+              morphId={item.id}
               image={item.image}
               subtitle={
                 <RowSource>

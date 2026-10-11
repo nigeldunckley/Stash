@@ -9,6 +9,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { locale, timeZone } from '../../../lib/dateFormatting'
 import type {
   Edition,
@@ -49,8 +50,9 @@ import {
   ProgressLine,
   SiteIcon,
 } from '../../elements/stash'
-import { motion, reducedMotion } from '../../elements/stash/motion'
+import { motion, pressable, reducedMotion } from '../../elements/stash/motion'
 import { keyframes, styled } from '../../tokens/stitches.config'
+import { navigateWithMorph } from '../../../lib/viewTransition'
 
 // Home: The Edition, a front page made once a day. See lib/edition/engine.ts
 // for how stories are chosen.
@@ -267,6 +269,35 @@ const CaptureForm = styled('form', {
     '&::placeholder': { color: '$stMuted' },
   },
   '@mdDown': { kbd: { display: 'none' } },
+  // On iPhone the field folds into the masthead's + button and opens
+  // only when asked for.
+  '@smDown': {
+    height: '44px',
+    '&:not([data-open="true"])': { display: 'none' },
+  },
+})
+
+const AddButton = styled('button', {
+  all: 'unset',
+  display: 'none',
+  placeItems: 'center',
+  flex: 'none',
+  alignSelf: 'center',
+  width: '36px',
+  height: '36px',
+  borderRadius: '50%',
+  border: '1px solid $stLine',
+  background: '$stSurface',
+  color: '$stInk',
+  cursor: 'pointer',
+  ...pressable,
+  '&[aria-expanded="true"]': {
+    background: '$stInk',
+    borderColor: '$stInk',
+    color: '$stCanvas',
+  },
+  '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '2px' },
+  '@smDown': { display: 'grid' },
 })
 
 const Source = styled('div', {
@@ -320,6 +351,8 @@ const LeadCover = styled(CoverImage, {
   cursor: 'pointer',
   '@mdDown': {
     aspectRatio: '3 / 2',
+    // Leave the headline above the fold on a phone.
+    maxHeight: '40svh',
     margin: '0 -16px',
     borderRadius: 0,
     '&::after': { display: 'none' },
@@ -342,7 +375,9 @@ const headline = {
   fontWeight: 500,
   color: '$stInk',
   textWrap: 'balance',
-  '&:hover': { textDecoration: 'underline', textDecorationThickness: '1px' },
+  '@media (hover: hover)': {
+    '&:hover': { textDecoration: 'underline', textDecorationThickness: '1px' },
+  },
   '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '2px' },
 }
 
@@ -373,6 +408,13 @@ const Actions = styled('div', {
   flexWrap: 'wrap',
   gap: '8px',
   marginTop: '4px',
+  // Full-width, thumb-sized buttons on a phone.
+  '@smDown': {
+    display: 'grid',
+    gridAutoFlow: 'column',
+    gridAutoColumns: '1fr',
+    '& > button': { height: '44px', justifyContent: 'center' },
+  },
 })
 
 const Btn = styled('button', {
@@ -390,8 +432,9 @@ const Btn = styled('button', {
   fontWeight: 500,
   color: '$stInk',
   cursor: 'pointer',
-  transition: `background ${motion.fast}, border-color ${motion.fast}`,
-  '&:hover': { borderColor: '$stMuted' },
+  transition: `background ${motion.fast}, border-color ${motion.fast}, transform ${motion.fast}`,
+  ...pressable,
+  '@media (hover: hover)': { '&:hover': { borderColor: '$stMuted' } },
   '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '2px' },
   kbd: { '@mdDown': { display: 'none' } },
   variants: {
@@ -400,7 +443,9 @@ const Btn = styled('button', {
         background: '$stInk',
         borderColor: '$stInk',
         color: '$stCanvas',
-        '&:hover': { borderColor: '$stInk', opacity: 0.9 },
+        '@media (hover: hover)': {
+          '&:hover': { borderColor: '$stInk', opacity: 0.9 },
+        },
         kbd: {
           background: 'transparent',
           color: 'inherit',
@@ -857,7 +902,7 @@ export function StashEdition(): JSX.Element {
       if (item.state === State.PROCESSING) {
         router.push(`/article?url=${encodeURIComponent(item.url)}`)
       } else {
-        router.push(`/${username}/${item.slug}`)
+        navigateWithMorph(router, `/${username}/${item.slug}`, item.id)
       }
     },
     [router, viewer]
@@ -915,6 +960,7 @@ export function StashEdition(): JSX.Element {
 
   const captureRef = useRef<HTMLInputElement>(null)
   const [capture, setCapture] = useState('')
+  const [captureOpen, setCaptureOpen] = useState(false)
   const submitCapture = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault()
@@ -1119,6 +1165,25 @@ export function StashEdition(): JSX.Element {
                 )}
               </MastDate>
             )}
+            <AddButton
+              type="button"
+              aria-label="Save a link or search"
+              aria-expanded={captureOpen}
+              // Keep the field focused so this tap can close it.
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => {
+                if (captureOpen) {
+                  setCaptureOpen(false)
+                  captureRef.current?.blur()
+                  return
+                }
+                // Show and focus in the same tap so iOS raises the keyboard.
+                flushSync(() => setCaptureOpen(true))
+                captureRef.current?.focus()
+              }}
+            >
+              <Plus size={18} weight="bold" />
+            </AddButton>
           </MastTop>
           {edition && stories.length > 0 && (
             <MastSub>
@@ -1188,7 +1253,11 @@ export function StashEdition(): JSX.Element {
           )}
         </Mast>
 
-        <CaptureForm onSubmit={submitCapture} role="search">
+        <CaptureForm
+          onSubmit={submitCapture}
+          role="search"
+          data-open={captureOpen}
+        >
           <Plus size={15} aria-hidden="true" />
           <input
             ref={captureRef}
@@ -1205,6 +1274,9 @@ export function StashEdition(): JSX.Element {
                 setCapture('')
                 event.currentTarget.blur()
               }
+            }}
+            onBlur={() => {
+              if (!capture.trim()) setCaptureOpen(false)
             }}
           />
           <Kbd>/</Kbd>
@@ -1258,7 +1330,11 @@ export function StashEdition(): JSX.Element {
               />
               <LeadCopy>
                 {sourceLine(lead, lead.why ?? 'Lead story')}
-                <LeadTitle type="button" onClick={() => open(lead.item)}>
+                <LeadTitle
+                  type="button"
+                  data-morph-title={lead.item.id}
+                  onClick={() => open(lead.item)}
+                >
                   {lead.item.title}
                 </LeadTitle>
                 {lead.item.description && <Dek>{lead.item.description}</Dek>}
@@ -1309,7 +1385,11 @@ export function StashEdition(): JSX.Element {
                       onClick={() => open(entry.item)}
                     />
                     {sourceLine(entry)}
-                    <StoryTitle type="button" onClick={() => open(entry.item)}>
+                    <StoryTitle
+                      type="button"
+                      data-morph-title={entry.item.id}
+                      onClick={() => open(entry.item)}
+                    >
                       {entry.item.title}
                     </StoryTitle>
                     {entry.item.description && (
@@ -1388,7 +1468,9 @@ export function StashEdition(): JSX.Element {
                             fallback={fallbackFor(item, 22)}
                           />
                           <span>
-                            <strong>{item.title}</strong>
+                            <strong data-morph-title={item.id}>
+                              {item.title}
+                            </strong>
                             <ProgressLine
                               percent={item.readingProgressPercent}
                             />
@@ -1428,7 +1510,9 @@ export function StashEdition(): JSX.Element {
                             src={entry.item.image}
                             fallback={fallbackFor(entry.item)}
                           />
-                          <strong>{entry.item.title}</strong>
+                          <strong data-morph-title={entry.item.id}>
+                            {entry.item.title}
+                          </strong>
                           <Meta>{sourceOf(entry.item)}</Meta>
                         </Video>
                       ))}
@@ -1489,7 +1573,11 @@ export function StashEdition(): JSX.Element {
         >
           <div style={{ minWidth: 0 }}>
             {sourceLine(entry)}
-            <BriefTitle type="button" onClick={() => open(entry.item)}>
+            <BriefTitle
+              type="button"
+              data-morph-title={entry.item.id}
+              onClick={() => open(entry.item)}
+            >
               {entry.item.title}
             </BriefTitle>
           </div>

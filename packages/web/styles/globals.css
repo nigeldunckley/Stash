@@ -666,3 +666,26 @@ input[type='checkbox'],
 input[type='radio'] {
   accent-color: var(--colors-stAccent);
 }
+
+/* View Transitions between pages: the iOS curve, quick crossfade. */
+::view-transition-group(*) {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 260ms;
+}
+::view-transition-old(reader-headline),
+::view-transition-new(reader-headline) {
+  height: 100%;
+  object-fit: contain;
+  object-position: left top;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
