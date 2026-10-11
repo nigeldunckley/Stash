@@ -162,6 +162,8 @@ const Excerpt = styled('div', {
 type ItemRowProps = {
   leading: ReactNode
   title: string
+  // Lets the title grow into the Reader's headline when the row opens.
+  morphId?: string
   // The item's picture, shown as a small thumbnail beside the text.
   image?: string
   subtitle?: ReactNode
@@ -191,6 +193,7 @@ export const ItemRow = forwardRef<
   const {
     leading,
     title,
+    morphId,
     image,
     subtitle,
     excerpt,
@@ -206,6 +209,7 @@ export const ItemRow = forwardRef<
   const props = {
     leading,
     title,
+    morphId,
     image,
     subtitle,
     excerpt,
@@ -243,7 +247,9 @@ export const ItemRow = forwardRef<
     >
       <Leading>{props.leading}</Leading>
       <Body>
-        <Title className="row-title">{props.title}</Title>
+        <Title className="row-title" data-morph-title={props.morphId}>
+          {props.title}
+        </Title>
         {props.subtitle && <Subtitle>{props.subtitle}</Subtitle>}
         {props.excerpt && <Excerpt>{props.excerpt}</Excerpt>}
       </Body>

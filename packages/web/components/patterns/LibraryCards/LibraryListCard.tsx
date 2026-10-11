@@ -10,6 +10,7 @@ import { useCallback, useState } from 'react'
 import { State } from '../../../lib/networking/fragments/articleFragment'
 import { useRestoreItem } from '../../../lib/networking/library_items/useLibraryItems'
 import { formatMinutes, minutesLeft } from '../../../lib/readingTime'
+import { navigateWithMorph } from '../../../lib/viewTransition'
 import {
   faviconFor,
   siteName,
@@ -273,7 +274,7 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
     if (newTab) {
       window.open(path, '_blank')
     } else {
-      router.push(path)
+      navigateWithMorph(router, path, item.id)
     }
   }
 
@@ -355,7 +356,7 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
             </Leading>
           )}
           <Body>
-            <Title>{item.title}</Title>
+            <Title data-morph-title={item.id}>{item.title}</Title>
             {summary && <Summary>{summary}</Summary>}
             <Meta>
               <SiteIcon

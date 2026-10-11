@@ -14,4 +14,6 @@ export const Kbd = styled('kbd', {
   background: '$stSurface',
   border: '1px solid $stLine',
   borderRadius: '4px',
+  // Keyboard hints mean nothing on a touch screen.
+  '@media (hover: none) and (pointer: coarse)': { display: 'none' },
 })
