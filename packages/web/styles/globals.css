@@ -660,3 +660,9 @@ p {
 * {
   scrollbar-width: thin;
 }
+
+/* Checkboxes and radios take the accent, not the browser's blue. */
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--colors-stAccent);
+}
