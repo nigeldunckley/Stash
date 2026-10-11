@@ -44,9 +44,12 @@ import { useGetViewer } from '../../../lib/networking/viewer/useGetViewer'
 import { faviconFor, shortTimeAgo, siteName } from '../../../lib/textFormatting'
 import { showErrorToast, showSuccessToast } from '../../../lib/toastHelpers'
 import {
+  ContextMenu,
   IconButton,
   ItemList,
   ItemRow,
+  linkEntries,
+  MenuEntry,
   PageMeta,
   Popover,
   SegmentedControl,
@@ -1307,6 +1310,23 @@ export function StashFeeds(): JSX.Element {
     </Leaving>
   )
 
+  const menuFor = (item: LibraryItemNode): MenuEntry[] => [
+    { label: 'Read in Stash', shortcut: '↵', onSelect: () => open(item) },
+    {
+      label: item.id == peekItem?.id ? 'Close peek' : 'Peek',
+      shortcut: 'Space',
+      onSelect: () => (item.id == peekItem?.id ? closePeek() : openPeek(item)),
+    },
+    {
+      label: saved.has(item.id) ? 'Saved to Library' : 'Save to Library',
+      shortcut: 'S',
+      separated: true,
+      onSelect: () => save(item),
+    },
+    { label: 'Archive', shortcut: '⌫', onSelect: () => archive(item) },
+    ...linkEntries(item.originalArticleUrl || item.url),
+  ]
+
   // One item as a row, for Read and for Watch's list view.
   const rowFor = (item: LibraryItemNode) => {
     const itemSeen = isSeen(item)
@@ -1322,100 +1342,104 @@ export function StashFeeds(): JSX.Element {
             onAction: () => archive(item),
           }}
         >
-          <ItemRow
-            ref={rowRef(item.id)}
-            leading={<UnseenDot hidden={itemSeen} />}
-            title={item.title}
-            image={item.image}
-            subtitle={
-              <RowSource>
-                {!selected && (
-                  <SiteIcon
-                    src={sourceIcon(item)}
-                    fallbackSrc={sourceIconFallback(item)}
-                    name={sourceName(item)}
-                    size={14}
-                    round={watching}
-                  />
-                )}
-                {[
-                  selected ? undefined : sourceName(item),
-                  item.author &&
-                  item.author !=
-                    subscriptionName(item.subscription, allSubscriptions)
-                    ? item.author
-                    : undefined,
-                  saved.has(item.id) ? 'Saved' : undefined,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </RowSource>
-            }
-            excerpt={
-              watching
-                ? descriptionWithoutChapters(item.description)
-                : item.description
-            }
-            meta={
-              <time
-                dateTime={item.publishedAt || item.savedAt}
-                title={publishedLabel(item)}
-              >
-                {shortTimeAgo(item.publishedAt || item.savedAt, now)}
-              </time>
-            }
-            muted={itemSeen}
-            selected={peekItem ? item.id == peekItem.id : item.id == focusId}
-            onOpen={() =>
-              item.id == peekItem?.id ? closePeek() : openPeek(item)
-            }
-            onFocus={() => setFocusId(item.id)}
-            actions={
-              <>
-                <IconButton
-                  label={
-                    saved.has(item.id) ? 'Saved to Library' : 'Save to Library'
-                  }
-                  shortcut="s"
-                  size="sm"
-                  active={saved.has(item.id)}
-                  onClick={() => save(item)}
+          <ContextMenu entries={menuFor(item)}>
+            <ItemRow
+              ref={rowRef(item.id)}
+              leading={<UnseenDot hidden={itemSeen} />}
+              title={item.title}
+              image={item.image}
+              subtitle={
+                <RowSource>
+                  {!selected && (
+                    <SiteIcon
+                      src={sourceIcon(item)}
+                      fallbackSrc={sourceIconFallback(item)}
+                      name={sourceName(item)}
+                      size={14}
+                      round={watching}
+                    />
+                  )}
+                  {[
+                    selected ? undefined : sourceName(item),
+                    item.author &&
+                    item.author !=
+                      subscriptionName(item.subscription, allSubscriptions)
+                      ? item.author
+                      : undefined,
+                    saved.has(item.id) ? 'Saved' : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </RowSource>
+              }
+              excerpt={
+                watching
+                  ? descriptionWithoutChapters(item.description)
+                  : item.description
+              }
+              meta={
+                <time
+                  dateTime={item.publishedAt || item.savedAt}
+                  title={publishedLabel(item)}
                 >
-                  <Bookmark
-                    size={15}
-                    weight={saved.has(item.id) ? 'fill' : 'regular'}
-                  />
-                </IconButton>
-                <IconButton
-                  label="Archive"
-                  shortcut="⌫"
-                  size="sm"
-                  onClick={() => archive(item)}
-                >
-                  <Archive size={15} />
-                </IconButton>
-                <IconButton
-                  label="Peek"
-                  shortcut="Space"
-                  size="sm"
-                  active={item.id == peekItem?.id}
-                  onClick={() =>
-                    item.id == peekItem?.id ? closePeek() : openPeek(item)
-                  }
-                >
-                  <SidebarSimple size={15} mirrored />
-                </IconButton>
-                <IconButton
-                  label="Open original"
-                  shortcut="v"
-                  size="sm"
-                  onClick={() => openOriginal(item)}
-                >
-                  <ArrowSquareOut size={15} />
-                </IconButton>
-              </>
-            }
-          />
+                  {shortTimeAgo(item.publishedAt || item.savedAt, now)}
+                </time>
+              }
+              muted={itemSeen}
+              selected={peekItem ? item.id == peekItem.id : item.id == focusId}
+              onOpen={() =>
+                item.id == peekItem?.id ? closePeek() : openPeek(item)
+              }
+              onFocus={() => setFocusId(item.id)}
+              actions={
+                <>
+                  <IconButton
+                    label={
+                      saved.has(item.id)
+                        ? 'Saved to Library'
+                        : 'Save to Library'
+                    }
+                    shortcut="s"
+                    size="sm"
+                    active={saved.has(item.id)}
+                    onClick={() => save(item)}
+                  >
+                    <Bookmark
+                      size={15}
+                      weight={saved.has(item.id) ? 'fill' : 'regular'}
+                    />
+                  </IconButton>
+                  <IconButton
+                    label="Archive"
+                    shortcut="⌫"
+                    size="sm"
+                    onClick={() => archive(item)}
+                  >
+                    <Archive size={15} />
+                  </IconButton>
+                  <IconButton
+                    label="Peek"
+                    shortcut="Space"
+                    size="sm"
+                    active={item.id == peekItem?.id}
+                    onClick={() =>
+                      item.id == peekItem?.id ? closePeek() : openPeek(item)
+                    }
+                  >
+                    <SidebarSimple size={15} mirrored />
+                  </IconButton>
+                  <IconButton
+                    label="Open original"
+                    shortcut="v"
+                    size="sm"
+                    onClick={() => openOriginal(item)}
+                  >
+                    <ArrowSquareOut size={15} />
+                  </IconButton>
+                </>
+              }
+            />
+          </ContextMenu>
         </SwipeAction>
       </Leaving>
     )

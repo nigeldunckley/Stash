@@ -738,6 +738,13 @@
   background: none;
 }
 
+/* Quotes hang into the margin in pull quotes too, as in print. Safari
+   only. */
+.article-inner-css blockquote,
+.article-inner-css blockquote p {
+  hanging-punctuation: first last;
+}
+
 /* The opening paragraph's first line in small caps, set by the reader on
    a real paragraph of prose only. */
 .article-inner-css p.st-lede::first-line {

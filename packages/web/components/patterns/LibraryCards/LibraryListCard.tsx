@@ -10,14 +10,17 @@ import { useCallback, useState } from 'react'
 import { State } from '../../../lib/networking/fragments/articleFragment'
 import { useRestoreItem } from '../../../lib/networking/library_items/useLibraryItems'
 import { formatMinutes, minutesLeft } from '../../../lib/readingTime'
-import { shortTimeAgo, siteName } from '../../../lib/textFormatting'
+import { siteName, timeAgoInSentence } from '../../../lib/textFormatting'
 import { sortedLabels } from '../../../lib/labelsSort'
 import { Box } from '../../elements/LayoutPrimitives'
 import { LoadingBar } from '../../elements/LoadingBar'
 import { ProgressBar } from '../../elements/ProgressBar'
 import {
+  ContextMenu,
   CoverImage,
   IconButton,
+  linkEntries,
+  MenuEntry,
   SiteIcon,
   SwipeAction,
 } from '../../elements/stash'
@@ -248,6 +251,63 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
       ? { label: 'Unarchive', icon: <Archive size={16} />, action: 'unarchive' }
       : { label: 'Archive', icon: <Archive size={16} />, action: 'archive' }
 
+  const open = (newTab = false) => {
+    window.localStorage.setItem('nav-return', router.asPath)
+    const path = `/${props.viewer.profile.username}/${item.slug}`
+    if (newTab) {
+      window.open(path, '_blank')
+    } else {
+      router.push(path)
+    }
+  }
+
+  const menuEntries: MenuEntry[] = [
+    { label: 'Open', shortcut: '↵', onSelect: () => open() },
+    { label: 'Open in new tab', onSelect: () => open(true) },
+    item.folder == 'following'
+      ? {
+          label: 'Save to Library',
+          separated: true,
+          onSelect: () => props.handleAction('move-to-inbox'),
+        }
+      : {
+          label: item.state === State.ARCHIVED ? 'Unarchive' : 'Archive',
+          shortcut: 'E',
+          separated: true,
+          onSelect: () =>
+            props.handleAction(
+              item.state === State.ARCHIVED ? 'unarchive' : 'archive'
+            ),
+        },
+    {
+      label: 'Labels…',
+      shortcut: 'L',
+      onSelect: () => props.handleAction('set-labels'),
+    },
+    {
+      label: progress >= 98 ? 'Mark as unread' : 'Mark as read',
+      onSelect: () =>
+        props.handleAction(progress >= 98 ? 'mark-unread' : 'mark-read'),
+    },
+    { label: 'Edit info…', onSelect: () => props.handleAction('editTitle') },
+    ...linkEntries(item.originalArticleUrl || item.url),
+    item.state == State.DELETED
+      ? {
+          label: 'Restore',
+          separated: true,
+          onSelect: () => {
+            restoreItem.mutateAsync({ itemId: item.id, slug: item.slug })
+          },
+        }
+      : {
+          label: 'Delete',
+          shortcut: '#',
+          destructive: true,
+          separated: true,
+          onSelect: () => props.handleAction('delete'),
+        },
+  ]
+
   return (
     <SwipeAction
       label={swipe.label}
@@ -255,135 +315,137 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
       onAction={() => props.handleAction(swipe.action)}
       disabled={selecting || item.state == State.DELETED}
     >
-      <Row
-        data-menu-open={menuOpen}
-        data-selecting={selecting}
-        onClick={(event) => {
-          if (selecting) {
-            setIsChecked(item.id, !isChecked)
-            return
-          }
-          window.localStorage.setItem('nav-return', router.asPath)
-          const path = `/${props.viewer.profile.username}/${item.slug}`
-          if (event.metaKey || event.ctrlKey) {
-            window.open(path, '_blank')
-          } else {
-            router.push(path)
-          }
-        }}
+      <ContextMenu
+        entries={selecting ? [] : menuEntries}
+        onOpenChange={setMenuOpen}
       >
-        {selecting && (
-          <Leading>
-            <CardCheckbox
-              isChecked={isChecked}
-              handleChanged={handleCheckChanged}
-            />
-          </Leading>
-        )}
-        <Body>
-          <Title>{item.title}</Title>
-          {summary && <Summary>{summary}</Summary>}
-          <Meta>
-            <SiteIcon
-              src={item.siteIcon}
-              name={source || item.title}
-              size={14}
-            />
-            {source && <span>{source}</span>}
-            {props.isLoading ? (
-              <span>Saving…</span>
-            ) : (
-              <>
-                {left && <span>{left}</span>}
-                {started ? (
-                  <Progress
-                    role="img"
-                    aria-label={`${progress}% read`}
-                    title={`${progress}% read`}
-                  >
-                    <i style={{ width: `${progress}%` }} />
-                  </Progress>
-                ) : (
-                  item.savedAt && (
-                    <span>
-                      Saved {shortTimeAgo(item.savedAt).toLowerCase()}
-                    </span>
-                  )
-                )}
-              </>
-            )}
-            {labels.slice(0, 2).map(({ name, color }) => (
-              <LabelDot
-                key={name}
-                style={{ ['--label-color' as string]: color }}
-              >
-                {name}
-              </LabelDot>
-            ))}
-          </Meta>
-        </Body>
-        <Thumb src={item.image} fallback={<LetterTile>{letter}</LetterTile>} />
-        {!selecting && (
-          <Actions onClick={stop}>
-            {item.folder == 'following' ? (
-              <IconButton
-                label="Save to Library"
-                size="sm"
-                onClick={() => props.handleAction('move-to-inbox')}
-              >
-                <Bookmark size={15} />
-              </IconButton>
-            ) : (
-              <IconButton
-                label={item.state === State.ARCHIVED ? 'Unarchive' : 'Archive'}
-                shortcut="e"
-                size="sm"
-                onClick={() =>
-                  props.handleAction(
-                    item.state === State.ARCHIVED ? 'unarchive' : 'archive'
-                  )
+        <Row
+          data-menu-open={menuOpen}
+          data-selecting={selecting}
+          onClick={(event) => {
+            if (selecting) {
+              setIsChecked(item.id, !isChecked)
+              return
+            }
+            open(event.metaKey || event.ctrlKey)
+          }}
+        >
+          {selecting && (
+            <Leading>
+              <CardCheckbox
+                isChecked={isChecked}
+                handleChanged={handleCheckChanged}
+              />
+            </Leading>
+          )}
+          <Body>
+            <Title>{item.title}</Title>
+            {summary && <Summary>{summary}</Summary>}
+            <Meta>
+              <SiteIcon
+                src={item.siteIcon}
+                name={source || item.title}
+                size={14}
+              />
+              {source && <span>{source}</span>}
+              {props.isLoading ? (
+                <span>Saving…</span>
+              ) : (
+                <>
+                  {left && <span>{left}</span>}
+                  {started ? (
+                    <Progress
+                      role="img"
+                      aria-label={`${progress}% read`}
+                      title={`${progress}% read`}
+                    >
+                      <i style={{ width: `${progress}%` }} />
+                    </Progress>
+                  ) : (
+                    item.savedAt && (
+                      <span>Saved {timeAgoInSentence(item.savedAt)}</span>
+                    )
+                  )}
+                </>
+              )}
+              {labels.slice(0, 2).map(({ name, color }) => (
+                <LabelDot
+                  key={name}
+                  style={{ ['--label-color' as string]: color }}
+                >
+                  {name}
+                </LabelDot>
+              ))}
+            </Meta>
+          </Body>
+          <Thumb
+            src={item.image}
+            fallback={<LetterTile>{letter}</LetterTile>}
+          />
+          {!selecting && (
+            <Actions onClick={stop}>
+              {item.folder == 'following' ? (
+                <IconButton
+                  label="Save to Library"
+                  size="sm"
+                  onClick={() => props.handleAction('move-to-inbox')}
+                >
+                  <Bookmark size={15} />
+                </IconButton>
+              ) : (
+                <IconButton
+                  label={
+                    item.state === State.ARCHIVED ? 'Unarchive' : 'Archive'
+                  }
+                  shortcut="e"
+                  size="sm"
+                  onClick={() =>
+                    props.handleAction(
+                      item.state === State.ARCHIVED ? 'unarchive' : 'archive'
+                    )
+                  }
+                >
+                  <Archive size={15} />
+                </IconButton>
+              )}
+              {item.state == State.DELETED ? (
+                <IconButton
+                  label="Restore"
+                  size="sm"
+                  onClick={async () => {
+                    await restoreItem.mutateAsync({
+                      itemId: item.id,
+                      slug: item.slug,
+                    })
+                  }}
+                >
+                  <ArrowCounterClockwise size={15} />
+                </IconButton>
+              ) : (
+                <IconButton
+                  label="Delete"
+                  shortcut="#"
+                  size="sm"
+                  onClick={() => props.handleAction('delete')}
+                >
+                  <Trash size={15} />
+                </IconButton>
+              )}
+              <CardMenu
+                item={item}
+                viewer={props.viewer}
+                onOpenChange={setMenuOpen}
+                actionHandler={props.handleAction}
+                triggerElement={
+                  <MenuGlyph aria-label="More actions" title="More actions">
+                    <DotsThree size={16} weight="bold" />
+                  </MenuGlyph>
                 }
-              >
-                <Archive size={15} />
-              </IconButton>
-            )}
-            {item.state == State.DELETED ? (
-              <IconButton
-                label="Restore"
-                size="sm"
-                onClick={async () => {
-                  await restoreItem.mutateAsync({
-                    itemId: item.id,
-                    slug: item.slug,
-                  })
-                }}
-              >
-                <ArrowCounterClockwise size={15} />
-              </IconButton>
-            ) : (
-              <IconButton
-                label="Delete"
-                shortcut="#"
-                size="sm"
-                onClick={() => props.handleAction('delete')}
-              >
-                <Trash size={15} />
-              </IconButton>
-            )}
-            <CardMenu
-              item={item}
-              viewer={props.viewer}
-              onOpenChange={setMenuOpen}
-              actionHandler={props.handleAction}
-              triggerElement={
-                <MenuGlyph aria-label="More actions" title="More actions">
-                  <DotsThree size={16} weight="bold" />
-                </MenuGlyph>
-              }
-            />
-          </Actions>
-        )}
-      </Row>
+              />
+            </Actions>
+          )}
+        </Row>
+      </ContextMenu>
     </SwipeAction>
   )
 }

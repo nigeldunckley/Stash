@@ -597,3 +597,66 @@ button {
     border-left: 1px solid var(--colors-thNotebookBorder);
   }
 }
+
+/* App feel in Safari: no grey tap flash, controls don't select their own
+   labels on a long press, and taps don't wait for a double-tap zoom. */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+[role='button'],
+[role='tab'],
+[role='switch'],
+[role='menuitem'],
+nav {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+a,
+button,
+input,
+label,
+[role='button'] {
+  touch-action: manipulation;
+}
+
+/* Items with a press-and-hold menu: the menu replaces Safari's link
+   preview and text selection on iPhone. */
+@media (pointer: coarse) {
+  [data-st-menu] {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* Headlines break into even lines, and paragraphs avoid a lone last word. */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+/* Keyboard focus, for anything that doesn't draw its own. :where keeps it
+   weaker than any component's own focus style. */
+:where(:focus-visible) {
+  outline: 2px solid var(--colors-stAccent);
+  outline-offset: 2px;
+}
+
+/* Containers focused by script, not by the reader. */
+:where([tabindex='-1']:focus-visible) {
+  outline: none;
+}
+
+/* Thin overlay-style scrollbars in panes and lists. */
+* {
+  scrollbar-width: thin;
+}

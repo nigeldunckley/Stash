@@ -274,6 +274,12 @@ export const { styled, css, theme, getCssText, globalCss, keyframes, config } =
         stAccentText: '#C23A00',
         stAccentTint: 'rgba(255, 79, 0, 0.10)',
         stOnAccent: '#09090B',
+        // Translucent surfaces for bars, menus and panels that float over
+        // content. Used with the blur in elements/stash/material.ts.
+        stMaterial: 'rgba(255, 255, 255, 0.72)',
+        stMaterialStrong: 'rgba(255, 255, 255, 0.92)',
+        stScrim: 'rgba(9, 9, 11, 0.22)',
+        stDanger: '#D92D20',
 
         highlight_background_green: '85, 198, 137',
         highlight_background_blue: '106, 177, 255',
@@ -443,6 +449,10 @@ const darkThemeSpec = {
     stAccentText: '#FF8A50',
     stAccentTint: 'rgba(255, 90, 20, 0.14)',
     stOnAccent: '#09090B',
+    stMaterial: 'rgba(17, 17, 19, 0.7)',
+    stMaterialStrong: 'rgba(17, 17, 19, 0.9)',
+    stScrim: 'rgba(0, 0, 0, 0.42)',
+    stDanger: '#FF6B5E',
 
     highlight_underline_alpha: '0.5',
     highlight_background_alpha: '0.35',
@@ -487,6 +497,8 @@ const apolloThemeSpec = {
     stSunken: '#27272A',
     stLine: '#2E2E33',
     stLineStrong: '#3F3F46',
+    stMaterial: 'rgba(31, 31, 35, 0.7)',
+    stMaterialStrong: 'rgba(31, 31, 35, 0.9)',
   },
 }
 

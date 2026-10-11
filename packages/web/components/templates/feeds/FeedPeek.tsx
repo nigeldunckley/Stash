@@ -27,7 +27,12 @@ import {
   reducedMotion,
   SiteIcon,
 } from '../../elements/stash'
-import { ease, motion } from '../../elements/stash/motion'
+import {
+  floatingShadow,
+  glassStrong,
+  hairlineEdge,
+} from '../../elements/stash/material'
+import { ease, motion, pressable, spring } from '../../elements/stash/motion'
 
 export type FeedPeekProps = {
   item: LibraryItemNode
@@ -88,7 +93,7 @@ const Pane = styled('aside', {
   borderRadius: '$lg',
   color: '$stInk',
   fontFamily: '$inter',
-  animation: `${slideIn} 240ms ${ease}`,
+  animation: `${slideIn} 360ms ${spring}`,
   [reducedMotion]: { animation: 'none' },
   [`@media not all and ${PEEK_INLINE}`]: {
     position: 'fixed',
@@ -399,10 +404,10 @@ const Dock = styled('div', {
   alignItems: 'center',
   gap: '4px',
   padding: '5px',
-  background: '$stSurface',
-  border: '1px solid $stLine',
+  ...glassStrong,
+  ...hairlineEdge,
   borderRadius: '12px',
-  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 32px rgba(0, 0, 0, 0.12)',
+  boxShadow: floatingShadow,
   whiteSpace: 'nowrap',
   zIndex: 2,
 })
@@ -422,7 +427,8 @@ const Button = styled('button', {
   fontWeight: 500,
   color: '$stInk',
   cursor: 'pointer',
-  transition: `background ${motion.fast}, color ${motion.fast}`,
+  transition: `background ${motion.fast}, color ${motion.fast}, transform ${motion.fast}`,
+  ...pressable,
   '&:hover': { background: '$stSunken' },
   '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '1px' },
   [`& ${Kbd}`]: {
@@ -692,7 +698,7 @@ const Sheet = styled(Dialog.Content, {
   borderTop: '1px solid $stLine',
   borderRadius: '18px 18px 0 0',
   fontFamily: '$inter',
-  animation: `${slideUp} 320ms ${ease}`,
+  animation: `${slideUp} ${motion.sheet}`,
   '&:focus': { outline: 'none' },
   [reducedMotion]: { animation: 'none' },
 })
@@ -773,7 +779,7 @@ export function FeedPeekSheet(
           aria-describedby={undefined}
           style={{
             transform: pull ? `translateY(${pull}px)` : undefined,
-            transition: dragging ? 'none' : `transform 200ms ${ease}`,
+            transition: dragging ? 'none' : `transform 320ms ${spring}`,
           }}
         >
           <Grab {...grab}>

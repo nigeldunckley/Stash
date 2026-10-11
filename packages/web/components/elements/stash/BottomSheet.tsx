@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { ReactNode } from 'react'
 import { keyframes, styled } from '../../tokens/stitches.config'
-import { reducedMotion } from './motion'
+import { motion, reducedMotion } from './motion'
 
 const slideUp = keyframes({
   from: { transform: 'translateY(100%)' },
@@ -17,8 +17,8 @@ const Overlay = styled(Dialog.Overlay, {
   position: 'fixed',
   inset: 0,
   zIndex: 40,
-  background: '$overlay',
-  animation: `${fadeIn} 200ms ease`,
+  background: '$stScrim',
+  animation: `${fadeIn} ${motion.base}`,
   [reducedMotion]: { animation: 'none' },
 })
 
@@ -38,9 +38,10 @@ const Content = styled(Dialog.Content, {
   borderRadius: '16px 16px 0 0',
   paddingBottom: 'env(safe-area-inset-bottom, 0px)',
   fontFamily: '$inter',
-  animation: `${slideUp} 280ms cubic-bezier(0.2, 0, 0, 1)`,
+  boxShadow: '0 -12px 40px -16px rgba(9, 9, 11, 0.3)',
+  animation: `${slideUp} ${motion.sheet}`,
   '&:focus': { outline: 'none' },
-  [reducedMotion]: { animation: 'none' },
+  [reducedMotion]: { animation: `${fadeIn} 150ms linear` },
 })
 
 const Grabber = styled('div', {
@@ -69,6 +70,7 @@ const Title = styled(Dialog.Title, {
 
 const Body = styled('div', {
   overflowY: 'auto',
+  overscrollBehavior: 'contain',
   WebkitOverflowScrolling: 'touch',
   padding: '14px 16px 18px',
 })

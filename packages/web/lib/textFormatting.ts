@@ -24,21 +24,34 @@ export const shortTimeAgo = (
     return ''
   }
   const minutes = Math.floor((now - then.valueOf()) / 60000)
-  const plural = (count: number, unit: string) =>
-    `${count} ${unit}${count == 1 ? '' : 's'} ago`
+  // Abbreviated units don't take a plural: 8 min ago, 3 hr ago.
   if (minutes < 1) {
     return 'Just now'
   }
   if (minutes < 60) {
-    return plural(minutes, 'min')
+    return `${minutes} min ago`
   }
   if (minutes < 24 * 60) {
-    return plural(Math.floor(minutes / 60), 'hr')
+    return `${Math.floor(minutes / 60)} hr ago`
   }
-  if (minutes < 7 * 24 * 60) {
-    return plural(Math.floor(minutes / (24 * 60)), 'day')
+  const days = Math.floor(minutes / (24 * 60))
+  if (days == 1) {
+    return 'Yesterday'
+  }
+  if (days < 7) {
+    return `${days} days ago`
   }
   return then.format(then.year() == dayjs(now).year() ? 'D MMM' : 'D MMM YYYY')
+}
+
+// shortTimeAgo for the middle of a sentence: "Saved just now", "Saved
+// yesterday", "Saved 3 Oct".
+export const timeAgoInSentence = (
+  date: string | undefined,
+  now = Date.now()
+): string => {
+  const ago = shortTimeAgo(date, now)
+  return ago == 'Just now' || ago == 'Yesterday' ? ago.toLowerCase() : ago
 }
 
 // The site's own favicon, guessed from a page or feed address.

@@ -11,18 +11,16 @@ import {
 import { PopperContentProps } from '@radix-ui/react-popover'
 import { CSS } from '@stitches/react'
 import { styled } from './../tokens/stitches.config'
+import {
+  menuContentStyles,
+  menuItemStyles,
+  menuSeparatorStyles,
+} from './stash/Menu'
 
 const StyledItem = styled(Item, {
-  fontSize: '14px',
-  fontWeight: '400',
-  py: '10px',
-  px: '15px',
-  cursor: 'default',
-  color: '$utilityTextDefault',
-
-  '&:focus': {
-    outline: 'none',
-    backgroundColor: '$thLeftMenuBackground',
+  ...menuItemStyles,
+  variants: {
+    destructive: { true: { color: '$stDanger' } },
   },
 })
 
@@ -47,55 +45,8 @@ const StyledTriggerItem = styled(Trigger, {
 })
 
 export const DropdownContent = styled(Content, {
-  width: 195,
-  zIndex: 100,
-  backgroundColor: '$grayBg',
-  borderRadius: '6px',
-  outline: '1px solid #323232',
-  border: '1px solid $grayBorder',
-  boxShadow: '0px 1px 2px 0px rgba(0, 0, 0, 0.05);',
-  '--arrow-visibility': '',
-  '&[data-side="top"]': {
-    '--arrow-visibility': 'collapse',
-  },
-  '&[data-side="bottom"]': {
-    '--arrow-top': -13,
-  },
-  '&[data-align="start"]': {
-    '--arrow-visibility': 'collapse',
-  },
-  '&[data-align="center"]': {
-    '--arrow-before-left': 'auto',
-    '--arrow-before-right': '90px',
-    '--arrow-after-left': 'auto',
-    '--arrow-after-right': '91px',
-  },
-  '&[data-align="end"]': {
-    '--arrow-before-left': 'auto',
-    '--arrow-before-right': '9px',
-    '--arrow-after-left': 'auto',
-    '--arrow-after-right': '10px',
-  },
-  '&:before': {
-    top: 'calc(var(--arrow-top) * 1px - 2px)',
-    left: 'var(--arrow-before-left)',
-    right: 'var(--arrow-before-right)',
-    border: '8px solid transparent',
-    borderBottomColor: '$grayBorder',
-  },
-  '&:after': {
-    top: 'calc(var(--arrow-top) * 1px)',
-    left: 'var(--arrow-after-left)',
-    right: 'var(--arrow-after-right)',
-    border: '7px solid transparent',
-    borderBottomColor: '$grayBg',
-  },
-  '&:before, &:after': {
-    visibility: 'var(--arrow-visibility)',
-    position: 'absolute',
-    display: 'inline-block',
-    content: '',
-  },
+  ...menuContentStyles,
+  transformOrigin: 'var(--radix-dropdown-menu-content-transform-origin)',
 })
 
 const StyledArrow = styled(Arrow, {
@@ -103,9 +54,12 @@ const StyledArrow = styled(Arrow, {
 })
 
 const StyledLabel = styled(Label, {
-  color: '$utilityTextDefault',
-  fontSize: 13,
-  padding: '5px 10px',
+  color: '$stMuted',
+  fontFamily: '$mono',
+  fontSize: '10.5px',
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+  padding: '6px 10px 4px',
   cursor: 'default',
 })
 
@@ -126,23 +80,21 @@ type DropdownProps = {
   onOpenChange?: (open: boolean) => void
 }
 
-export const DropdownSeparator = styled(Separator, {
-  height: '1px',
-  margin: 0,
-  backgroundColor: '$homeDivider',
-})
+export const DropdownSeparator = styled(Separator, menuSeparatorStyles)
 
 type DropdownOptionProps = {
   onSelect: () => void
   title?: string
   children?: React.ReactNode
   hideSeparator?: boolean
+  destructive?: boolean
 }
 
 export function DropdownOption(props: DropdownOptionProps): JSX.Element {
   return (
     <>
       <StyledItem
+        destructive={props.destructive}
         onSelect={() => {
           props.onSelect()
         }}
@@ -190,7 +142,8 @@ export function Dropdown(
             ;(document.activeElement as HTMLElement).blur()
           }}
           side={side}
-          sideOffset={sideOffset}
+          sideOffset={sideOffset || 6}
+          collisionPadding={12}
           align={align ? align : 'center'}
           alignOffset={alignOffset}
           onCloseAutoFocus={(event) => {
