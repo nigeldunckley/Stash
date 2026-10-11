@@ -10,7 +10,11 @@ import { useCallback, useState } from 'react'
 import { State } from '../../../lib/networking/fragments/articleFragment'
 import { useRestoreItem } from '../../../lib/networking/library_items/useLibraryItems'
 import { formatMinutes, minutesLeft } from '../../../lib/readingTime'
-import { siteName, timeAgoInSentence } from '../../../lib/textFormatting'
+import {
+  faviconFor,
+  siteName,
+  timeAgoInSentence,
+} from '../../../lib/textFormatting'
 import { sortedLabels } from '../../../lib/labelsSort'
 import { Box } from '../../elements/LayoutPrimitives'
 import { LoadingBar } from '../../elements/LoadingBar'
@@ -93,20 +97,33 @@ const Thumb = styled(CoverImage, {
   },
 })
 
-// Stands in for a missing image: the source's first letter, set in the
-// reading face, so rows without pictures still look finished.
-const LetterTile = styled('span', {
+// Stands in for a missing image: the publication's icon over its name, set
+// like a masthead in the reading face, so rows without pictures still look
+// finished.
+const PublicationTile = styled('span', {
   display: 'grid',
   placeItems: 'center',
+  alignContent: 'center',
+  gap: '6px',
   width: '100%',
   height: '100%',
+  padding: '8px',
+  boxSizing: 'border-box',
   fontFamily: '$serif',
-  fontSize: '30px',
+  fontSize: '13px',
   fontWeight: 500,
-  lineHeight: 1,
+  lineHeight: 1.15,
+  letterSpacing: '-0.005em',
   color: '$stInk2',
-  textTransform: 'uppercase',
-  '@smDown': { fontSize: '24px' },
+  textAlign: 'center',
+  '& > span:last-child': {
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden',
+    overflowWrap: 'anywhere',
+  },
+  '@smDown': { fontSize: '12px', gap: '4px', padding: '6px' },
 })
 
 const Row = styled('div', {
@@ -216,7 +233,7 @@ const summaryOf = (item: LinkedItemCardProps['item']): string | undefined => {
 
 // A library item as a row: serif title, a line of summary, then source,
 // time left and progress in small mono. The picture sits at the end, or a
-// lettered tile when there isn't one. Actions appear on hover or swipe.
+// publication tile when there isn't one. Actions appear on hover or swipe.
 export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
   const router = useRouter()
   const restoreItem = useRestoreItem()
@@ -231,7 +248,6 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
   const labels = sortedLabels(item.labels).filter(
     ({ name }) => FLAIR_ICON_NAMES.indexOf(name.toLocaleLowerCase()) == -1
   )
-  const letter = (source || item.title || '').replace(/^(www\.|the\s+)/i, '')[0]
 
   const handleCheckChanged = useCallback(() => {
     setIsChecked(item.id, !isChecked)
@@ -380,7 +396,17 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
           </Body>
           <Thumb
             src={item.image}
-            fallback={<LetterTile>{letter}</LetterTile>}
+            fallback={
+              <PublicationTile>
+                <SiteIcon
+                  src={item.siteIcon}
+                  fallbackSrc={faviconFor(item.originalArticleUrl, item.url)}
+                  name={source || item.title}
+                  size={18}
+                />
+                {source && <span>{source}</span>}
+              </PublicationTile>
+            }
           />
           {!selecting && (
             <Actions onClick={stop}>

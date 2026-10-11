@@ -1,56 +1,15 @@
-import { Box, SpanBox, VStack } from '../../elements/LayoutPrimitives'
-import { StyledText } from '../../elements/StyledText'
-import { ErrorSlothIcon } from '../../elements/icons/ErrorSlothIcon'
-import { DEFAULT_HEADER_HEIGHT } from './HeaderSpacer'
+import { WarningCircle } from '@phosphor-icons/react'
+import { EmptyState } from '../../elements/stash/EmptyState'
 
 export const FetchItemsError = (): JSX.Element => {
   return (
-    <VStack
-      alignment="center"
-      distribution="center"
-      css={{
-        gap: '5px',
-        width: '100%',
-        height: '100%',
-        pb: '100px',
-        px: '30px',
-        minHeight: `calc(100vh - ${DEFAULT_HEADER_HEIGHT})`,
-      }}
+    <EmptyState
+      tone="error"
+      icon={<WarningCircle size={24} />}
+      title="Couldn’t load your items"
+      action={{ label: 'Try again', onClick: () => window.location.reload() }}
     >
-      <ErrorSlothIcon />
-      <StyledText
-        css={{
-          display: 'flex',
-          marginBlockStart: '0px',
-          marginBlockEnd: '0px',
-          lineHeight: '125%',
-          fontSize: '20px',
-          fontFamily: '$inter',
-          fontWeight: 'bold',
-        }}
-      >
-        Something has gone wrong.
-      </StyledText>
-      <SpanBox
-        css={{
-          marginBlockStart: '0px',
-          marginBlockEnd: '0px',
-          fontSize: '15px',
-          lineHeight: '125%',
-          fontFamily: '$inter',
-          color: '$thTextSubtle2',
-          textAlign: 'center',
-        }}
-      >
-        We have encountered unexpected problems.{' '}
-        <a
-          href="https://docs.omnivore.work/using/help.html"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Get help
-        </a>
-      </SpanBox>
-    </VStack>
+      Stash couldn’t reach your server. Check your connection and try again.
+    </EmptyState>
   )
 }

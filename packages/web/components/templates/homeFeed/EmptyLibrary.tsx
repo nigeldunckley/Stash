@@ -1,133 +1,106 @@
-import { Box, VStack } from '../../elements/LayoutPrimitives'
-import { useMemo } from 'react'
-import { SuggestionBox, SuggestionAction } from '../../elements/SuggestionBox'
-import { DEFAULT_HEADER_HEIGHT } from './HeaderSpacer'
-import { EmptyLibraryIcon } from '../../elements/icons/EmptyLibraryNotes'
-import { EmptyHighlightsIcon } from '../../elements/icons/EmptyHighlightsIcon'
-import { EmptyTrashIcon } from '../../elements/icons/EmptyTrashIcon'
+import {
+  Archive,
+  Books,
+  HighlighterCircle,
+  MagnifyingGlass,
+  Rss,
+  Trash,
+} from '@phosphor-icons/react'
 import { useGetSubscriptions } from '../../../lib/networking/subscriptions/useGetSubscriptions'
+import { EmptyState } from '../../elements/stash/EmptyState'
 
 type EmptyLibraryProps = {
   folder: string | undefined
+  searchTerm?: string
   onAddLinkClicked?: () => void | undefined
 }
 
-const Icon = (props: EmptyLibraryProps) => {
-  console.log('empty icon:', props.folder)
-  switch (props.folder) {
-    case 'highlights':
-      return <EmptyHighlightsIcon />
-    case 'trash':
-      return <EmptyTrashIcon />
-    default:
-      return <EmptyLibraryIcon />
-  }
-}
-
-const Title = (props: EmptyLibraryProps) => {
-  // If its the subscriptions folder we fetch the subscriptions
-  // to prevent a better message
-  const { data: subscriptions, isLoading } = useGetSubscriptions(
-    {},
-    props.folder == 'subscriptions'
-  )
-
-  const titleText = (folder: string | undefined) => {
-    switch (folder) {
-      case 'highlights':
-        return 'You do not have any highlights yet.'
-      case 'trash':
-        return 'Your trash is empty.'
-      case 'archive':
-        return 'You do not have any archived items.'
-      case 'following':
-        if (isLoading || (subscriptions?.length ?? 0) > 0) {
-          return 'No subscription items found.'
-        }
-        return 'You do not have any subscriptions.'
-      case 'home':
-        return 'Your homepage is empty.'
-    }
-    return 'No results found.'
-  }
-  return (
-    <Box
-      css={{
-        display: 'flex',
-        marginBlockStart: '0px',
-        marginBlockEnd: '10px',
-        lineHeight: '125%',
-        fontSize: '23px',
-        fontFamily: '$inter',
-        fontWeight: 'bold',
-        textAlign: 'center',
-      }}
-    >
-      {titleText(props.folder)}
-    </Box>
-  )
-}
-
-const Subtitle = (props: EmptyLibraryProps) => {
-  // If its the subscriptions folder we fetch the subscriptions
-  // to prevent a better message
-  const { data: subscriptions, isLoading } = useGetSubscriptions(
-    {},
-    props.folder == 'subscriptions'
-  )
-  const titleText = (folder: string | undefined) => {
-    switch (folder) {
-      case 'home':
-        return 'All your newly saved items and subscriptions will appear in your home section.'
-      case 'inbox':
-        return 'Items you have saved using the mobile apps and browser extensions, along with subscriptions you have moved into your library will appear here'
-      case 'highlights':
-        return 'Highlight text while reading to start building your highlights library.'
-      case 'trash':
-        return 'Deleted items will appear here before they are permanently deleted.'
-      case 'archive':
-        return 'Archived items are hidden from your library but saved forever. You can always access them here.'
-      case 'following':
-        if (isLoading || (subscriptions?.length ?? 0) > 0) {
-          return 'No subscription items found.'
-        }
-        return 'Get started by subscribing to newsletters or feeds from the settings menu.'
-    }
-    return 'No results found.'
-  }
-  return (
-    <Box
-      css={{
-        fontSize: '17px',
-        fontFamily: '$inter',
-        color: '$thNotebookSubtle',
-        textAlign: 'center',
-      }}
-    >
-      {titleText(props.folder)}
-    </Box>
-  )
-}
+const ICON_SIZE = 24
 
 export const EmptyLibrary = (props: EmptyLibraryProps) => {
+  // For feeds, say whether there are no feeds or just nothing new.
+  const { data: subscriptions, isLoading } = useGetSubscriptions(
+    {},
+    props.folder == 'following' || props.folder == 'subscriptions'
+  )
+  const search = props.searchTerm?.trim()
+
+  if (search == 'is:unread') {
+    return (
+      <EmptyState icon={<Books size={ICON_SIZE} />} title="All caught up">
+        Everything in your Library has been read.
+      </EmptyState>
+    )
+  }
+  if (search == 'is:reading') {
+    return (
+      <EmptyState icon={<Books size={ICON_SIZE} />} title="Nothing in progress">
+        Articles you’ve started but not finished will appear here.
+      </EmptyState>
+    )
+  }
+  if (search) {
+    return (
+      <EmptyState
+        icon={<MagnifyingGlass size={ICON_SIZE} />}
+        title="No results"
+      >
+        Nothing matches “{search}”. Try different words or check the spelling.
+      </EmptyState>
+    )
+  }
+
+  switch (props.folder) {
+    case 'highlights':
+      return (
+        <EmptyState
+          icon={<HighlighterCircle size={ICON_SIZE} />}
+          title="No highlights yet"
+        >
+          Select text while you read to highlight it. Your highlights collect
+          here.
+        </EmptyState>
+      )
+    case 'trash':
+      return (
+        <EmptyState icon={<Trash size={ICON_SIZE} />} title="Trash is empty">
+          Deleted items wait here before they’re removed for good.
+        </EmptyState>
+      )
+    case 'archive':
+      return (
+        <EmptyState
+          icon={<Archive size={ICON_SIZE} />}
+          title="Nothing archived"
+        >
+          Archived items leave your Library but stay here, and in search, for
+          good.
+        </EmptyState>
+      )
+    case 'following':
+    case 'subscriptions':
+      return isLoading || (subscriptions?.length ?? 0) > 0 ? (
+        <EmptyState icon={<Rss size={ICON_SIZE} />} title="Nothing new">
+          New posts from your feeds will appear here.
+        </EmptyState>
+      ) : (
+        <EmptyState icon={<Rss size={ICON_SIZE} />} title="No feeds yet">
+          Follow a site’s RSS feed or a YouTube channel from Settings › Feeds.
+        </EmptyState>
+      )
+  }
   return (
-    <VStack
-      alignment="center"
-      distribution="center"
-      css={{
-        gap: '5px',
-        width: '100%',
-        height: '100%',
-        pb: '100px',
-        px: '25px',
-        maxWidth: '520px',
-        color: '$thLibraryMenuSecondary',
-        minHeight: `calc(100vh - ${DEFAULT_HEADER_HEIGHT})`,
-      }}
+    <EmptyState
+      icon={<Books size={ICON_SIZE} />}
+      title="Your Library is empty"
+      action={
+        props.onAddLinkClicked
+          ? { label: 'Add a link', onClick: props.onAddLinkClicked }
+          : undefined
+      }
     >
-      <Icon {...props} />
-      <Title {...props} />
-      <Subtitle {...props} />
-    </VStack>
+      Save articles from Safari’s Share Sheet, the Save to Stash button, or by
+      pasting a link.
+    </EmptyState>
   )
 }
