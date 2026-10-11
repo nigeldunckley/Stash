@@ -134,12 +134,19 @@ export function ContextMenu(props: {
 }
 
 // Shared entries for anything with a link.
-export function linkEntries(url: string): MenuEntry[] {
+// `openOriginal` replaces the plain window.open, for lists that also need to
+// record the visit (Feeds marks the item seen).
+export function linkEntries(
+  url: string,
+  openOriginal?: () => void
+): MenuEntry[] {
   const entries: MenuEntry[] = [
     {
       label: 'Open original',
       separated: true,
-      onSelect: () => window.open(url, '_blank', 'noopener,noreferrer'),
+      onSelect:
+        openOriginal ??
+        (() => window.open(url, '_blank', 'noopener,noreferrer')),
     },
     {
       label: 'Copy link',

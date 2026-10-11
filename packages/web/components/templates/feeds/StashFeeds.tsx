@@ -1324,7 +1324,9 @@ export function StashFeeds(): JSX.Element {
       onSelect: () => save(item),
     },
     { label: 'Archive', shortcut: '⌫', onSelect: () => archive(item) },
-    ...linkEntries(item.originalArticleUrl || item.url),
+    ...linkEntries(item.originalArticleUrl || item.url, () =>
+      openOriginal(item)
+    ),
   ]
 
   // One item as a row, for Read and for Watch's list view.
