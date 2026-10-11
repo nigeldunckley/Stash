@@ -1,6 +1,6 @@
 import { CSSProperties, ReactNode, useState } from 'react'
 import { styled } from '../../tokens/stitches.config'
-import { motion } from './motion'
+import { motion, reducedMotion } from './motion'
 
 const Frame = styled('span', {
   display: 'block',
@@ -23,9 +23,15 @@ const Frame = styled('span', {
     height: '100%',
     objectFit: 'cover',
     opacity: 0,
-    transition: `opacity ${motion.base}`,
+    // Pictures settle into place as they fade in, rather than popping.
+    transform: 'scale(1.03)',
+    transition: `opacity ${motion.slow}, transform ${motion.slow}`,
+    [reducedMotion]: {
+      transform: 'none',
+      transition: `opacity ${motion.fast}`,
+    },
   },
-  '&[data-loaded="true"] img': { opacity: 1 },
+  '&[data-loaded="true"] img': { opacity: 1, transform: 'none' },
 })
 
 type CoverImageProps = {

@@ -22,6 +22,7 @@ import {
   useDeleteItem,
   useGetLibraryItems,
   useMoveItemToFolder,
+  useRestoreItem,
   useRefreshProcessingItems,
   useUpdateItemReadStatus,
 } from '../../../lib/networking/library_items/useLibraryItems'
@@ -42,6 +43,8 @@ import { MultiSelectMode } from '../homeFeed/LibraryHeader'
 import { UploadModal } from '../UploadModal'
 import { BulkAction } from '../../../lib/networking/library_items/useLibraryItems'
 import { showErrorToast, showSuccessToast } from '../../../lib/toastHelpers'
+import { showUndoToast } from '../../elements/stash/UndoToast'
+import { ListSkeleton } from '../../elements/stash/Skeleton'
 import { SetPageLabelsModalPresenter } from '../article/SetLabelsModalPresenter'
 import { NotebookPresenter } from '../article/NotebookPresenter'
 import { PinnedButtons } from '../homeFeed/PinnedButtons'
@@ -93,11 +96,13 @@ export function LibraryContainer(props: LibraryContainerProps): JSX.Element {
 
   const gridContainerRef = useRef<HTMLDivElement>(null)
 
-  const [labelsTarget, setLabelsTarget] =
-    useState<LibraryItem | undefined>(undefined)
+  const [labelsTarget, setLabelsTarget] = useState<LibraryItem | undefined>(
+    undefined
+  )
 
-  const [notebookTarget, setNotebookTarget] =
-    useState<LibraryItem | undefined>(undefined)
+  const [notebookTarget, setNotebookTarget] = useState<LibraryItem | undefined>(
+    undefined
+  )
 
   const [showAddLinkModal, setShowAddLinkModal] = useState(false)
   const [showEditTitleModal, setShowEditTitleModal] = useState(false)
@@ -107,6 +112,7 @@ export function LibraryContainer(props: LibraryContainerProps): JSX.Element {
   const archiveItem = useArchiveItem()
   const deleteItem = useDeleteItem()
   const moveToFolder = useMoveItemToFolder()
+  const restoreItem = useRestoreItem()
   const bulkAction = useBulkActions()
   const updateItemReadStatus = useUpdateItemReadStatus()
 
@@ -349,9 +355,18 @@ export function LibraryContainer(props: LibraryContainerProps): JSX.Element {
           })
           return
         }
-        showSuccessToast(`Item ${action}d`, {
-          position: 'bottom-right',
-        })
+        showUndoToast(action == 'archive' ? 'Archived' : 'Unarchived', () =>
+          archiveItem
+            .mutateAsync({
+              itemId: item.node.id,
+              slug: item.node.slug,
+              input: {
+                linkId: item.node.id,
+                archived: action != 'archive',
+              },
+            })
+            .then(() => undefined)
+        )
         break
       case 'delete':
         try {
@@ -367,9 +382,11 @@ export function LibraryContainer(props: LibraryContainerProps): JSX.Element {
           return
         }
 
-        showSuccessToast(`Item deleted`, {
-          position: 'bottom-right',
-        })
+        showUndoToast('Moved to Trash', () =>
+          restoreItem
+            .mutateAsync({ itemId: item.node.id, slug: item.node.slug })
+            .then(() => undefined)
+        )
         break
       case 'mark-read':
       case 'mark-unread':
@@ -418,9 +435,7 @@ export function LibraryContainer(props: LibraryContainerProps): JSX.Element {
           })
           return
         }
-        showSuccessToast(`Item moved to library`, {
-          position: 'bottom-right',
-        })
+        showUndoToast('Saved to Library')
         break
       case 'set-labels':
         setLabelsTarget(item)
@@ -759,23 +774,23 @@ export function LibraryContainer(props: LibraryContainerProps): JSX.Element {
             let successMessage: string | undefined = undefined
             switch (action) {
               case BulkAction.ARCHIVE:
-                successMessage = 'Link Archived'
+                successMessage = 'Archived'
                 break
               case BulkAction.ADD_LABELS:
-                successMessage = 'Labels Added'
+                successMessage = 'Labels added'
                 break
               case BulkAction.DELETE:
-                successMessage = 'Items deleted'
+                successMessage = 'Moved to Trash'
                 break
               case BulkAction.MARK_AS_READ:
-                successMessage = 'Items marked as read'
+                successMessage = 'Marked as read'
                 break
               case BulkAction.MOVE_TO_FOLDER:
-                successMessage = 'Items moved to library'
+                successMessage = 'Saved to Library'
                 break
             }
             if (successMessage) {
-              showSuccessToast(successMessage, { position: 'bottom-right' })
+              showUndoToast(successMessage)
             }
           } else {
             showErrorToast('Error performing bulk action', {
@@ -964,7 +979,15 @@ function HomeFeedGrid(props: HomeFeedContentProps): JSX.Element {
           />
         )}
 
-        {showItems && (
+        {showItems && props.items.length == 0 && props.isValidating && (
+          <Box
+            css={{ width: '100%', maxWidth: '880px', mx: 'auto', mt: '10px' }}
+          >
+            <ListSkeleton />
+          </Box>
+        )}
+
+        {showItems && props.items.length > 0 && (
           <LibraryItemsLayout
             viewer={viewerData}
             layout={layout}

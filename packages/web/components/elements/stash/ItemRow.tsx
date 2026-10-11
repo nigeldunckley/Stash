@@ -7,6 +7,11 @@ const Actions = styled('div', {
   display: 'none',
   alignItems: 'center',
   gap: '2px',
+  // Touch screens swipe or press and hold instead.
+  '@media (hover: none) and (pointer: coarse)': {
+    visibility: 'hidden',
+    width: 0,
+  },
 })
 
 const Trailing = styled('div', {
@@ -86,7 +91,7 @@ const Root = styled('div', {
     tall: {
       true: {
         alignItems: 'start',
-        [`& ${Leading}`]: { height: '18px' },
+        [`& ${Leading}`]: { height: '21px' },
       },
     },
     muted: {
@@ -110,9 +115,10 @@ const Root = styled('div', {
       withImage: true,
       css: {
         [`& ${Thumb}`]: {
-          width: '112px',
-          height: '74px',
-          '@smDown': { width: '72px', height: '54px' },
+          width: '88px',
+          height: '60px',
+          marginTop: '2px',
+          '@smDown': { width: '64px', height: '48px' },
         },
       },
     },
@@ -122,19 +128,24 @@ const Root = styled('div', {
 const Body = styled('div', {
   minWidth: 0,
   display: 'grid',
-  gap: '2px',
+  gap: '3px',
 })
 
+// Titles are set in the reading face, up to two lines, like the Library.
 const Title = styled('div', {
-  fontFamily: '$inter',
-  fontSize: '$small',
+  fontFamily: '$serif',
+  fontSize: '17px',
   fontWeight: 500,
-  lineHeight: 1.35,
-  letterSpacing: '-0.005em',
+  lineHeight: 1.25,
+  letterSpacing: '-0.006em',
   color: '$stInk',
-  whiteSpace: 'nowrap',
+  textWrap: 'pretty',
+  display: '-webkit-box',
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: 'vertical',
   overflow: 'hidden',
-  textOverflow: 'ellipsis',
+  overflowWrap: 'anywhere',
+  '@smDown': { fontSize: '16.5px' },
 })
 
 const Subtitle = styled('div', {

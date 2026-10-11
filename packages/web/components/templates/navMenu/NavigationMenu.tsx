@@ -9,9 +9,13 @@ import {
   DotsThree,
   Highlighter,
   House,
+  Plus,
   Rss,
   Trash,
 } from '@phosphor-icons/react'
+import { IconButton } from '../../elements/stash'
+import { useGetLibraryItems } from '../../../lib/networking/library_items/useLibraryItems'
+import { useGetShortcuts } from '../../../lib/networking/shortcuts/useShortcuts'
 import { theme } from '../../tokens/stitches.config'
 import { usePersistedState } from '../../../lib/hooks/usePersistedState'
 import { NavMenuFooter } from './Footer'
@@ -112,6 +116,14 @@ export function NavigationMenu(props: NavigationMenuProps): JSX.Element {
           >
             Stash
           </SpanBox>
+          <SpanBox css={{ ml: 'auto', mr: '10px', display: 'flex' }}>
+            <IconButton
+              label="Add a link"
+              onClick={() => props.setShowAddLinkModal(true)}
+            >
+              <Plus size={18} />
+            </IconButton>
+          </SpanBox>
         </Box>
         <Box css={{ width: '100%', height: '60px' }}></Box>
 
@@ -127,7 +139,7 @@ export function NavigationMenu(props: NavigationMenuProps): JSX.Element {
           }}
         >
           <ServerVersionChip />
-          <NavMenuFooter {...props} showFullThemeSection={true} />
+          <NavMenuFooter showFullThemeSection={true} />
         </Box>
       </Box>
     </>
@@ -168,6 +180,7 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         section="library"
         isSelected={props.section == 'library'}
         icon={<Books size={18} />}
+        count={<NavCount folder="inbox" query="is:unread" />}
       />
       <NavButton
         {...props}
@@ -182,6 +195,7 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         section="subscriptions"
         isSelected={props.section == 'subscriptions'}
         icon={<Rss size={18} />}
+        count={<NavCount folder="following" query="-is:seen" />}
       />
       <NavButton
         {...props}
@@ -209,8 +223,45 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
   )
 }
 
-const Shortcuts = (props: NavigationMenuProps): JSX.Element => {
+// A Mail-style count beside a section: unread in the Library, unseen in
+// Feeds. Nothing shows at zero.
+function NavCount(props: {
+  folder: string
+  query: string
+}): JSX.Element | null {
+  const { data } = useGetLibraryItems(
+    `nav-count-${props.folder}`,
+    props.folder,
+    {
+      limit: 1,
+      sortDescending: true,
+      searchQuery: props.query,
+      includeCount: true,
+    },
+    true,
+    2 * 60 * 1000
+  )
+  const count = data?.pages[0]?.pageInfo.totalCount ?? 0
+  if (!count) return null
+  return (
+    <SpanBox
+      aria-label={`${count} new`}
+      css={{
+        ml: 'auto',
+        fontFamily: '$mono',
+        fontSize: '11px',
+        color: '$stMuted',
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      {count > 999 ? '999+' : count}
+    </SpanBox>
+  )
+}
+
+const Shortcuts = (props: NavigationMenuProps): JSX.Element | null => {
   const router = useRouter()
+  const { data: shortcuts, isLoading } = useGetShortcuts()
   const treeRef = useRef<TreeApi<Shortcut> | undefined>(undefined)
   const resetShortcuts = useResetShortcuts()
 
@@ -226,6 +277,11 @@ const Shortcuts = (props: NavigationMenuProps): JSX.Element => {
   const resetShortcutsToDefault = useCallback(async () => {
     await resetShortcuts.mutateAsync()
   }, [])
+
+  // An empty Shortcuts heading is just noise; Settings › Shortcuts adds them.
+  if (!isLoading && !shortcuts?.length) {
+    return null
+  }
 
   return (
     <VStack
@@ -304,6 +360,7 @@ const Shortcuts = (props: NavigationMenuProps): JSX.Element => {
 type NavButtonProps = {
   text: string
   icon: ReactNode
+  count?: ReactNode
 
   isSelected: boolean
   section: NavigationSection
@@ -361,6 +418,7 @@ function NavButton(props: NavButtonProps): JSX.Element {
     >
       {props.icon}
       {props.text}
+      {props.count}
     </HStack>
   )
 }
