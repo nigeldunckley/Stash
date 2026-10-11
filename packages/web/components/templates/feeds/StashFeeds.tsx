@@ -17,6 +17,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/router'
 import {
   CSSProperties,
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -49,6 +50,7 @@ import {
   ItemList,
   ItemRow,
   linkEntries,
+  ListSkeleton,
   MenuEntry,
   PageMeta,
   Popover,
@@ -341,7 +343,15 @@ const Empty = styled('div', {
 // The source at the start of a row's subtitle, with its favicon.
 const RowSource = styled('span', {
   '& > span:first-child': { verticalAlign: '-3px', marginRight: '6px' },
+  time: { fontVariantNumeric: 'tabular-nums' },
 })
+
+// A thin dot between byline parts, lighter than the text around it.
+const Dot = () => (
+  <span aria-hidden="true" style={{ margin: '0 6px', opacity: 0.5 }}>
+    ·
+  </span>
+)
 
 const MobileSources = styled('div', {
   display: 'grid',
@@ -1373,21 +1383,25 @@ export function StashFeeds(): JSX.Element {
                     saved.has(item.id) ? 'Saved' : undefined,
                   ]
                     .filter(Boolean)
-                    .join(' · ')}
+                    .map((part, index) => (
+                      <Fragment key={index}>
+                        {index > 0 && <Dot />}
+                        {part}
+                      </Fragment>
+                    ))}
+                  <Dot />
+                  <time
+                    dateTime={item.publishedAt || item.savedAt}
+                    title={publishedLabel(item)}
+                  >
+                    {shortTimeAgo(item.publishedAt || item.savedAt, now)}
+                  </time>
                 </RowSource>
               }
               excerpt={
                 watching
                   ? descriptionWithoutChapters(item.description)
                   : item.description
-              }
-              meta={
-                <time
-                  dateTime={item.publishedAt || item.savedAt}
-                  title={publishedLabel(item)}
-                >
-                  {shortTimeAgo(item.publishedAt || item.savedAt, now)}
-                </time>
               }
               muted={itemSeen}
               selected={peekItem ? item.id == peekItem.id : item.id == focusId}
@@ -1603,7 +1617,9 @@ export function StashFeeds(): JSX.Element {
                 {addPanel()}
               </div>
             </Empty>
-          ) : !itemsQuery.isPending && listed.length == 0 ? (
+          ) : itemsQuery.isPending && listed.length == 0 ? (
+            <ListSkeleton />
+          ) : listed.length == 0 ? (
             <Empty>
               {view == 'unseen'
                 ? 'You are all caught up.'

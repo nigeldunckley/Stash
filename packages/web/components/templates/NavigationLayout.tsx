@@ -12,7 +12,7 @@ import { useApplyLocalTheme } from '../../lib/hooks/useApplyLocalTheme'
 import { theme } from '../tokens/stitches.config'
 import { NavigationMenu } from './navMenu/NavigationMenu'
 import { Button } from '../elements/Button'
-import { List } from '@phosphor-icons/react'
+import { SidebarSimple } from '@phosphor-icons/react'
 import { LIBRARY_LEFT_MENU_WIDTH } from './navMenu/LibraryLegacyMenu'
 import { AddLinkModal } from './AddLinkModal'
 import { MobileTopBar } from './navMenu/MobileTopBar'
@@ -218,7 +218,11 @@ const Header = (props: HeaderProps): JSX.Element => {
         }}
         css={{ height: 'unset', display: 'flex' }}
       >
-        <List size="25" color={theme.colors.readerTextSubtle.toString()} />
+        <SidebarSimple
+          size={22}
+          color={theme.colors.readerTextSubtle.toString()}
+          aria-label="Show or hide the sidebar"
+        />
       </Button>
     </VStack>
   )

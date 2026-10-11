@@ -1,23 +1,31 @@
 import toast from 'react-hot-toast'
 import { styled } from '../../tokens/stitches.config'
-import { motion } from './motion'
+import { floatingShadow, glassStrong, hairlineEdge } from './material'
+import { motion, reducedMotion } from './motion'
 
 const Root = styled('div', {
   display: 'flex',
   alignItems: 'center',
   gap: '12px',
-  height: '38px',
-  padding: '0 6px 0 12px',
-  borderRadius: '10px',
-  background: '$stInk',
-  color: '$stCanvas',
+  height: '40px',
+  padding: '0 6px 0 14px',
+  borderRadius: '12px',
+  ...glassStrong,
+  ...hairlineEdge,
+  boxShadow: floatingShadow,
+  color: '$stInk',
   fontFamily: '$inter',
   fontSize: '$small',
   fontWeight: 500,
   whiteSpace: 'nowrap',
-  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
   transition: `opacity ${motion.base}, transform ${motion.base}`,
-  '&[data-visible="false"]': { opacity: 0, transform: 'translateY(8px)' },
+  '&[data-visible="false"]': {
+    opacity: 0,
+    transform: 'translateY(10px) scale(0.98)',
+  },
+  [reducedMotion]: {
+    '&[data-visible="false"]': { transform: 'none' },
+  },
   '@mdDown': { marginBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))' },
 })
 
@@ -37,13 +45,15 @@ const Undo = styled('button', {
   padding: '0 9px',
   borderRadius: '6px',
   fontWeight: 600,
-  color: '$stAccent',
+  color: '$stAccentText',
   cursor: 'pointer',
-  '&:hover': { background: 'rgba(127, 127, 127, 0.18)' },
+  '@media (hover: hover)': {
+    '&:hover': { background: 'rgba(127, 127, 127, 0.14)' },
+  },
   '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '1px' },
 })
 
-// A small dark toast at the bottom of the screen, with an Undo button when
+// A small frosted toast at the bottom of the screen, with an Undo button when
 // the action can be reversed.
 export const showUndoToast = (
   message: string,
