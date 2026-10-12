@@ -31,112 +31,112 @@
   "theme_color": "#FF4F00",
   "icons": [
     {
-      "src": "/pwa-maskable-36.png?v=stash-folded-s",
+      "src": "/pwa-maskable-36.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "36x36",
       "purpose": "maskable"
     },
     {
-      "src": "/pwa-36.png?v=stash-folded-s",
+      "src": "/pwa-36.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "36x36"
     },
     {
-      "src": "/pwa-maskable-48.png?v=stash-folded-s",
+      "src": "/pwa-maskable-48.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "48x48",
       "purpose": "maskable"
     },
     {
-      "src": "/pwa-48.png?v=stash-folded-s",
+      "src": "/pwa-48.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "48x48"
     },
     {
-      "src": "/pwa-maskable-72.png?v=stash-folded-s",
+      "src": "/pwa-maskable-72.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "72x72",
       "purpose": "maskable"
     },
     {
-      "src": "/pwa-72.png?v=stash-folded-s",
+      "src": "/pwa-72.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "72x72"
     },
     {
-      "src": "/pwa-maskable-96.png?v=stash-folded-s",
+      "src": "/pwa-maskable-96.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "96x96",
       "purpose": "maskable"
     },
     {
-      "src": "/pwa-96.png?v=stash-folded-s",
+      "src": "/pwa-96.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "96x96"
     },
     {
-      "src": "/pwa-maskable-128.png?v=stash-folded-s",
+      "src": "/pwa-maskable-128.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "128x128",
       "purpose": "maskable"
     },
     {
-      "src": "/pwa-128.png?v=stash-folded-s",
+      "src": "/pwa-128.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "128x128"
     },
     {
-      "src": "/pwa-maskable-144.png?v=stash-folded-s",
+      "src": "/pwa-maskable-144.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "144x144",
       "purpose": "maskable"
     },
     {
-      "src": "/pwa-144.png?v=stash-folded-s",
+      "src": "/pwa-144.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "144x144"
     },
     {
-      "src": "/pwa-maskable-192.png?v=stash-folded-s",
+      "src": "/pwa-maskable-192.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "maskable"
     },
     {
-      "src": "/pwa-192.png?v=stash-folded-s",
+      "src": "/pwa-192.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "/pwa-maskable-256.png?v=stash-folded-s",
+      "src": "/pwa-maskable-256.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "256x256",
       "purpose": "maskable"
     },
     {
-      "src": "/pwa-256.png?v=stash-folded-s",
+      "src": "/pwa-256.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "256x256"
     },
     {
-      "src": "/pwa-maskable-384.png?v=stash-folded-s",
+      "src": "/pwa-maskable-384.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "384x384",
       "purpose": "maskable"
     },
     {
-      "src": "/pwa-384.png?v=stash-folded-s",
+      "src": "/pwa-384.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "384x384"
     },
     {
-      "src": "/pwa-maskable-512.png?v=stash-folded-s",
+      "src": "/pwa-maskable-512.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "maskable"
     },
     {
-      "src": "/pwa-512.png?v=stash-folded-s",
+      "src": "/pwa-512.png?v=stash-folded-s-legible",
       "type": "image/png",
       "sizes": "512x512"
     }

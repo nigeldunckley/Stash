@@ -71,7 +71,7 @@ async function main() {
   for (const icon of manifest.icons) {
     const size = icon.src.match(/-(\d+)\.png/)[1]
     icon.sizes = `${size}x${size}`
-    icon.src = icon.src.replace(/\?.*$/, '') + '?v=stash-folded-s'
+    icon.src = icon.src.replace(/\?.*$/, '') + '?v=stash-folded-s-legible'
   }
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
   console.log('Generated Stash SVGs, favicons, touch icons and manifest icons.')

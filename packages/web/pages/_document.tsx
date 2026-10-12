@@ -16,7 +16,7 @@ export default class Document extends NextDocument {
             id="stitches"
             dangerouslySetInnerHTML={{ __html: getCssText() }}
           />
-          <link rel="manifest" href="/manifest.webmanifest" />
+          <link rel="manifest" href="/manifest.webmanifest?v=stash-folded-s-legible" />
           {/* Until the app knows the chosen theme (see syncThemeColor). */}
           <meta
             name="theme-color"
