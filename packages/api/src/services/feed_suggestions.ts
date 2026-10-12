@@ -901,12 +901,16 @@ const readBlogrolls = async (
     if (!page) continue
     const where = blogrollLinkIn(page.data, home)
     let sites: BlogrollSite[] = []
-    if (where.opml) {
-      const res = await fetcher.get(where.opml)
-      if (res) sites = blogrollFromOpml(res.data)
-    } else if (where.page) {
-      const res = await fetcher.get(where.page)
-      if (res) sites = blogrollFromPage(res.data, where.page)
+    if (where.opml || where.page) {
+      const res = await fetcher.get((where.opml ?? where.page) as string)
+      if (!res) {
+        // Couldn't read it tonight: keep what was known and try again.
+        if (row?.blogroll?.length) blogrolls.set(guide.key, row.blogroll)
+        continue
+      }
+      sites = where.opml
+        ? blogrollFromOpml(res.data)
+        : blogrollFromPage(res.data, where.page as string)
     }
     await repo.upsert(
       { userId, guide: guide.key, blogroll: sites, blogrollCheckedAt: now },
@@ -976,6 +980,28 @@ export const buildFeedSuggestions = async (
     fetcher,
     now
   )
+  // Suggestions can be turned off while a build runs. Checked again as the
+  // build goes, so it stops visiting sites, and at the end, so nothing it
+  // wrote outlives the switch.
+  let lastCheck = Date.now()
+  const turnedOff = async (force = false) => {
+    if (!force && Date.now() - lastCheck < 10_000) return false
+    lastCheck = Date.now()
+    if (await feedSuggestionsEnabled(userId)) return false
+    await forgetFeedSuggestions(userId)
+    logger.info('feed-suggestions: turned off mid-build', { userId })
+    return true
+  }
+  const stopped = (): BuildSummary => ({
+    articles: 0,
+    candidates: 0,
+    checked: 0,
+    channels: 0,
+    requests: fetcher.used(),
+    shown: 0,
+  })
+  if (await turnedOff(true)) return stopped()
+
   const graph = addBlogrolls(
     buildReadingGraph(data, guideWeights),
     blogrolls,
@@ -1005,6 +1031,12 @@ export const buildFeedSuggestions = async (
   const followedNow = new Set<string>()
   let checked = 0
   let channels = 0
+  // A channel can be linked by handle and by ID; it's suggested once.
+  const channelFeeds = new Map(
+    [...existing.values()]
+      .filter((s) => s.kind === 'youtube' && s.status !== 'nofeed' && s.feedUrl)
+      .map((s) => [s.feedUrl as string, s.site])
+  )
 
   const consider = async (c: Candidate) => {
     const row = existing.get(c.site)
@@ -1037,9 +1069,15 @@ export const buildFeedSuggestions = async (
       channels++
       const channel = await findChannelFeed(c.site, now)
       if (channel === undefined) return
-      // A channel you already follow is put aside like a site without a
-      // feed, and looked at again in a month.
-      if (!channel || graph.followedChannels.has(channel.channelId)) {
+      // A channel you already follow, or one already suggested under its
+      // other address, is put aside like a site without a feed, and looked
+      // at again in a month.
+      const elsewhere = channel && channelFeeds.get(channel.feedUrl)
+      if (
+        !channel ||
+        graph.followedChannels.has(channel.channelId) ||
+        (elsewhere && elsewhere !== c.site)
+      ) {
         await repo.upsert(
           {
             id: row?.id,
@@ -1056,6 +1094,7 @@ export const buildFeedSuggestions = async (
         if (channel) followedNow.add(c.site)
         return
       }
+      channelFeeds.set(channel.feedUrl, c.site)
       feed = channel
     } else {
       if (checked >= MAX_SITES_PER_RUN) return
@@ -1121,7 +1160,10 @@ export const buildFeedSuggestions = async (
   }
 
   // Once tonight's requests run out, what's already known is still scored.
-  for (const c of graph.candidates) await consider(c)
+  for (const c of graph.candidates) {
+    if (await turnedOff()) return stopped()
+    await consider(c)
+  }
 
   // Starting points, only while your own reading leads to too few.
   const ownShown = await repo
@@ -1133,6 +1175,7 @@ export const buildFeedSuggestions = async (
     })
     .andWhere(`NOT (s.reasons @> '[{"kind": "starter"}]')`)
     .getCount()
+  if (await turnedOff(true)) return stopped()
   if (ownShown < STARTERS_BELOW) {
     for (const { host, topic } of STARTING_POINTS) {
       const site = siteOf(host)
@@ -1174,6 +1217,7 @@ export const buildFeedSuggestions = async (
     { userId, guide: RUN_GUIDE, weight: graph.articles },
     ['userId', 'guide']
   )
+  if (await turnedOff(true)) return stopped()
 
   const summary = {
     articles: graph.articles,
@@ -1230,11 +1274,13 @@ export const setFeedSuggestionsEnabled = async (
       ),
     { uid: userId }
   )
-  if (!enabled) {
-    await getRepository(FeedSuggestion).delete({ userId })
-    await getRepository(FeedSuggestionGuide).delete({ userId })
-  }
+  if (!enabled) await forgetFeedSuggestions(userId)
   return enabled
+}
+
+const forgetFeedSuggestions = async (userId: string) => {
+  await getRepository(FeedSuggestion).delete({ userId })
+  await getRepository(FeedSuggestionGuide).delete({ userId })
 }
 
 // ---------------------------------------------------------------------------
