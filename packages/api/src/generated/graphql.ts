@@ -1085,6 +1085,82 @@ export type FeedEdge = {
   node: Feed;
 };
 
+export type FeedSuggestion = {
+  __typename?: 'FeedSuggestion';
+  author?: Maybe<Scalars['String']>;
+  description?: Maybe<Scalars['String']>;
+  feedUrl?: Maybe<Scalars['String']>;
+  icon?: Maybe<Scalars['String']>;
+  id: Scalars['ID'];
+  kind: Scalars['String'];
+  lastPostAt?: Maybe<Scalars['Date']>;
+  latest: Array<FeedSuggestionPost>;
+  postsPerWeek?: Maybe<Scalars['Float']>;
+  reasons: Array<FeedSuggestionReason>;
+  score: Scalars['Float'];
+  signals: Scalars['JSON'];
+  siteUrl: Scalars['String'];
+  status: FeedSuggestionStatus;
+  subscriptionId?: Maybe<Scalars['ID']>;
+  title: Scalars['String'];
+  trialEndsAt?: Maybe<Scalars['Date']>;
+};
+
+export enum FeedSuggestionAction {
+  Dismiss = 'DISMISS',
+  Drop = 'DROP',
+  Follow = 'FOLLOW',
+  Keep = 'KEEP',
+  Restore = 'RESTORE',
+  Try = 'TRY'
+}
+
+export type FeedSuggestionPost = {
+  __typename?: 'FeedSuggestionPost';
+  image?: Maybe<Scalars['String']>;
+  minutes?: Maybe<Scalars['Int']>;
+  publishedAt?: Maybe<Scalars['Date']>;
+  summary?: Maybe<Scalars['String']>;
+  title: Scalars['String'];
+  url: Scalars['String'];
+};
+
+export type FeedSuggestionReason = {
+  __typename?: 'FeedSuggestionReason';
+  count: Scalars['Int'];
+  guide: Scalars['String'];
+  guideName: Scalars['String'];
+  kind: Scalars['String'];
+  title?: Maybe<Scalars['String']>;
+};
+
+export enum FeedSuggestionStatus {
+  Dismissed = 'DISMISSED',
+  Following = 'FOLLOWING',
+  Kept = 'KEPT',
+  New = 'NEW',
+  Trial = 'TRIAL'
+}
+
+export type FeedSuggestionsError = {
+  __typename?: 'FeedSuggestionsError';
+  errorCodes: Array<FeedSuggestionsErrorCode>;
+};
+
+export enum FeedSuggestionsErrorCode {
+  BadRequest = 'BAD_REQUEST',
+  Unauthorized = 'UNAUTHORIZED'
+}
+
+export type FeedSuggestionsResult = FeedSuggestionsError | FeedSuggestionsSuccess;
+
+export type FeedSuggestionsSuccess = {
+  __typename?: 'FeedSuggestionsSuccess';
+  articlesConsidered: Scalars['Int'];
+  builtAt?: Maybe<Scalars['Date']>;
+  suggestions: Array<FeedSuggestion>;
+};
+
 export type FeedsError = {
   __typename?: 'FeedsError';
   errorCodes: Array<FeedsErrorCode>;
@@ -1901,6 +1977,7 @@ export type Mutation = {
   optInFeature: OptInFeatureResult;
   recommend: RecommendResult;
   recommendHighlights: RecommendHighlightsResult;
+  refreshFeedSuggestions: RefreshFeedSuggestionsResult;
   refreshHome: RefreshHomeResult;
   replyToEmail: ReplyToEmailResult;
   reportItem: ReportItemResult;
@@ -1924,6 +2001,7 @@ export type Mutation = {
   subscribe: SubscribeResult;
   unsubscribe: UnsubscribeResult;
   updateEmail: UpdateEmailResult;
+  updateFeedSuggestion: UpdateFeedSuggestionResult;
   updateFilter: UpdateFilterResult;
   updateFolderPolicy: UpdateFolderPolicyResult;
   updateHighlight: UpdateHighlightResult;
@@ -2262,6 +2340,11 @@ export type MutationUpdateEmailArgs = {
 };
 
 
+export type MutationUpdateFeedSuggestionArgs = {
+  input: UpdateFeedSuggestionInput;
+};
+
+
 export type MutationUpdateFilterArgs = {
   input: UpdateFilterInput;
 };
@@ -2517,6 +2600,7 @@ export type Query = {
   deviceTokens: DeviceTokensResult;
   discoverFeeds: DiscoverFeedResult;
   discoverTopics: GetDiscoverTopicResults;
+  feedSuggestions: FeedSuggestionsResult;
   feeds: FeedsResult;
   filters: FiltersResult;
   folderPolicies: FolderPoliciesResult;
@@ -2538,7 +2622,6 @@ export type Query = {
   recentSearches: RecentSearchesResult;
   rules: RulesResult;
   scanFeeds: ScanFeedsResult;
-  youtubeChannel: YouTubeChannelResult;
   search: SearchResult;
   sendInstallInstructions: SendInstallInstructionsResult;
   subscription: SubscriptionResult;
@@ -2550,6 +2633,7 @@ export type Query = {
   validateUsername: Scalars['Boolean'];
   webhook: WebhookResult;
   webhooks: WebhooksResult;
+  youtubeChannel: YouTubeChannelResult;
 };
 
 
@@ -2563,6 +2647,12 @@ export type QueryArticleArgs = {
 export type QueryArticleSavingRequestArgs = {
   id?: InputMaybe<Scalars['ID']>;
   url?: InputMaybe<Scalars['String']>;
+};
+
+
+export type QueryFeedSuggestionsArgs = {
+  first?: InputMaybe<Scalars['Int']>;
+  statuses?: InputMaybe<Array<FeedSuggestionStatus>>;
 };
 
 
@@ -2620,11 +2710,6 @@ export type QueryScanFeedsArgs = {
 };
 
 
-export type QueryYoutubeChannelArgs = {
-  url: Scalars['String'];
-};
-
-
 export type QuerySearchArgs = {
   after?: InputMaybe<Scalars['String']>;
   first?: InputMaybe<Scalars['Int']>;
@@ -2673,6 +2758,11 @@ export type QueryValidateUsernameArgs = {
 
 export type QueryWebhookArgs = {
   id: Scalars['ID'];
+};
+
+
+export type QueryYoutubeChannelArgs = {
+  url: Scalars['String'];
 };
 
 export type Reaction = {
@@ -2836,6 +2926,22 @@ export type RecommendingUser = {
   profileImageURL?: Maybe<Scalars['String']>;
   userId: Scalars['String'];
   username: Scalars['String'];
+};
+
+export type RefreshFeedSuggestionsError = {
+  __typename?: 'RefreshFeedSuggestionsError';
+  errorCodes: Array<RefreshFeedSuggestionsErrorCode>;
+};
+
+export enum RefreshFeedSuggestionsErrorCode {
+  Unauthorized = 'UNAUTHORIZED'
+}
+
+export type RefreshFeedSuggestionsResult = RefreshFeedSuggestionsError | RefreshFeedSuggestionsSuccess;
+
+export type RefreshFeedSuggestionsSuccess = {
+  __typename?: 'RefreshFeedSuggestionsSuccess';
+  queued: Scalars['Boolean'];
 };
 
 export type RefreshHomeError = {
@@ -3631,11 +3737,11 @@ export type Subscription = {
   description?: Maybe<Scalars['String']>;
   failedAt?: Maybe<Scalars['Date']>;
   fetchContent: Scalars['Boolean'];
-  includeShorts: Scalars['Boolean'];
   fetchContentType: FetchContentType;
   folder: Scalars['String'];
   icon?: Maybe<Scalars['String']>;
   id: Scalars['ID'];
+  includeShorts: Scalars['Boolean'];
   isPrivate?: Maybe<Scalars['Boolean']>;
   lastFetchedAt?: Maybe<Scalars['Date']>;
   mostRecentItemDate?: Maybe<Scalars['Date']>;
@@ -3789,6 +3895,30 @@ export type UpdateEmailSuccess = {
   __typename?: 'UpdateEmailSuccess';
   email: Scalars['String'];
   verificationEmailSent?: Maybe<Scalars['Boolean']>;
+};
+
+export type UpdateFeedSuggestionError = {
+  __typename?: 'UpdateFeedSuggestionError';
+  errorCodes: Array<UpdateFeedSuggestionErrorCode>;
+};
+
+export enum UpdateFeedSuggestionErrorCode {
+  BadRequest = 'BAD_REQUEST',
+  NotFound = 'NOT_FOUND',
+  Unauthorized = 'UNAUTHORIZED'
+}
+
+export type UpdateFeedSuggestionInput = {
+  action: FeedSuggestionAction;
+  id: Scalars['ID'];
+  subscriptionId?: InputMaybe<Scalars['ID']>;
+};
+
+export type UpdateFeedSuggestionResult = UpdateFeedSuggestionError | UpdateFeedSuggestionSuccess;
+
+export type UpdateFeedSuggestionSuccess = {
+  __typename?: 'UpdateFeedSuggestionSuccess';
+  suggestion: FeedSuggestion;
 };
 
 export type UpdateFilterError = {
@@ -4098,6 +4228,7 @@ export type UpdateSubscriptionInput = {
   fetchContentType?: InputMaybe<FetchContentType>;
   folder?: InputMaybe<Scalars['String']>;
   id: Scalars['ID'];
+  includeShorts?: InputMaybe<Scalars['Boolean']>;
   isPrivate?: InputMaybe<Scalars['Boolean']>;
   lastFetchedChecksum?: InputMaybe<Scalars['String']>;
   mostRecentItemDate?: InputMaybe<Scalars['Date']>;
@@ -4105,7 +4236,6 @@ export type UpdateSubscriptionInput = {
   refreshedAt?: InputMaybe<Scalars['Date']>;
   scheduledAt?: InputMaybe<Scalars['Date']>;
   status?: InputMaybe<SubscriptionStatus>;
-  includeShorts?: InputMaybe<Scalars['Boolean']>;
 };
 
 export type UpdateSubscriptionResult = UpdateSubscriptionError | UpdateSubscriptionSuccess;
@@ -4374,8 +4504,6 @@ export type WebhooksSuccess = {
   webhooks: Array<Webhook>;
 };
 
-
-
 export type YouTubeChannel = {
   __typename?: 'YouTubeChannel';
   avatar?: Maybe<Scalars['String']>;
@@ -4414,6 +4542,8 @@ export type YouTubeChannelVideo = {
   title: Scalars['String'];
   url: Scalars['String'];
 };
+
+
 
 export type ResolverTypeWrapper<T> = Promise<T> | T;
 
@@ -4682,6 +4812,15 @@ export type ResolversTypes = {
   FeedArticlesResult: ResolversTypes['FeedArticlesError'] | ResolversTypes['FeedArticlesSuccess'];
   FeedArticlesSuccess: ResolverTypeWrapper<FeedArticlesSuccess>;
   FeedEdge: ResolverTypeWrapper<FeedEdge>;
+  FeedSuggestion: ResolverTypeWrapper<FeedSuggestion>;
+  FeedSuggestionAction: FeedSuggestionAction;
+  FeedSuggestionPost: ResolverTypeWrapper<FeedSuggestionPost>;
+  FeedSuggestionReason: ResolverTypeWrapper<FeedSuggestionReason>;
+  FeedSuggestionStatus: FeedSuggestionStatus;
+  FeedSuggestionsError: ResolverTypeWrapper<FeedSuggestionsError>;
+  FeedSuggestionsErrorCode: FeedSuggestionsErrorCode;
+  FeedSuggestionsResult: ResolversTypes['FeedSuggestionsError'] | ResolversTypes['FeedSuggestionsSuccess'];
+  FeedSuggestionsSuccess: ResolverTypeWrapper<FeedSuggestionsSuccess>;
   FeedsError: ResolverTypeWrapper<FeedsError>;
   FeedsErrorCode: FeedsErrorCode;
   FeedsInput: FeedsInput;
@@ -4884,6 +5023,10 @@ export type ResolversTypes = {
   Recommendation: ResolverTypeWrapper<Recommendation>;
   RecommendationGroup: ResolverTypeWrapper<RecommendationGroup>;
   RecommendingUser: ResolverTypeWrapper<RecommendingUser>;
+  RefreshFeedSuggestionsError: ResolverTypeWrapper<RefreshFeedSuggestionsError>;
+  RefreshFeedSuggestionsErrorCode: RefreshFeedSuggestionsErrorCode;
+  RefreshFeedSuggestionsResult: ResolversTypes['RefreshFeedSuggestionsError'] | ResolversTypes['RefreshFeedSuggestionsSuccess'];
+  RefreshFeedSuggestionsSuccess: ResolverTypeWrapper<RefreshFeedSuggestionsSuccess>;
   RefreshHomeError: ResolverTypeWrapper<RefreshHomeError>;
   RefreshHomeErrorCode: RefreshHomeErrorCode;
   RefreshHomeResult: ResolversTypes['RefreshHomeError'] | ResolversTypes['RefreshHomeSuccess'];
@@ -4941,12 +5084,6 @@ export type ResolversTypes = {
   ScanFeedsInput: ScanFeedsInput;
   ScanFeedsResult: ResolversTypes['ScanFeedsError'] | ResolversTypes['ScanFeedsSuccess'];
   ScanFeedsSuccess: ResolverTypeWrapper<ScanFeedsSuccess>;
-  YouTubeChannel: ResolverTypeWrapper<YouTubeChannel>;
-  YouTubeChannelError: ResolverTypeWrapper<YouTubeChannelError>;
-  YouTubeChannelErrorCode: YouTubeChannelErrorCode;
-  YouTubeChannelResult: ResolversTypes['YouTubeChannelError'] | ResolversTypes['YouTubeChannelSuccess'];
-  YouTubeChannelSuccess: ResolverTypeWrapper<YouTubeChannelSuccess>;
-  YouTubeChannelVideo: ResolverTypeWrapper<YouTubeChannelVideo>;
   SearchError: ResolverTypeWrapper<SearchError>;
   SearchErrorCode: SearchErrorCode;
   SearchItem: ResolverTypeWrapper<SearchItem>;
@@ -5055,6 +5192,11 @@ export type ResolversTypes = {
   UpdateEmailInput: UpdateEmailInput;
   UpdateEmailResult: ResolversTypes['UpdateEmailError'] | ResolversTypes['UpdateEmailSuccess'];
   UpdateEmailSuccess: ResolverTypeWrapper<UpdateEmailSuccess>;
+  UpdateFeedSuggestionError: ResolverTypeWrapper<UpdateFeedSuggestionError>;
+  UpdateFeedSuggestionErrorCode: UpdateFeedSuggestionErrorCode;
+  UpdateFeedSuggestionInput: UpdateFeedSuggestionInput;
+  UpdateFeedSuggestionResult: ResolversTypes['UpdateFeedSuggestionError'] | ResolversTypes['UpdateFeedSuggestionSuccess'];
+  UpdateFeedSuggestionSuccess: ResolverTypeWrapper<UpdateFeedSuggestionSuccess>;
   UpdateFilterError: ResolverTypeWrapper<UpdateFilterError>;
   UpdateFilterErrorCode: UpdateFilterErrorCode;
   UpdateFilterInput: UpdateFilterInput;
@@ -5161,6 +5303,12 @@ export type ResolversTypes = {
   WebhooksErrorCode: WebhooksErrorCode;
   WebhooksResult: ResolversTypes['WebhooksError'] | ResolversTypes['WebhooksSuccess'];
   WebhooksSuccess: ResolverTypeWrapper<WebhooksSuccess>;
+  YouTubeChannel: ResolverTypeWrapper<YouTubeChannel>;
+  YouTubeChannelError: ResolverTypeWrapper<YouTubeChannelError>;
+  YouTubeChannelErrorCode: YouTubeChannelErrorCode;
+  YouTubeChannelResult: ResolversTypes['YouTubeChannelError'] | ResolversTypes['YouTubeChannelSuccess'];
+  YouTubeChannelSuccess: ResolverTypeWrapper<YouTubeChannelSuccess>;
+  YouTubeChannelVideo: ResolverTypeWrapper<YouTubeChannelVideo>;
 };
 
 /** Mapping between all available schema types and the resolvers parents */
@@ -5319,6 +5467,12 @@ export type ResolversParentTypes = {
   FeedArticlesResult: ResolversParentTypes['FeedArticlesError'] | ResolversParentTypes['FeedArticlesSuccess'];
   FeedArticlesSuccess: FeedArticlesSuccess;
   FeedEdge: FeedEdge;
+  FeedSuggestion: FeedSuggestion;
+  FeedSuggestionPost: FeedSuggestionPost;
+  FeedSuggestionReason: FeedSuggestionReason;
+  FeedSuggestionsError: FeedSuggestionsError;
+  FeedSuggestionsResult: ResolversParentTypes['FeedSuggestionsError'] | ResolversParentTypes['FeedSuggestionsSuccess'];
+  FeedSuggestionsSuccess: FeedSuggestionsSuccess;
   FeedsError: FeedsError;
   FeedsInput: FeedsInput;
   FeedsResult: ResolversParentTypes['FeedsError'] | ResolversParentTypes['FeedsSuccess'];
@@ -5477,6 +5631,9 @@ export type ResolversParentTypes = {
   Recommendation: Recommendation;
   RecommendationGroup: RecommendationGroup;
   RecommendingUser: RecommendingUser;
+  RefreshFeedSuggestionsError: RefreshFeedSuggestionsError;
+  RefreshFeedSuggestionsResult: ResolversParentTypes['RefreshFeedSuggestionsError'] | ResolversParentTypes['RefreshFeedSuggestionsSuccess'];
+  RefreshFeedSuggestionsSuccess: RefreshFeedSuggestionsSuccess;
   RefreshHomeError: RefreshHomeError;
   RefreshHomeResult: ResolversParentTypes['RefreshHomeError'] | ResolversParentTypes['RefreshHomeSuccess'];
   RefreshHomeSuccess: RefreshHomeSuccess;
@@ -5520,11 +5677,6 @@ export type ResolversParentTypes = {
   ScanFeedsInput: ScanFeedsInput;
   ScanFeedsResult: ResolversParentTypes['ScanFeedsError'] | ResolversParentTypes['ScanFeedsSuccess'];
   ScanFeedsSuccess: ScanFeedsSuccess;
-  YouTubeChannel: YouTubeChannel;
-  YouTubeChannelError: YouTubeChannelError;
-  YouTubeChannelResult: ResolversParentTypes['YouTubeChannelError'] | ResolversParentTypes['YouTubeChannelSuccess'];
-  YouTubeChannelSuccess: YouTubeChannelSuccess;
-  YouTubeChannelVideo: YouTubeChannelVideo;
   SearchError: SearchError;
   SearchItem: SearchItem;
   SearchItemEdge: SearchItemEdge;
@@ -5608,6 +5760,10 @@ export type ResolversParentTypes = {
   UpdateEmailInput: UpdateEmailInput;
   UpdateEmailResult: ResolversParentTypes['UpdateEmailError'] | ResolversParentTypes['UpdateEmailSuccess'];
   UpdateEmailSuccess: UpdateEmailSuccess;
+  UpdateFeedSuggestionError: UpdateFeedSuggestionError;
+  UpdateFeedSuggestionInput: UpdateFeedSuggestionInput;
+  UpdateFeedSuggestionResult: ResolversParentTypes['UpdateFeedSuggestionError'] | ResolversParentTypes['UpdateFeedSuggestionSuccess'];
+  UpdateFeedSuggestionSuccess: UpdateFeedSuggestionSuccess;
   UpdateFilterError: UpdateFilterError;
   UpdateFilterInput: UpdateFilterInput;
   UpdateFilterResult: ResolversParentTypes['UpdateFilterError'] | ResolversParentTypes['UpdateFilterSuccess'];
@@ -5689,6 +5845,11 @@ export type ResolversParentTypes = {
   WebhooksError: WebhooksError;
   WebhooksResult: ResolversParentTypes['WebhooksError'] | ResolversParentTypes['WebhooksSuccess'];
   WebhooksSuccess: WebhooksSuccess;
+  YouTubeChannel: YouTubeChannel;
+  YouTubeChannelError: YouTubeChannelError;
+  YouTubeChannelResult: ResolversParentTypes['YouTubeChannelError'] | ResolversParentTypes['YouTubeChannelSuccess'];
+  YouTubeChannelSuccess: YouTubeChannelSuccess;
+  YouTubeChannelVideo: YouTubeChannelVideo;
 };
 
 export type SanitizeDirectiveArgs = {
@@ -6446,6 +6607,62 @@ export type FeedEdgeResolvers<ContextType = ResolverContext, ParentType extends 
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 };
 
+export type FeedSuggestionResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['FeedSuggestion'] = ResolversParentTypes['FeedSuggestion']> = {
+  author?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  description?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  feedUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  icon?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  kind?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  lastPostAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  latest?: Resolver<Array<ResolversTypes['FeedSuggestionPost']>, ParentType, ContextType>;
+  postsPerWeek?: Resolver<Maybe<ResolversTypes['Float']>, ParentType, ContextType>;
+  reasons?: Resolver<Array<ResolversTypes['FeedSuggestionReason']>, ParentType, ContextType>;
+  score?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  signals?: Resolver<ResolversTypes['JSON'], ParentType, ContextType>;
+  siteUrl?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes['FeedSuggestionStatus'], ParentType, ContextType>;
+  subscriptionId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
+  title?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  trialEndsAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type FeedSuggestionPostResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['FeedSuggestionPost'] = ResolversParentTypes['FeedSuggestionPost']> = {
+  image?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  minutes?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
+  publishedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  summary?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  title?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  url?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type FeedSuggestionReasonResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['FeedSuggestionReason'] = ResolversParentTypes['FeedSuggestionReason']> = {
+  count?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  guide?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  guideName?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  kind?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  title?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type FeedSuggestionsErrorResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['FeedSuggestionsError'] = ResolversParentTypes['FeedSuggestionsError']> = {
+  errorCodes?: Resolver<Array<ResolversTypes['FeedSuggestionsErrorCode']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type FeedSuggestionsResultResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['FeedSuggestionsResult'] = ResolversParentTypes['FeedSuggestionsResult']> = {
+  __resolveType: TypeResolveFn<'FeedSuggestionsError' | 'FeedSuggestionsSuccess', ParentType, ContextType>;
+};
+
+export type FeedSuggestionsSuccessResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['FeedSuggestionsSuccess'] = ResolversParentTypes['FeedSuggestionsSuccess']> = {
+  articlesConsidered?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  builtAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  suggestions?: Resolver<Array<ResolversTypes['FeedSuggestion']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
 export type FeedsErrorResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['FeedsError'] = ResolversParentTypes['FeedsError']> = {
   errorCodes?: Resolver<Array<ResolversTypes['FeedsErrorCode']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
@@ -7075,6 +7292,7 @@ export type MutationResolvers<ContextType = ResolverContext, ParentType extends 
   optInFeature?: Resolver<ResolversTypes['OptInFeatureResult'], ParentType, ContextType, RequireFields<MutationOptInFeatureArgs, 'input'>>;
   recommend?: Resolver<ResolversTypes['RecommendResult'], ParentType, ContextType, RequireFields<MutationRecommendArgs, 'input'>>;
   recommendHighlights?: Resolver<ResolversTypes['RecommendHighlightsResult'], ParentType, ContextType, RequireFields<MutationRecommendHighlightsArgs, 'input'>>;
+  refreshFeedSuggestions?: Resolver<ResolversTypes['RefreshFeedSuggestionsResult'], ParentType, ContextType>;
   refreshHome?: Resolver<ResolversTypes['RefreshHomeResult'], ParentType, ContextType>;
   replyToEmail?: Resolver<ResolversTypes['ReplyToEmailResult'], ParentType, ContextType, RequireFields<MutationReplyToEmailArgs, 'recentEmailId' | 'reply'>>;
   reportItem?: Resolver<ResolversTypes['ReportItemResult'], ParentType, ContextType, RequireFields<MutationReportItemArgs, 'input'>>;
@@ -7098,6 +7316,7 @@ export type MutationResolvers<ContextType = ResolverContext, ParentType extends 
   subscribe?: Resolver<ResolversTypes['SubscribeResult'], ParentType, ContextType, RequireFields<MutationSubscribeArgs, 'input'>>;
   unsubscribe?: Resolver<ResolversTypes['UnsubscribeResult'], ParentType, ContextType, RequireFields<MutationUnsubscribeArgs, 'name'>>;
   updateEmail?: Resolver<ResolversTypes['UpdateEmailResult'], ParentType, ContextType, RequireFields<MutationUpdateEmailArgs, 'input'>>;
+  updateFeedSuggestion?: Resolver<ResolversTypes['UpdateFeedSuggestionResult'], ParentType, ContextType, RequireFields<MutationUpdateFeedSuggestionArgs, 'input'>>;
   updateFilter?: Resolver<ResolversTypes['UpdateFilterResult'], ParentType, ContextType, RequireFields<MutationUpdateFilterArgs, 'input'>>;
   updateFolderPolicy?: Resolver<ResolversTypes['UpdateFolderPolicyResult'], ParentType, ContextType, RequireFields<MutationUpdateFolderPolicyArgs, 'input'>>;
   updateHighlight?: Resolver<ResolversTypes['UpdateHighlightResult'], ParentType, ContextType, RequireFields<MutationUpdateHighlightArgs, 'input'>>;
@@ -7245,6 +7464,7 @@ export type QueryResolvers<ContextType = ResolverContext, ParentType extends Res
   deviceTokens?: Resolver<ResolversTypes['DeviceTokensResult'], ParentType, ContextType>;
   discoverFeeds?: Resolver<ResolversTypes['DiscoverFeedResult'], ParentType, ContextType>;
   discoverTopics?: Resolver<ResolversTypes['GetDiscoverTopicResults'], ParentType, ContextType>;
+  feedSuggestions?: Resolver<ResolversTypes['FeedSuggestionsResult'], ParentType, ContextType, Partial<QueryFeedSuggestionsArgs>>;
   feeds?: Resolver<ResolversTypes['FeedsResult'], ParentType, ContextType, RequireFields<QueryFeedsArgs, 'input'>>;
   filters?: Resolver<ResolversTypes['FiltersResult'], ParentType, ContextType>;
   folderPolicies?: Resolver<ResolversTypes['FolderPoliciesResult'], ParentType, ContextType>;
@@ -7266,7 +7486,6 @@ export type QueryResolvers<ContextType = ResolverContext, ParentType extends Res
   recentSearches?: Resolver<ResolversTypes['RecentSearchesResult'], ParentType, ContextType>;
   rules?: Resolver<ResolversTypes['RulesResult'], ParentType, ContextType, Partial<QueryRulesArgs>>;
   scanFeeds?: Resolver<ResolversTypes['ScanFeedsResult'], ParentType, ContextType, RequireFields<QueryScanFeedsArgs, 'input'>>;
-  youtubeChannel?: Resolver<ResolversTypes['YouTubeChannelResult'], ParentType, ContextType, RequireFields<QueryYoutubeChannelArgs, 'url'>>;
   search?: Resolver<ResolversTypes['SearchResult'], ParentType, ContextType, Partial<QuerySearchArgs>>;
   sendInstallInstructions?: Resolver<ResolversTypes['SendInstallInstructionsResult'], ParentType, ContextType>;
   subscription?: Resolver<ResolversTypes['SubscriptionResult'], ParentType, ContextType, RequireFields<QuerySubscriptionArgs, 'id'>>;
@@ -7278,6 +7497,7 @@ export type QueryResolvers<ContextType = ResolverContext, ParentType extends Res
   validateUsername?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<QueryValidateUsernameArgs, 'username'>>;
   webhook?: Resolver<ResolversTypes['WebhookResult'], ParentType, ContextType, RequireFields<QueryWebhookArgs, 'id'>>;
   webhooks?: Resolver<ResolversTypes['WebhooksResult'], ParentType, ContextType>;
+  youtubeChannel?: Resolver<ResolversTypes['YouTubeChannelResult'], ParentType, ContextType, RequireFields<QueryYoutubeChannelArgs, 'url'>>;
 };
 
 export type ReactionResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['Reaction'] = ResolversParentTypes['Reaction']> = {
@@ -7403,6 +7623,20 @@ export type RecommendingUserResolvers<ContextType = ResolverContext, ParentType 
   profileImageURL?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   userId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   username?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type RefreshFeedSuggestionsErrorResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['RefreshFeedSuggestionsError'] = ResolversParentTypes['RefreshFeedSuggestionsError']> = {
+  errorCodes?: Resolver<Array<ResolversTypes['RefreshFeedSuggestionsErrorCode']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type RefreshFeedSuggestionsResultResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['RefreshFeedSuggestionsResult'] = ResolversParentTypes['RefreshFeedSuggestionsResult']> = {
+  __resolveType: TypeResolveFn<'RefreshFeedSuggestionsError' | 'RefreshFeedSuggestionsSuccess', ParentType, ContextType>;
+};
+
+export type RefreshFeedSuggestionsSuccessResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['RefreshFeedSuggestionsSuccess'] = ResolversParentTypes['RefreshFeedSuggestionsSuccess']> = {
+  queued?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 };
 
@@ -7870,9 +8104,9 @@ export type SubscriptionResolvers<ContextType = ResolverContext, ParentType exte
   fetchContent?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   fetchContentType?: Resolver<ResolversTypes['FetchContentType'], ParentType, ContextType>;
   folder?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  includeShorts?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   icon?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  includeShorts?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isPrivate?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
   lastFetchedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   mostRecentItemDate?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
@@ -7989,6 +8223,20 @@ export type UpdateEmailResultResolvers<ContextType = ResolverContext, ParentType
 export type UpdateEmailSuccessResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['UpdateEmailSuccess'] = ResolversParentTypes['UpdateEmailSuccess']> = {
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   verificationEmailSent?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type UpdateFeedSuggestionErrorResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['UpdateFeedSuggestionError'] = ResolversParentTypes['UpdateFeedSuggestionError']> = {
+  errorCodes?: Resolver<Array<ResolversTypes['UpdateFeedSuggestionErrorCode']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type UpdateFeedSuggestionResultResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['UpdateFeedSuggestionResult'] = ResolversParentTypes['UpdateFeedSuggestionResult']> = {
+  __resolveType: TypeResolveFn<'UpdateFeedSuggestionError' | 'UpdateFeedSuggestionSuccess', ParentType, ContextType>;
+};
+
+export type UpdateFeedSuggestionSuccessResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['UpdateFeedSuggestionSuccess'] = ResolversParentTypes['UpdateFeedSuggestionSuccess']> = {
+  suggestion?: Resolver<ResolversTypes['FeedSuggestion'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 };
 
@@ -8343,6 +8591,40 @@ export type WebhooksSuccessResolvers<ContextType = ResolverContext, ParentType e
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 };
 
+export type YouTubeChannelResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['YouTubeChannel'] = ResolversParentTypes['YouTubeChannel']> = {
+  avatar?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  channelId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  feedUrl?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  handle?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  title?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  uploadsPerWeek?: Resolver<Maybe<ResolversTypes['Float']>, ParentType, ContextType>;
+  videos?: Resolver<Array<ResolversTypes['YouTubeChannelVideo']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type YouTubeChannelErrorResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['YouTubeChannelError'] = ResolversParentTypes['YouTubeChannelError']> = {
+  errorCodes?: Resolver<Array<ResolversTypes['YouTubeChannelErrorCode']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type YouTubeChannelResultResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['YouTubeChannelResult'] = ResolversParentTypes['YouTubeChannelResult']> = {
+  __resolveType: TypeResolveFn<'YouTubeChannelError' | 'YouTubeChannelSuccess', ParentType, ContextType>;
+};
+
+export type YouTubeChannelSuccessResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['YouTubeChannelSuccess'] = ResolversParentTypes['YouTubeChannelSuccess']> = {
+  channel?: Resolver<ResolversTypes['YouTubeChannel'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type YouTubeChannelVideoResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['YouTubeChannelVideo'] = ResolversParentTypes['YouTubeChannelVideo']> = {
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  publishedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  thumbnail?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  title?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  url?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
 export type Resolvers<ContextType = ResolverContext> = {
   AddDiscoverFeedError?: AddDiscoverFeedErrorResolvers<ContextType>;
   AddDiscoverFeedResult?: AddDiscoverFeedResultResolvers<ContextType>;
@@ -8479,6 +8761,12 @@ export type Resolvers<ContextType = ResolverContext> = {
   FeedArticlesResult?: FeedArticlesResultResolvers<ContextType>;
   FeedArticlesSuccess?: FeedArticlesSuccessResolvers<ContextType>;
   FeedEdge?: FeedEdgeResolvers<ContextType>;
+  FeedSuggestion?: FeedSuggestionResolvers<ContextType>;
+  FeedSuggestionPost?: FeedSuggestionPostResolvers<ContextType>;
+  FeedSuggestionReason?: FeedSuggestionReasonResolvers<ContextType>;
+  FeedSuggestionsError?: FeedSuggestionsErrorResolvers<ContextType>;
+  FeedSuggestionsResult?: FeedSuggestionsResultResolvers<ContextType>;
+  FeedSuggestionsSuccess?: FeedSuggestionsSuccessResolvers<ContextType>;
   FeedsError?: FeedsErrorResolvers<ContextType>;
   FeedsResult?: FeedsResultResolvers<ContextType>;
   FeedsSuccess?: FeedsSuccessResolvers<ContextType>;
@@ -8620,6 +8908,9 @@ export type Resolvers<ContextType = ResolverContext> = {
   Recommendation?: RecommendationResolvers<ContextType>;
   RecommendationGroup?: RecommendationGroupResolvers<ContextType>;
   RecommendingUser?: RecommendingUserResolvers<ContextType>;
+  RefreshFeedSuggestionsError?: RefreshFeedSuggestionsErrorResolvers<ContextType>;
+  RefreshFeedSuggestionsResult?: RefreshFeedSuggestionsResultResolvers<ContextType>;
+  RefreshFeedSuggestionsSuccess?: RefreshFeedSuggestionsSuccessResolvers<ContextType>;
   RefreshHomeError?: RefreshHomeErrorResolvers<ContextType>;
   RefreshHomeResult?: RefreshHomeResultResolvers<ContextType>;
   RefreshHomeSuccess?: RefreshHomeSuccessResolvers<ContextType>;
@@ -8722,6 +9013,9 @@ export type Resolvers<ContextType = ResolverContext> = {
   UpdateEmailError?: UpdateEmailErrorResolvers<ContextType>;
   UpdateEmailResult?: UpdateEmailResultResolvers<ContextType>;
   UpdateEmailSuccess?: UpdateEmailSuccessResolvers<ContextType>;
+  UpdateFeedSuggestionError?: UpdateFeedSuggestionErrorResolvers<ContextType>;
+  UpdateFeedSuggestionResult?: UpdateFeedSuggestionResultResolvers<ContextType>;
+  UpdateFeedSuggestionSuccess?: UpdateFeedSuggestionSuccessResolvers<ContextType>;
   UpdateFilterError?: UpdateFilterErrorResolvers<ContextType>;
   UpdateFilterResult?: UpdateFilterResultResolvers<ContextType>;
   UpdateFilterSuccess?: UpdateFilterSuccessResolvers<ContextType>;
@@ -8788,6 +9082,11 @@ export type Resolvers<ContextType = ResolverContext> = {
   WebhooksError?: WebhooksErrorResolvers<ContextType>;
   WebhooksResult?: WebhooksResultResolvers<ContextType>;
   WebhooksSuccess?: WebhooksSuccessResolvers<ContextType>;
+  YouTubeChannel?: YouTubeChannelResolvers<ContextType>;
+  YouTubeChannelError?: YouTubeChannelErrorResolvers<ContextType>;
+  YouTubeChannelResult?: YouTubeChannelResultResolvers<ContextType>;
+  YouTubeChannelSuccess?: YouTubeChannelSuccessResolvers<ContextType>;
+  YouTubeChannelVideo?: YouTubeChannelVideoResolvers<ContextType>;
 };
 
 export type DirectiveResolvers<ContextType = ResolverContext> = {

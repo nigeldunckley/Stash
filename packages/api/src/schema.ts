@@ -2946,6 +2946,123 @@ const schema = gql`
     errorCodes: [YouTubeChannelErrorCode!]!
   }
 
+  # A feed Stash suggests because your reading keeps leading to it.
+  type FeedSuggestion {
+    id: ID!
+    siteUrl: String!
+    feedUrl: String
+    kind: String!
+    title: String!
+    description: String
+    icon: String
+    author: String
+    postsPerWeek: Float
+    lastPostAt: Date
+    score: Float!
+    # Each signal between 0 and 1: links, taste, neighbour, writer, saves, health.
+    signals: JSON!
+    reasons: [FeedSuggestionReason!]!
+    latest: [FeedSuggestionPost!]!
+    status: FeedSuggestionStatus!
+    subscriptionId: ID
+    trialEndsAt: Date
+  }
+
+  # Why a feed is suggested: one of your feeds linked to it, you saved from
+  # it, a writer you read writes it, or it links to the same places as one of
+  # your favourite feeds.
+  type FeedSuggestionReason {
+    kind: String!
+    guide: String!
+    guideName: String!
+    count: Int!
+    title: String
+  }
+
+  type FeedSuggestionPost {
+    title: String!
+    url: String!
+    image: String
+    summary: String
+    publishedAt: Date
+    minutes: Int
+  }
+
+  enum FeedSuggestionStatus {
+    NEW
+    FOLLOWING
+    TRIAL
+    KEPT
+    DISMISSED
+  }
+
+  union FeedSuggestionsResult = FeedSuggestionsSuccess | FeedSuggestionsError
+
+  type FeedSuggestionsSuccess {
+    suggestions: [FeedSuggestion!]!
+    builtAt: Date
+    articlesConsidered: Int!
+  }
+
+  enum FeedSuggestionsErrorCode {
+    BAD_REQUEST
+    UNAUTHORIZED
+  }
+
+  type FeedSuggestionsError {
+    errorCodes: [FeedSuggestionsErrorCode!]!
+  }
+
+  enum FeedSuggestionAction {
+    FOLLOW
+    TRY
+    KEEP
+    DROP
+    DISMISS
+    RESTORE
+  }
+
+  input UpdateFeedSuggestionInput {
+    id: ID!
+    action: FeedSuggestionAction!
+    # The subscription made when following or trying the feed.
+    subscriptionId: ID
+  }
+
+  union UpdateFeedSuggestionResult =
+      UpdateFeedSuggestionSuccess
+    | UpdateFeedSuggestionError
+
+  type UpdateFeedSuggestionSuccess {
+    suggestion: FeedSuggestion!
+  }
+
+  enum UpdateFeedSuggestionErrorCode {
+    BAD_REQUEST
+    NOT_FOUND
+    UNAUTHORIZED
+  }
+
+  type UpdateFeedSuggestionError {
+    errorCodes: [UpdateFeedSuggestionErrorCode!]!
+  }
+
+  union RefreshFeedSuggestionsResult =
+      RefreshFeedSuggestionsSuccess
+    | RefreshFeedSuggestionsError
+
+  type RefreshFeedSuggestionsSuccess {
+    queued: Boolean!
+  }
+
+  enum RefreshFeedSuggestionsErrorCode {
+    UNAUTHORIZED
+  }
+
+  type RefreshFeedSuggestionsError {
+    errorCodes: [RefreshFeedSuggestionsErrorCode!]!
+  }
+
   input ScanFeedsInput {
     url: String
     opml: String
@@ -3568,6 +3685,10 @@ const schema = gql`
     generateApiKey(input: GenerateApiKeyInput!): GenerateApiKeyResult!
     unsubscribe(name: String!, subscriptionId: ID): UnsubscribeResult!
     subscribe(input: SubscribeInput!): SubscribeResult!
+    updateFeedSuggestion(
+      input: UpdateFeedSuggestionInput!
+    ): UpdateFeedSuggestionResult!
+    refreshFeedSuggestions: RefreshFeedSuggestionsResult!
     addPopularRead(name: String!): AddPopularReadResult!
     saveDiscoverArticle(
       input: SaveDiscoverArticleInput!
@@ -3702,6 +3823,10 @@ const schema = gql`
     discoverFeeds: DiscoverFeedResult!
     scanFeeds(input: ScanFeedsInput!): ScanFeedsResult!
     youtubeChannel(url: String!): YouTubeChannelResult!
+    feedSuggestions(
+      statuses: [FeedSuggestionStatus!]
+      first: Int
+    ): FeedSuggestionsResult!
     home(first: Int, after: String): HomeResult!
     subscription(id: ID!): SubscriptionResult!
     hiddenHomeSection: HiddenHomeSectionResult!

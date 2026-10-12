@@ -43,6 +43,7 @@ import {
   PROCESS_YOUTUBE_VIDEO_JOB_NAME,
 } from '../jobs/process-youtube-video'
 import { PRUNE_TRASH_JOB } from '../jobs/prune_trash'
+import { BUILD_FEED_SUGGESTIONS_JOB } from '../jobs/build_feed_suggestions'
 import {
   queueRSSRefreshFeedJob,
   REFRESH_ALL_FEEDS_JOB_NAME,
@@ -130,6 +131,7 @@ export const getJobPriority = (jobName: string): number => {
     case PRUNE_TRASH_JOB:
     case EXPIRE_FOLDERS_JOB_NAME:
     case EXPORT_JOB_NAME:
+    case BUILD_FEED_SUGGESTIONS_JOB:
       return 100
 
     default:
@@ -901,7 +903,7 @@ export const removeDigestJobs = async (userId: string) => {
   // remove existing repeated job if any
   await Promise.all(
     Object.keys(CRON_PATTERNS).map((key) =>
-      queue.removeJobScheduler(CREATE_DIGEST_JOB, )
+      queue.removeJobScheduler(CREATE_DIGEST_JOB)
     )
   )
 }
@@ -1094,6 +1096,26 @@ export const enqueueExpireFoldersJob = async () => {
       removeOnFail: true,
       priority: getJobPriority(EXPIRE_FOLDERS_JOB_NAME),
       attempts: 3,
+    }
+  )
+}
+
+// Rebuilds one user's feed suggestions now rather than at the nightly run.
+export const enqueueBuildFeedSuggestions = async (userId: string) => {
+  const queue = await getQueue()
+  if (!queue) {
+    return undefined
+  }
+
+  return queue.add(
+    BUILD_FEED_SUGGESTIONS_JOB,
+    { userId },
+    {
+      jobId: `${BUILD_FEED_SUGGESTIONS_JOB}_${userId}_${JOB_VERSION}`,
+      removeOnComplete: true,
+      removeOnFail: true,
+      priority: getJobPriority(BUILD_FEED_SUGGESTIONS_JOB),
+      attempts: 1,
     }
   )
 }

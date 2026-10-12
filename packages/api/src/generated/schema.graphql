@@ -975,6 +975,77 @@ type FeedEdge {
   node: Feed!
 }
 
+type FeedSuggestion {
+  author: String
+  description: String
+  feedUrl: String
+  icon: String
+  id: ID!
+  kind: String!
+  lastPostAt: Date
+  latest: [FeedSuggestionPost!]!
+  postsPerWeek: Float
+  reasons: [FeedSuggestionReason!]!
+  score: Float!
+  signals: JSON!
+  siteUrl: String!
+  status: FeedSuggestionStatus!
+  subscriptionId: ID
+  title: String!
+  trialEndsAt: Date
+}
+
+enum FeedSuggestionAction {
+  DISMISS
+  DROP
+  FOLLOW
+  KEEP
+  RESTORE
+  TRY
+}
+
+type FeedSuggestionPost {
+  image: String
+  minutes: Int
+  publishedAt: Date
+  summary: String
+  title: String!
+  url: String!
+}
+
+type FeedSuggestionReason {
+  count: Int!
+  guide: String!
+  guideName: String!
+  kind: String!
+  title: String
+}
+
+enum FeedSuggestionStatus {
+  DISMISSED
+  FOLLOWING
+  KEPT
+  NEW
+  TRIAL
+}
+
+type FeedSuggestionsError {
+  errorCodes: [FeedSuggestionsErrorCode!]!
+}
+
+enum FeedSuggestionsErrorCode {
+  BAD_REQUEST
+  UNAUTHORIZED
+}
+
+union FeedSuggestionsResult = FeedSuggestionsError | FeedSuggestionsSuccess
+
+type FeedSuggestionsSuccess {
+  articlesConsidered: Int!
+  builtAt: Date
+  suggestions: [FeedSuggestion!]!
+}
+
 type FeedsError {
   errorCodes: [FeedsErrorCode!]!
 }
@@ -1720,6 +1791,7 @@ type Mutation {
   optInFeature(input: OptInFeatureInput!): OptInFeatureResult!
   recommend(input: RecommendInput!): RecommendResult!
   recommendHighlights(input: RecommendHighlightsInput!): RecommendHighlightsResult!
+  refreshFeedSuggestions: RefreshFeedSuggestionsResult!
   refreshHome: RefreshHomeResult!
   replyToEmail(recentEmailId: ID!, reply: AllowedReply!): ReplyToEmailResult!
   reportItem(input: ReportItemInput!): ReportItemResult!
@@ -1743,6 +1815,7 @@ type Mutation {
   subscribe(input: SubscribeInput!): SubscribeResult!
   unsubscribe(name: String!, subscriptionId: ID): UnsubscribeResult!
   updateEmail(input: UpdateEmailInput!): UpdateEmailResult!
+  updateFeedSuggestion(input: UpdateFeedSuggestionInput!): UpdateFeedSuggestionResult!
   updateFilter(input: UpdateFilterInput!): UpdateFilterResult!
   updateFolderPolicy(input: UpdateFolderPolicyInput!): UpdateFolderPolicyResult!
   updateHighlight(input: UpdateHighlightInput!): UpdateHighlightResult!
@@ -1937,6 +2010,7 @@ type Query {
   deviceTokens: DeviceTokensResult!
   discoverFeeds: DiscoverFeedResult!
   discoverTopics: GetDiscoverTopicResults!
+  feedSuggestions(first: Int, statuses: [FeedSuggestionStatus!]): FeedSuggestionsResult!
   feeds(input: FeedsInput!): FeedsResult!
   filters: FiltersResult!
   folderPolicies: FolderPoliciesResult!
@@ -1958,7 +2032,6 @@ type Query {
   recentSearches: RecentSearchesResult!
   rules(enabled: Boolean): RulesResult!
   scanFeeds(input: ScanFeedsInput!): ScanFeedsResult!
-  youtubeChannel(url: String!): YouTubeChannelResult!
   search(after: String, first: Int, format: String, includeContent: Boolean, query: String): SearchResult!
   sendInstallInstructions: SendInstallInstructionsResult!
   subscription(id: ID!): SubscriptionResult!
@@ -1970,6 +2043,7 @@ type Query {
   validateUsername(username: String!): Boolean!
   webhook(id: ID!): WebhookResult!
   webhooks: WebhooksResult!
+  youtubeChannel(url: String!): YouTubeChannelResult!
 }
 
 type Reaction {
@@ -2118,6 +2192,20 @@ type RecommendingUser {
   profileImageURL: String
   userId: String!
   username: String!
+}
+
+type RefreshFeedSuggestionsError {
+  errorCodes: [RefreshFeedSuggestionsErrorCode!]!
+}
+
+enum RefreshFeedSuggestionsErrorCode {
+  UNAUTHORIZED
+}
+
+union RefreshFeedSuggestionsResult = RefreshFeedSuggestionsError | RefreshFeedSuggestionsSuccess
+
+type RefreshFeedSuggestionsSuccess {
+  queued: Boolean!
 }
 
 type RefreshHomeError {
@@ -2857,9 +2945,9 @@ type Subscription {
   fetchContent: Boolean!
   fetchContentType: FetchContentType!
   folder: String!
-  includeShorts: Boolean!
   icon: String
   id: ID!
+  includeShorts: Boolean!
   isPrivate: Boolean
   lastFetchedAt: Date
   mostRecentItemDate: Date
@@ -2999,6 +3087,28 @@ union UpdateEmailResult = UpdateEmailError | UpdateEmailSuccess
 type UpdateEmailSuccess {
   email: String!
   verificationEmailSent: Boolean
+}
+
+type UpdateFeedSuggestionError {
+  errorCodes: [UpdateFeedSuggestionErrorCode!]!
+}
+
+enum UpdateFeedSuggestionErrorCode {
+  BAD_REQUEST
+  NOT_FOUND
+  UNAUTHORIZED
+}
+
+input UpdateFeedSuggestionInput {
+  action: FeedSuggestionAction!
+  id: ID!
+  subscriptionId: ID
+}
+
+union UpdateFeedSuggestionResult = UpdateFeedSuggestionError | UpdateFeedSuggestionSuccess
+
+type UpdateFeedSuggestionSuccess {
+  suggestion: FeedSuggestion!
 }
 
 type UpdateFilterError {
@@ -3285,12 +3395,12 @@ input UpdateSubscriptionInput {
   fetchContentType: FetchContentType
   folder: String
   id: ID!
+  includeShorts: Boolean
   isPrivate: Boolean
   lastFetchedChecksum: String
   mostRecentItemDate: Date
   name: String
   refreshedAt: Date
-  includeShorts: Boolean
   scheduledAt: Date
   status: SubscriptionStatus
 }

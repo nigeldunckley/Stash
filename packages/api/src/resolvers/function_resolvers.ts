@@ -15,6 +15,7 @@ import {
 import { Post } from '../entity/post'
 import { PublicItem } from '../entity/public_item'
 import { Recommendation } from '../entity/recommendation'
+import { FeedSuggestion } from '../entity/feed_suggestion'
 import {
   DEFAULT_SUBSCRIPTION_FOLDER,
   Subscription,
@@ -133,6 +134,9 @@ import {
   saveUrlResolver,
   scanFeedsResolver,
   youtubeChannelResolver,
+  feedSuggestionsResolver,
+  updateFeedSuggestionResolver,
+  refreshFeedSuggestionsResolver,
   searchResolver,
   sendInstallInstructionsResolver,
   setBookmarkArticleResolver,
@@ -294,6 +298,8 @@ export const functionResolvers = {
     unsubscribe: unsubscribeResolver,
     updatePage: updatePageResolver,
     subscribe: subscribeResolver,
+    updateFeedSuggestion: updateFeedSuggestionResolver,
+    refreshFeedSuggestions: refreshFeedSuggestionsResolver,
     addPopularRead: addPopularReadResolver,
     setWebhook: setWebhookResolver,
     deleteWebhook: deleteWebhookResolver,
@@ -370,6 +376,7 @@ export const functionResolvers = {
     feeds: feedsResolver,
     scanFeeds: scanFeedsResolver,
     youtubeChannel: youtubeChannelResolver,
+    feedSuggestions: feedSuggestionsResolver,
     integration: integrationResolver,
     subscription: subscriptionResolver,
     highlights: highlightsResolver,
@@ -623,6 +630,17 @@ export const functionResolvers = {
       }
 
       return 0
+    },
+  },
+  FeedSuggestion: {
+    title(suggestion: FeedSuggestion) {
+      return suggestion.title || suggestion.site
+    },
+    status(suggestion: FeedSuggestion) {
+      return suggestion.status.toUpperCase()
+    },
+    icon(suggestion: FeedSuggestion) {
+      return suggestion.icon && createImageProxyUrl(suggestion.icon, 128, 128)
     },
   },
   Subscription: {
@@ -945,6 +963,9 @@ export const functionResolvers = {
   ...resultResolveTypeResolver('UpdateEmail'),
   ...resultResolveTypeResolver('ScanFeeds'),
   ...resultResolveTypeResolver('YouTubeChannel'),
+  ...resultResolveTypeResolver('FeedSuggestions'),
+  ...resultResolveTypeResolver('UpdateFeedSuggestion'),
+  ...resultResolveTypeResolver('RefreshFeedSuggestions'),
   ...resultResolveTypeResolver('MoveToFolder'),
   ...resultResolveTypeResolver('UpdateNewsletterEmail'),
   ...resultResolveTypeResolver('EmptyTrash'),

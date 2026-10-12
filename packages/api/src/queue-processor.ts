@@ -19,6 +19,10 @@ import { TaskState } from './generated/graphql'
 import { aiSummarize, AI_SUMMARIZE_JOB_NAME } from './jobs/ai-summarize'
 import { createDigest, CREATE_DIGEST_JOB } from './jobs/ai/create_digest'
 import { bulkAction, BULK_ACTION_JOB_NAME } from './jobs/bulk_action'
+import {
+  buildFeedSuggestionsJob,
+  BUILD_FEED_SUGGESTIONS_JOB,
+} from './jobs/build_feed_suggestions'
 import { callWebhook, CALL_WEBHOOK_JOB_NAME } from './jobs/call_webhook'
 import {
   confirmEmailJob,
@@ -233,6 +237,8 @@ export const createWorker = (connection: ConnectionOptions) =>
             return expireFoldersJob()
           case EXPORT_JOB_NAME:
             return exportJob(job.data)
+          case BUILD_FEED_SUGGESTIONS_JOB:
+            return buildFeedSuggestionsJob(job.data)
           default:
             logger.warning(`[queue-processor] unhandled job: ${job.name}`)
         }
@@ -279,6 +285,19 @@ const setupCronJobs = async () => {
     {
       opts: {
         priority: getJobPriority(REFRESH_ALL_FEEDS_JOB_NAME),
+      },
+    }
+  )
+
+  // Feed suggestions are rebuilt once a night, when nothing else is busy.
+  await queue.upsertJobScheduler(
+    BUILD_FEED_SUGGESTIONS_JOB,
+    {
+      pattern: '0 3 * * *',
+    },
+    {
+      opts: {
+        priority: getJobPriority(BUILD_FEED_SUGGESTIONS_JOB),
       },
     }
   )
