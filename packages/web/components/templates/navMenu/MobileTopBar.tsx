@@ -131,7 +131,13 @@ export function MobileTopBar(props: {
           <Tab
             key={item.section}
             href={item.href}
-            aria-current={props.section == item.section ? 'page' : undefined}
+            data-nav={item.section}
+            aria-current={
+              props.section == item.section ||
+              (props.section == 'discover' && item.section == 'subscriptions')
+                ? 'page'
+                : undefined
+            }
           >
             {item.label}
           </Tab>

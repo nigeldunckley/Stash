@@ -79,6 +79,7 @@ import {
   PEEK_WIDTH,
 } from './FeedPeek'
 import { SourceSettings } from './SourceSettings'
+import { DiscoverPill } from '../discover/DiscoverPill'
 import { navigateWithMorph } from '../../../lib/viewTransition'
 
 const Page = styled('main', {
@@ -1468,6 +1469,7 @@ export function StashFeeds(): JSX.Element {
       <Tabs role="tablist" aria-label="Feeds" wide={!!peekItem && peekInline}>
         <TabLabel tab="read" label="Read" current={tab} onSelect={setTab} />
         <TabLabel tab="watch" label="Watch" current={tab} onSelect={setTab} />
+        <DiscoverPill />
       </Tabs>
       <Panes
         peeking={!!peekItem}
