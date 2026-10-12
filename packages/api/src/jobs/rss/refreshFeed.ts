@@ -25,7 +25,11 @@ import createHttpTaskWithToken, {
 } from '../../utils/createTask'
 import { cleanUrl, generateFingerprint, wordsCount } from '../../utils/helpers'
 import { logger } from '../../utils/logger'
-import { parsePreparedContent, rssParserConfig } from '../../utils/parser'
+import {
+  parsePreparedContent,
+  repairFeedXml,
+  rssParserConfig,
+} from '../../utils/parser'
 import { videoIdFromYouTubeUrl } from '../../utils/youtube'
 import {
   channelIdFromFeedUrl,
@@ -119,7 +123,7 @@ export const isOldItem = (
   item: RssFeedItem,
   mostRecentItemTimestamp: number,
   // How far back a feed's first check reaches.
-  firstLookBackMs = 24 * 60 * 60 * 1000
+  firstLookBackMs = FIRST_LOOK_BACK_MS
 ) => {
   // always fetch items without isoDate
   if (!item.isoDate) {
@@ -128,7 +132,7 @@ export const isOldItem = (
 
   const publishedAt = new Date(item.isoDate)
 
-  // don't fetch older than 24 hrs items for new feeds
+  // a new feed starts with its recent posts, not its whole archive
   if (!mostRecentItemTimestamp) {
     return publishedAt < new Date(Date.now() - firstLookBackMs)
   }
@@ -140,7 +144,18 @@ export const isOldItem = (
 }
 
 // How far behind the newest item already seen a late feed item may be dated.
-export const LATE_ITEM_WINDOW_MS = 3 * 24 * 60 * 60 * 1000
+// Each one is checked against the library, so the window can be generous:
+// sites often publish posts dated days earlier, or add several at once.
+export const LATE_ITEM_WINDOW_MS = 14 * 24 * 60 * 60 * 1000
+
+// A feed's first check brings in its posts from the last two weeks, as a feed
+// reader shows a site's recent posts as soon as it is followed. It used to
+// take only the last day, so a site that posts weekly showed a single post.
+export const FIRST_LOOK_BACK_MS = 14 * 24 * 60 * 60 * 1000
+// ...but no more than this many, for feeds that post many times a day.
+const FIRST_CHECK_MAX_ITEMS = 50
+// The most items one later check adds.
+const MAX_ITEMS_PER_CHECK = 100
 
 const feedFetchFailedRedisKey = (feedUrl: string) =>
   `feed-fetch-failure:${feedUrl}`
@@ -224,13 +239,36 @@ const getThumbnail = (item: RssFeedItem): string | undefined => {
   return undefined
 }
 
+// Some sites turn away a browser user agent that doesn't behave like a
+// browser, but let feed readers through.
+const FEED_READER_USER_AGENT =
+  'Mozilla/5.0 (compatible; Stash feed reader; +https://github.com/nigeldunckley/stash)'
+
+const getFeed = async (url: string, userAgent?: string) => {
+  const config = rssParserConfig()
+  return axios.get(url, {
+    ...config,
+    headers: userAgent
+      ? { ...config.headers, 'user-agent': userAgent }
+      : config.headers,
+    responseType: 'arraybuffer',
+    timeout: 60_000,
+    maxRedirects: 10,
+  })
+}
+
 export const fetchAndChecksum = async (url: string) => {
   try {
-    const response = await axios.get(url, {
-      ...rssParserConfig(),
-      responseType: 'arraybuffer',
-      timeout: 60_000,
-      maxRedirects: 10,
+    const response = await getFeed(url).catch((error) => {
+      // A site that answered, but refused, gets asked again as a feed reader.
+      if (axios.isAxiosError(error) && error.response) {
+        logger.info('rss: feed refused, asking as a feed reader', {
+          url,
+          status: error.response.status,
+        })
+        return getFeed(url, FEED_READER_USER_AGENT)
+      }
+      throw error
     })
 
     const hash = crypto.createHash('sha256')
@@ -302,9 +340,19 @@ const parseFeed = async (url: string, content: string) => {
       }
     }
 
-    // return await is needed to catch errors thrown by the parser
-    // otherwise the error will be caught by the outer try catch
-    return await parser.parseString(content)
+    try {
+      // return await is needed to catch errors thrown by the parser
+      // otherwise the error will be caught by the outer try catch
+      return await parser.parseString(content)
+    } catch (error) {
+      const repaired = repairFeedXml(content)
+      if (repaired == content) {
+        throw error
+      }
+      const feed = await parser.parseString(repaired)
+      logger.info('rss: parsed feed after repairing its XML', { url })
+      return feed
+    }
   } catch (error) {
     logger.info(error)
     return null
@@ -880,8 +928,11 @@ const processSubscription = async (
 ) => {
   const refreshedAt = new Date()
   const scheduledAt = nextCheckAt(feed, refreshedAt.getTime(), feedUrl)
-  // A new channel starts with its last week of videos rather than one day.
-  const firstLookBackMs = (youtube ? 7 : 1) * 24 * 60 * 60 * 1000
+  // A new channel starts with its last week of videos.
+  const firstLookBackMs = youtube ? 7 * 24 * 60 * 60 * 1000 : FIRST_LOOK_BACK_MS
+  const maxItems = mostRecentItemDate
+    ? MAX_ITEMS_PER_CHECK
+    : FIRST_CHECK_MAX_ITEMS
 
   let lastItemFetchedAt: Date | null = null
   let lastValidItem: RssFeedItem | null = null
@@ -911,8 +962,21 @@ const processSubscription = async (
   // The feed's lastBuildDate is not trusted to skip it: many feeds never
   // update it. The checksum above and the item dates below decide instead.
 
+  // Newest first, so a check that reaches its item limit keeps the newest.
+  // Most feeds already list items that way. Undated items can't be placed,
+  // so they go first, in feed order.
+  const itemTime = (item: (typeof feed.items)[number]) => {
+    const date = item.isoDate || item.published || item.updated || item.created
+    const time = date ? new Date(date).getTime() : NaN
+    return isNaN(time) ? Infinity : time
+  }
+  const items = feed.items
+    .map((item, index) => ({ item, index, time: itemTime(item) }))
+    .sort((a, b) => (a.time == b.time ? a.index - b.index : b.time - a.time))
+    .map(({ item }) => item)
+
   // save each item in the feed
-  for (const item of feed.items) {
+  for (const item of items) {
     try {
       const guid = item.guid || item.link
       // use published or updated if isoDate is not available for atom feeds
@@ -972,8 +1036,8 @@ const processSubscription = async (
       }
 
       // Max limit per-feed update
-      if (itemCount > 99) {
-        if (itemCount == 100) {
+      if (itemCount >= maxItems) {
+        if (itemCount == maxItems) {
           logger.info(`Max limit reached for feed ${feedUrl}`)
         }
         itemCount = itemCount + 1
