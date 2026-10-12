@@ -185,6 +185,36 @@ const getPurifiedContent = (html: string): Document => {
   return parseHTML(clean).document
 }
 
+// Readability can prefer navigation or a footer when the article is mostly
+// headings and lists. Check whether its result contains the text blocks from a
+// substantial semantic article before accepting it.
+const articleTextBlocks = (document: Document): string[] => {
+  const articles = Array.from(document.querySelectorAll('article')).filter(
+    (article) => (article.textContent?.trim().length || 0) >= 250
+  )
+  if (articles.length !== 1) return []
+
+  return Array.from(
+    articles[0].querySelectorAll('p, li, blockquote, h2, h3, h4')
+  )
+    .map(
+      (element) =>
+        element.textContent?.replace(/\s+/g, ' ').trim().toLowerCase() || ''
+    )
+    .filter((text) => text.length >= 30)
+}
+
+const articleCoverage = (blocks: string[], text: string): number => {
+  if (!blocks.length) return 1
+
+  const normalized = text.replace(/\s+/g, ' ').toLowerCase()
+  const covered = blocks.reduce(
+    (length, block) => length + (normalized.includes(block) ? block.length : 0),
+    0
+  )
+  return covered / blocks.reduce((length, block) => length + block.length, 0)
+}
+
 const getReadabilityResult = async (
   url: string,
   html: string,
@@ -209,13 +239,45 @@ const getReadabilityResult = async (
     }
 
     try {
-      const article = await new Readability(document, {
+      const options = {
         debug: DEBUG_MODE,
         createImageProxyUrl,
         keepTables: isNewsletter,
         ignoreLinkDensity: isNewsletter,
         url,
-      }).parse()
+      }
+      const blocks = isNewsletter ? [] : articleTextBlocks(document)
+      // Readability mutates the document, so retain a copy for a possible retry.
+      const sourceHtml = blocks.length ? document.documentElement.outerHTML : ''
+      const article = await new Readability(document, options).parse()
+      const coverage = articleCoverage(blocks, article?.textContent || '')
+
+      if (blocks.length && coverage < 0.5) {
+        try {
+          const scopedDocument = parseHTML(sourceHtml).document
+          const scopedArticle = scopedDocument.querySelector('article')
+          if (scopedArticle) {
+            scopedDocument.body.innerHTML = scopedArticle.outerHTML
+            const scopedResult = await new Readability(
+              scopedDocument,
+              options
+            ).parse()
+            const scopedCoverage = articleCoverage(
+              blocks,
+              scopedResult?.textContent || ''
+            )
+            if (
+              scopedResult?.content &&
+              scopedCoverage >= 0.5 &&
+              scopedCoverage > coverage
+            ) {
+              return scopedResult
+            }
+          }
+        } catch (error) {
+          logger.info('parsing semantic article failed', { url, error })
+        }
+      }
 
       if (article) {
         return article

@@ -37,6 +37,22 @@ describe('parseMetadata', () => {
 })
 
 describe('parsePreparedContent', () => {
+  it('keeps list-heavy article text instead of site navigation or footer', async () => {
+    const html = load('./test/utils/data/list-heavy-ghost-article.html')
+    const result = await parsePreparedContent(
+      'https://example.com/blog/updates/',
+      {
+        document: html,
+        pageInfo: { title: 'All the product updates' },
+      }
+    )
+
+    expect(result.parsedContent?.content).to.include('Update 1:')
+    expect(result.parsedContent?.content).to.include('Update 25:')
+    expect(result.parsedContent?.content).not.to.include('Published with Ghost')
+    expect(result.parsedContent?.content).not.to.include('Member Perks')
+  })
+
   it('gets published date when JSONLD fails to load', async () => {
     nock('https://stratechery.com:443', { encodedQueryParams: true })
       .get('/wp-json/oembed/1.0/embed')
