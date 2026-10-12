@@ -43,6 +43,7 @@ import {
 import { Merge } from '../util'
 import { isBase64Image, validatedDate, wordsCount } from '../utils/helpers'
 import {
+  createCardImageProxyUrl,
   createHeaderImageProxyUrl,
   createImageProxyUrl,
   originalImageUrl,
@@ -475,11 +476,7 @@ export const functionResolvers = {
     },
     image(article: LibraryItem): string | undefined {
       if (article.thumbnail) {
-        return createImageProxyUrl(
-          originalImageUrl(article.thumbnail),
-          320,
-          320
-        )
+        return createCardImageProxyUrl(article.thumbnail)
       }
 
       return undefined
@@ -553,10 +550,7 @@ export const functionResolvers = {
       return item.originalUrl
     },
     image(item: LibraryItem) {
-      return (
-        item.thumbnail &&
-        createImageProxyUrl(originalImageUrl(item.thumbnail), 320, 320)
-      )
+      return item.thumbnail && createCardImageProxyUrl(item.thumbnail)
     },
     headerImage(item: LibraryItem) {
       return item.thumbnail && createHeaderImageProxyUrl(item.thumbnail)
