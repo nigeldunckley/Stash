@@ -80,7 +80,9 @@ const guideName = (r: FeedSuggestionReason) =>
 // counts are an overlap percentage; a blogroll is a recommendation outright;
 // the rest are counts of pieces.
 export const reasonStrength = (r: FeedSuggestionReason): number =>
-  r.kind == 'neighbour'
+  r.kind == 'similar'
+    ? 0.65
+    : r.kind == 'neighbour'
     ? Math.min(1, r.count / 100) * 0.6
     : r.kind == 'blogroll'
     ? 0.8
@@ -92,12 +94,14 @@ export const reasonAmount = (r: FeedSuggestionReason): string => {
       return `${r.count}×`
     case 'neighbour':
       return `${r.count}%`
+    case 'similar':
+      return 'Similar'
     case 'save':
       return `${r.count} saved`
     case 'writer':
       return `${r.count} read`
     case 'blogroll':
-      return 'blogroll'
+      return 'Blogroll'
     case 'starter':
       return ''
   }

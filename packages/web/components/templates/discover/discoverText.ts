@@ -23,6 +23,8 @@ export const reasonLine = (reason: FeedSuggestionReason): string => {
       return `${reason.guideName} writes here · you finished ${reason.count}`
     case 'neighbour':
       return `Links to the same places as ${reason.guideName}`
+    case 'similar':
+      return `Similar to ${reason.guideName}`
     case 'starter':
       return reason.title
         ? `A starting point · ${reason.title}`
@@ -63,6 +65,8 @@ export const whySentence = (s: FeedSuggestion): string => {
   }
   const save = s.reasons.find((r) => r.kind == 'save')
   if (save) parts.push(`you've saved from it before`)
+  const similar = s.reasons.find((r) => r.kind == 'similar')
+  if (similar) parts.push(`it's similar to ${similar.guideName}`)
   if (!parts.length) return 'It reads like what you read.'
   const sentence = parts.join(', and ')
   return sentence.charAt(0).toUpperCase() + sentence.slice(1) + '.'
@@ -93,7 +97,8 @@ export const fallbackIconFor = (s: FeedSuggestion): string | undefined =>
 export const isGuide = (reason: FeedSuggestionReason): boolean =>
   reason.kind == 'link' ||
   reason.kind == 'blogroll' ||
-  reason.kind == 'neighbour'
+  reason.kind == 'neighbour' ||
+  reason.kind == 'similar'
 
 export const guideIcon = (reason: FeedSuggestionReason): string | undefined =>
   isGuide(reason) ? faviconFor(reason.guide) : undefined

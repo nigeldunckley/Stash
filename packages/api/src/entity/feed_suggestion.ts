@@ -19,7 +19,14 @@ export type FeedSuggestionStatus =
 // A starting point is a built-in suggestion, only offered while your reading
 // leads to too few of its own.
 export type FeedSuggestionReason = {
-  kind: 'link' | 'save' | 'writer' | 'neighbour' | 'blogroll' | 'starter'
+  kind:
+    | 'link'
+    | 'save'
+    | 'writer'
+    | 'neighbour'
+    | 'similar'
+    | 'blogroll'
+    | 'starter'
   // the feed URL of the guide, 'saves', 'writers' or 'starters'
   guide: string
   guideName: string

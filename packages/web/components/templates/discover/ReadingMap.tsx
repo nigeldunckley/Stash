@@ -547,7 +547,7 @@ export function ReadingMap(props: {
                 <span>
                   {r.kind == 'save'
                     ? 'Your saves'
-                    : r.kind == 'neighbour'
+                    : r.kind == 'neighbour' || r.kind == 'similar'
                     ? `Like ${r.guideName}`
                     : r.guideName}
                 </span>

@@ -27,6 +27,7 @@ export const buildFeedSuggestionsJob = async (
         userId: data.userId,
         error,
       })
+      throw error
     }
     return
   }

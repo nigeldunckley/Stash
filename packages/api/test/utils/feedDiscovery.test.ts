@@ -4,6 +4,7 @@ import {
   addBlogrolls,
   buildReadingGraph,
   feedLinksIn,
+  findSiteFeed,
   readFeed,
   scoreCandidate,
 } from '../../src/services/feed_suggestions'
@@ -21,6 +22,7 @@ import {
   pickVaried,
   postsPerWeek,
   ReadItem,
+  SCORE_FLOOR,
   siteOf,
   youtubeChannelKey,
 } from '../../src/utils/feedDiscovery'
@@ -210,9 +212,74 @@ describe('feed discovery', () => {
       expect(ben?.saves).to.eql(3)
       expect(graph.writers.get('brian potter')?.count).to.eql(3)
     })
+
+    it('finds related publishers when recent articles have no links', () => {
+      const graph = buildReadingGraph(
+        {
+          items: [],
+          links: [],
+          subscriptions: [
+            sub('https://daringfireball.net/feeds/main', 'Daring Fireball'),
+          ],
+        },
+        new Map()
+      )
+      const candidate = graph.candidates.find((c) => c.site === 'ben-evans.com')
+      expect(candidate?.catalogFeedUrl).to.eql(
+        'https://www.ben-evans.com/benedictevans?format=rss'
+      )
+      expect(candidate?.similar.has('https://daringfireball.net/feeds/main')).to
+        .be.true
+      const now = new Date('2026-10-12T00:00:00Z')
+      const scored = scoreCandidate(
+        candidate!,
+        {
+          feedUrl: candidate!.catalogFeedUrl!,
+          siteUrl: 'https://ben-evans.com/',
+          postsPerWeek: 1,
+          lastPostAt: new Date('2026-10-10T00:00:00Z'),
+          latest: [],
+          outHosts: [],
+          hasFullText: false,
+          hasImages: false,
+          words: '',
+        },
+        graph,
+        () => 1,
+        now
+      )
+      expect(scored.score).to.be.greaterThan(SCORE_FLOOR)
+      expect(scored.reasons[0].kind).to.eql('similar')
+      expect(graph.candidates.map((c) => c.site)).not.to.include(
+        'daringfireball.net'
+      )
+    })
   })
 
   describe('reading a site', () => {
+    it('reads a known feed without needing a discoverable home page', async () => {
+      const now = new Date('2026-10-12T00:00:00Z')
+      const feedUrl = 'https://example.com/custom.xml'
+      const visited: string[] = []
+      const feed = await findSiteFeed(
+        'example.com',
+        {
+          used: () => visited.length,
+          get: async (url) => {
+            visited.push(url)
+            return {
+              data: `<rss version="2.0"><channel><title>Example</title><link>https://example.com/</link><item><title>Latest</title><link>https://example.com/latest</link><pubDate>Sat, 10 Oct 2026 10:00:00 GMT</pubDate></item></channel></rss>`,
+              contentType: 'application/rss+xml',
+            }
+          },
+        },
+        now,
+        feedUrl
+      )
+      expect(feed?.title).to.eql('Example')
+      expect(visited).to.eql([feedUrl])
+    })
+
     it('finds advertised feeds and skips comment feeds', () => {
       const links = feedLinksIn(
         `<html><head>
@@ -361,12 +428,14 @@ describe('feed discovery', () => {
         ]),
         new Map()
       )
-      expect(graph.candidates.map((c) => c.site)).to.eql(['sixcolors.com'])
+      const sites = graph.candidates.map((c) => c.site)
+      expect(sites).to.include('sixcolors.com')
+      expect(sites).not.to.include('daringfireball.net')
       expect(graph.leading[0]).to.deep.include({ host: 'daringfireball.net' })
 
       const now = new Date('2026-10-12T00:00:00Z')
       const scored = scoreCandidate(
-        graph.candidates[0],
+        graph.candidates.find((c) => c.site == 'sixcolors.com')!,
         {
           feedUrl: 'https://sixcolors.com/feed/',
           siteUrl: 'https://sixcolors.com/',
@@ -419,9 +488,9 @@ describe('feed discovery', () => {
         },
         new Map()
       )
-      expect(graph.candidates.map((c) => c.site)).to.eql([
-        'youtube.com/@veritasium',
-      ])
+      expect(graph.candidates.map((c) => c.site)).to.include(
+        'youtube.com/@veritasium'
+      )
       expect([...graph.followedChannels]).to.eql(['UCHnyfMqiRRG1u-2MsSQLbXA'])
     })
   })

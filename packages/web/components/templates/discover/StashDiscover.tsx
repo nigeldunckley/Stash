@@ -1,7 +1,7 @@
 import { ArrowClockwise, Check, Plus } from '@phosphor-icons/react'
 import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FEED_SUGGESTIONS_KEY,
   FeedSuggestion,
@@ -607,10 +607,11 @@ function WriterCardView(props: {
 
 export function StashDiscover(): JSX.Element {
   const queryClient = useQueryClient()
-  const { data, isPending, isError } = useFeedSuggestions()
+  const { data, isPending, isError, refetch } = useFeedSuggestions()
   const actions = useSuggestionActions()
   const [open, setOpen] = useState<string>()
   const [looking, setLooking] = useState(false)
+  const builtBeforeLook = useRef<string>()
   const heroIcon = useRef<HTMLSpanElement>(null)
 
   const suggestions = useMemo(() => data?.suggestions ?? [], [data])
@@ -713,6 +714,7 @@ export function StashDiscover(): JSX.Element {
   )
 
   const lookAgain = async () => {
+    builtBeforeLook.current = data?.builtAt
     setLooking(true)
     try {
       if (!(await refreshFeedSuggestions())) throw new Error('not queued')
@@ -720,11 +722,32 @@ export function StashDiscover(): JSX.Element {
         'Looking through your reading. Check back in a few minutes.'
       )
     } catch {
+      setLooking(false)
       showErrorToast('Could not start a new look')
-    } finally {
-      setTimeout(() => setLooking(false), 4000)
     }
   }
+
+  useEffect(() => {
+    if (!looking) return
+    let active = true
+    const poll = setInterval(() => {
+      void refetch().then((result) => {
+        if (!active) return
+        const builtAt = result.data?.builtAt
+        if (builtAt && builtAt !== builtBeforeLook.current) {
+          setLooking(false)
+        }
+      })
+    }, 10_000)
+    const timeout = setTimeout(() => {
+      if (active) setLooking(false)
+    }, 10 * 60_000)
+    return () => {
+      active = false
+      clearInterval(poll)
+      clearTimeout(timeout)
+    }
+  }, [looking, refetch])
 
   const turnOn = async () => {
     setLooking(true)

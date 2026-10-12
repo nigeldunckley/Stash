@@ -20,9 +20,17 @@ export type FeedSuggestionReason = {
   // link: one of your feeds links to it; blogroll: one of your feeds lists
   // it in its blogroll; save: you save from it; writer: a writer you finish
   // writes it; neighbour: it links to the same places as one of your
-  // favourite feeds; starter: a starting point, offered only while your
-  // reading leads to too few suggestions (its title is the topic).
-  kind: 'link' | 'blogroll' | 'save' | 'writer' | 'neighbour' | 'starter'
+  // favourite feeds; similar: a related publisher in the reviewed catalog;
+  // starter: a starting point, offered only while your reading leads to too
+  // few suggestions (its title is the topic).
+  kind:
+    | 'link'
+    | 'blogroll'
+    | 'save'
+    | 'writer'
+    | 'neighbour'
+    | 'similar'
+    | 'starter'
   guide: string
   guideName: string
   count: number
@@ -295,7 +303,6 @@ export function useSuggestionActions() {
       setStatus(suggestion.id, action == 'TRY' ? 'TRIAL' : 'FOLLOWING')
       const result = await subscribeMutation({
         url: suggestion.feedUrl,
-        name: suggestion.title,
         subscriptionType: SubscriptionType.RSS,
       })
       const subscriptionId = result.subscribe.subscriptions?.[0]?.id
