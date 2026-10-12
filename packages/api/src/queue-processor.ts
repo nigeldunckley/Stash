@@ -168,9 +168,16 @@ export const createWorker = (connection: ConnectionOptions) =>
       const executeJob = async (job: Job) => {
         switch (job.name) {
           case 'refresh-all-feeds': {
+            // Skip a sweep while the queue is still working through a backlog,
+            // so a slow run can't pile checks up behind it. A feed whose check
+            // is already queued isn't queued twice either (same job id).
             const queue = await getQueue()
-            const counts = await queue?.getJobCounts('prioritized')
-            if (counts && counts.wait > 1000) {
+            const counts = await queue?.getJobCounts('prioritized', 'waiting')
+            if (
+              counts &&
+              (counts.prioritized ?? 0) + (counts.waiting ?? 0) > 200
+            ) {
+              logger.info('rss: queue busy, skipping this sweep', { counts })
               return
             }
             return await refreshAllFeeds(appDataSource)
@@ -278,9 +285,8 @@ const setupCronJobs = async () => {
   await queue.upsertJobScheduler(
     REFRESH_ALL_FEEDS_JOB_NAME,
     {
-      // Each feed sets when it is next due (see nextCheckAt); this only
-      // picks up the ones whose time has come.
-      every: 15 * 60 * 1000, // 15 minutes
+      // Every feed is checked every five minutes (see nextCheckAt).
+      every: 5 * 60 * 1000, // 5 minutes
     },
     {
       opts: {

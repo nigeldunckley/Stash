@@ -244,39 +244,130 @@ const getThumbnail = (item: RssFeedItem): string | undefined => {
 const FEED_READER_USER_AGENT =
   'Mozilla/5.0 (compatible; Stash feed reader; +https://github.com/nigeldunckley/stash)'
 
-const getFeed = async (url: string, userAgent?: string) => {
+// What the site said about the feed last time (ETag / Last-Modified), so the
+// next check can ask "has it changed?" and get an empty 304 when it hasn't.
+export type FeedValidators = {
+  etag?: string
+  lastModified?: string
+  checksum: string
+}
+
+const feedValidatorsRedisKey = (feedUrl: string) => `feed-validators:${feedUrl}`
+
+const getFeedValidators = async (
+  feedUrl: string
+): Promise<FeedValidators | undefined> => {
+  try {
+    const result = await redisDataSource.redisClient?.get(
+      feedValidatorsRedisKey(feedUrl)
+    )
+    return result ? (JSON.parse(result) as FeedValidators) : undefined
+  } catch (error) {
+    logger.info('rss: could not read feed validators', { feedUrl })
+    return undefined
+  }
+}
+
+const saveFeedValidators = async (
+  feedUrl: string,
+  validators: FeedValidators
+) => {
+  try {
+    const key = feedValidatorsRedisKey(feedUrl)
+    if (!validators.etag && !validators.lastModified) {
+      await redisDataSource.redisClient?.del(key)
+      return
+    }
+    await redisDataSource.redisClient?.set(
+      key,
+      JSON.stringify(validators),
+      'EX',
+      24 * 60 * 60
+    )
+  } catch (error) {
+    logger.info('rss: could not save feed validators', { feedUrl })
+  }
+}
+
+export const conditionalHeaders = (
+  validators?: FeedValidators
+): Record<string, string> => {
+  const headers: Record<string, string> = {}
+  if (validators?.etag) {
+    headers['if-none-match'] = validators.etag
+  }
+  if (validators?.lastModified) {
+    headers['if-modified-since'] = validators.lastModified
+  }
+  return headers
+}
+
+const getFeed = async (
+  url: string,
+  userAgent?: string,
+  extraHeaders: Record<string, string> = {}
+) => {
   const config = rssParserConfig()
   return axios.get(url, {
     ...config,
-    headers: userAgent
-      ? { ...config.headers, 'user-agent': userAgent }
-      : config.headers,
+    headers: {
+      ...config.headers,
+      ...(userAgent ? { 'user-agent': userAgent } : {}),
+      ...extraHeaders,
+    },
     responseType: 'arraybuffer',
     timeout: 60_000,
     maxRedirects: 10,
+    validateStatus: (status) =>
+      (status >= 200 && status < 300) || status === 304,
   })
 }
 
-export const fetchAndChecksum = async (url: string) => {
+export const fetchAndChecksum = async (
+  url: string,
+  validators?: FeedValidators
+): Promise<
+  | { url: string; content: string; checksum: string; notModified?: false }
+  | { url: string; notModified: true }
+  | null
+> => {
   try {
-    const response = await getFeed(url).catch((error) => {
-      // A site that answered, but refused, gets asked again as a feed reader.
-      if (axios.isAxiosError(error) && error.response) {
-        logger.info('rss: feed refused, asking as a feed reader', {
-          url,
-          status: error.response.status,
-        })
-        return getFeed(url, FEED_READER_USER_AGENT)
+    const conditional = conditionalHeaders(validators)
+    const response = await getFeed(url, undefined, conditional).catch(
+      (error) => {
+        // A site that answered, but refused, gets asked again as a feed reader.
+        if (axios.isAxiosError(error) && error.response) {
+          logger.info('rss: feed refused, asking as a feed reader', {
+            url,
+            status: error.response.status,
+          })
+          return getFeed(url, FEED_READER_USER_AGENT, conditional)
+        }
+        throw error
       }
-      throw error
-    })
+    )
+
+    if (response.status === 304) {
+      return { url, notModified: true }
+    }
 
     const hash = crypto.createHash('sha256')
     hash.update(response.data as Buffer)
 
     const dataStr = (response.data as Buffer).toString()
+    const checksum = hash.digest('hex')
 
-    return { url, content: dataStr, checksum: hash.digest('hex') }
+    const header = (name: string) => {
+      const value = response.headers?.[name] as unknown
+      return typeof value === 'string' && value ? value : undefined
+    }
+    await saveFeedValidators(url, {
+      etag: header('etag'),
+      lastModified: header('last-modified'),
+      checksum,
+    })
+
+    return { url, content: dataStr, checksum }
   } catch (error) {
     logger.info(`Failed to fetch or hash content from ${url}.`, error)
     return null
@@ -295,7 +386,7 @@ const parseFeed = async (url: string, content: string) => {
       } else {
         // open the preview page to get the data
         const fetchResult = await fetchAndChecksum(`https://t.me/s/${channel}`)
-        if (!fetchResult) {
+        if (!fetchResult || fetchResult.notModified) {
           return null
         }
 
@@ -802,67 +893,16 @@ const parser = new Parser({
   },
 })
 
-const getUpdateFrequency = (feed: RssFeed) => {
-  const updateFrequency =
-    feed['syn:updateFrequency'] || feed['sy:updateFrequency']
+// Every feed is checked every five minutes. The next check is due a little
+// under that, so the five-minute sweep (see queue-processor) always finds it.
+export const CHECK_INTERVAL_MS = 5 * 60 * 1000
+const CHECK_SLACK_MS = 60 * 1000
+// A feed that couldn't be fetched waits longer before the next try, so a site
+// that is down isn't asked every five minutes.
+export const FAILED_CHECK_INTERVAL_MS = 30 * 60 * 1000
 
-  if (!updateFrequency) {
-    return 1
-  }
-
-  const frequency = parseInt(updateFrequency, 10)
-  if (isNaN(frequency)) {
-    return 1
-  }
-
-  return frequency
-}
-
-// Feeds are checked again after the period they declare, kept between half an
-// hour and two hours so new items show up within a reasonable time.
-const MIN_CHECK_INTERVAL_MS = 30 * 60 * 1000
-const MAX_CHECK_INTERVAL_MS = 2 * 60 * 60 * 1000
-// YouTube channel feeds are small and new videos are wanted quickly.
-const YOUTUBE_CHECK_INTERVAL_MS = 15 * 60 * 1000
-
-export const nextCheckAt = (
-  feed: RssFeed,
-  now = Date.now(),
-  feedUrl = ''
-): Date => {
-  if (channelIdFromFeedUrl(feedUrl)) {
-    return new Date(now + YOUTUBE_CHECK_INTERVAL_MS)
-  }
-  const declared =
-    feed['syn:updatePeriod'] || feed['sy:updatePeriod']
-      ? getUpdatePeriodInHours(feed) * 60 * 60 * 1000 * getUpdateFrequency(feed)
-      : MIN_CHECK_INTERVAL_MS
-  const interval = Math.min(
-    MAX_CHECK_INTERVAL_MS,
-    Math.max(MIN_CHECK_INTERVAL_MS, declared)
-  )
-  return new Date(now + interval)
-}
-
-const getUpdatePeriodInHours = (feed: RssFeed) => {
-  const updatePeriod = feed['syn:updatePeriod'] || feed['sy:updatePeriod']
-
-  switch (updatePeriod) {
-    case 'hourly':
-      return 1
-    case 'daily':
-      return 24
-    case 'weekly':
-      return 7 * 24
-    case 'monthly':
-      return 30 * 24
-    case 'yearly':
-      return 365 * 24
-    default:
-      // default to hourly
-      return 1
-  }
-}
+export const nextCheckAt = (now = Date.now()): Date =>
+  new Date(now + CHECK_INTERVAL_MS - CHECK_SLACK_MS)
 
 // get link following the order of preference: via, alternate, self
 const getLink = (
@@ -927,7 +967,7 @@ const processSubscription = async (
   includeShorts = false
 ) => {
   const refreshedAt = new Date()
-  const scheduledAt = nextCheckAt(feed, refreshedAt.getTime(), feedUrl)
+  const scheduledAt = nextCheckAt(refreshedAt.getTime())
   // A new channel starts with its last week of videos.
   const firstLookBackMs = youtube ? 7 * 24 * 60 * 60 * 1000 : FIRST_LOOK_BACK_MS
   const maxItems = mostRecentItemDate
@@ -1221,7 +1261,41 @@ export const _refreshFeed = async (request: RefreshFeedRequest) => {
     }
 
     const channelId = channelIdFromFeedUrl(feedUrl)
-    let fetchResult = await fetchAndChecksum(feedUrl)
+    // Only ask "has it changed?" when every subscriber has already taken in
+    // the copy the validators describe. A check where an item failed keeps
+    // the older checksum so the feed is read again, and that must still
+    // happen even if the site says nothing changed.
+    const validators = await getFeedValidators(feedUrl)
+    const canSkipUnchanged =
+      !!validators &&
+      lastFetchedChecksums.every((checksum) => checksum === validators.checksum)
+    const fetched = await fetchAndChecksum(
+      feedUrl,
+      canSkipUnchanged ? validators : undefined
+    )
+
+    if (fetched?.notModified) {
+      logger.info('feed not modified', { feedUrl })
+      const refreshedAt = new Date()
+      const scheduledAt = nextCheckAt(refreshedAt.getTime())
+      for (let i = 0; i < subscriptionIds.length; i++) {
+        try {
+          await updateSubscription(userIds[i], subscriptionIds[i], {
+            refreshedAt,
+            scheduledAt,
+            failedAt: null,
+          })
+        } catch (error) {
+          logger.error('Error while recording feed check', {
+            error,
+            subscriptionId: subscriptionIds[i],
+          })
+        }
+      }
+      return true
+    }
+
+    let fetchResult = fetched
     let feed = fetchResult
       ? await parseFeed(feedUrl, fetchResult.content)
       : null
@@ -1312,10 +1386,12 @@ export const _refreshFeed = async (request: RefreshFeedRequest) => {
     })
 
     const now = new Date()
-    // mark subscriptions as error if we failed to get the feed
+    // mark subscriptions as error if we failed to get the feed, and try again
+    // a little later rather than at every five-minute sweep
     await updateSubscriptions(subscriptionIds, {
       refreshedAt: now,
       failedAt: now,
+      scheduledAt: new Date(now.getTime() + FAILED_CHECK_INTERVAL_MS),
     })
 
     return false
