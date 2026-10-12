@@ -17,7 +17,7 @@ export type FeedSuggestionStatus =
 
 // One of your feeds (or your saves, or a writer) that led to a suggestion.
 export type FeedSuggestionReason = {
-  kind: 'link' | 'save' | 'writer' | 'neighbour'
+  kind: 'link' | 'save' | 'writer' | 'neighbour' | 'similar'
   // the feed URL of the guide, 'saves' or the writer's name
   guide: string
   guideName: string

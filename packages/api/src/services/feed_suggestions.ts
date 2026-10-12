@@ -1,7 +1,8 @@
 // Feed discovery: once a night Stash looks at what you read, works out which
-// sites your feeds keep pointing to, finds those sites' feeds and scores
-// them. Nothing about your reading leaves the server; the only requests out
-// are to public sites your own articles already link to.
+// sites your feeds keep pointing to, and checks their feeds. A reviewed set
+// of related publishers supplies candidates when articles have no useful
+// links. Nothing about your reading leaves the server; requests only go to
+// candidate publishers' public sites and feeds.
 
 import axios from 'axios'
 import dns from 'dns'
@@ -52,6 +53,7 @@ import { getAbsoluteUrl, wait } from '../utils/helpers'
 import { logger } from '../utils/logger'
 import { rssParserConfig } from '../utils/parser'
 import { validateUrl } from './create_page_save_request'
+import { catalog } from './feed_suggestions/catalog'
 
 // How far back reading counts.
 const LOOKBACK_DAYS = 60
@@ -85,6 +87,8 @@ type Candidate = {
   // the host seen most often, used to find the site's feed
   hosts: Map<string, number>
   edges: Map<string, Edge>
+  similar: Map<string, number>
+  catalogFeedUrl?: string
   saves: number
   saveTitle?: string
   prelim: number
@@ -205,7 +209,14 @@ export const buildReadingGraph = (
   const candidateFor = (site: string) => {
     let c = candidates.get(site)
     if (!c) {
-      c = { site, hosts: new Map(), edges: new Map(), saves: 0, prelim: 0 }
+      c = {
+        site,
+        hosts: new Map(),
+        edges: new Map(),
+        similar: new Map(),
+        saves: 0,
+        prelim: 0,
+      }
       candidates.set(site, c)
     }
     return c
@@ -282,11 +293,55 @@ export const buildReadingGraph = (
     }
   }
 
+  // Article extraction and short RSS summaries often contain no outbound
+  // links. Use the reviewed publisher relationships as another route from a
+  // followed feed to a candidate, even on a reader's first Discover run.
+  const articleSiteBySubscription = new Map<string, string>()
+  for (const item of data.items) {
+    if (
+      !item.subscription ||
+      articleSiteBySubscription.has(item.subscription)
+    ) {
+      continue
+    }
+    const host = hostOf(item.originalUrl)
+    if (host) articleSiteBySubscription.set(item.subscription, siteOf(host))
+  }
+  for (const feed of catalog) {
+    const host = hostOf(`https://${feed.site}/`)
+    if (!host || !suggestible(host)) continue
+    const related = data.subscriptions.filter((sub) => {
+      if (sub.status !== SubscriptionStatus.Active || !sub.url) return false
+      const sourceHost = hostOf(sub.url)
+      const sourceSite =
+        articleSiteBySubscription.get(sub.url) ||
+        (sourceHost && siteOf(sourceHost))
+      return (
+        !!sourceSite &&
+        !!feed.related?.some(
+          (relatedSite) => sourceSite === siteOf(relatedSite)
+        )
+      )
+    })
+    if (!related.length) continue
+    const candidate = candidateFor(siteOf(host))
+    candidate.catalogFeedUrl = feed.url
+    candidate.hosts.set(host, (candidate.hosts.get(host) ?? 0) + 1)
+    for (const sub of related) {
+      if (!sub.url) continue
+      candidate.similar.set(sub.url, 1)
+      guides.set(sub.url, { key: sub.url, name: sub.name })
+    }
+  }
+
   const trust = (key: string) => guideWeights.get(key) ?? 1
   for (const c of candidates.values()) {
     let linkSum = 0
     c.edges.forEach((e, key) => (linkSum += e.weight * trust(key)))
-    c.prelim = linkSum + c.saves * 2 * trust(SAVES_GUIDE)
+    c.prelim =
+      linkSum +
+      c.saves * 2 * trust(SAVES_GUIDE) +
+      [...c.similar.keys()].reduce((sum, key) => sum + 3 * trust(key), 0)
   }
 
   const favourites = [...guideStrength.entries()]
@@ -554,9 +609,17 @@ export const readFeed = async (
 export const findSiteFeed = async (
   host: string,
   fetcher: Fetcher,
-  now = new Date()
+  now = new Date(),
+  knownFeedUrl?: string
 ): Promise<SiteFeed | null> => {
   const home = `https://${host}/`
+  if (knownFeedUrl) {
+    const known = await fetcher.get(knownFeedUrl)
+    if (known && looksLikeFeed(known.data)) {
+      const feed = await readFeed(known.data, knownFeedUrl, home, now)
+      if (feed) return feed
+    }
+  }
   const page = await fetcher.get(home)
   if (!page) return null
   if (looksLikeFeed(page.data)) return readFeed(page.data, home, home, now)
@@ -598,6 +661,15 @@ const reasonsFor = (
       count: edge.count,
       title: edge.example?.title,
     }))
+  for (const key of c.similar.keys()) {
+    if (reasons.some((reason) => reason.guide === key)) continue
+    reasons.push({
+      kind: 'similar',
+      guide: key,
+      guideName: graph.guides.get(key)?.name ?? key,
+      count: 1,
+    })
+  }
   const fromSaves = c.edges.get(SAVES_GUIDE)
   if (c.saves > 0 || fromSaves) {
     reasons.push({
@@ -673,7 +745,17 @@ export const scoreCandidate = (
     health: healthScore(feed, now),
   }
   const healthy = isHealthy(feed, now)
-  return { signals, score: healthy ? scoreOf(signals) : 0, reasons }
+  const similarity = [...c.similar.keys()].reduce(
+    (sum, key) => sum + trust(key),
+    0
+  )
+  return {
+    signals,
+    score: healthy
+      ? Math.min(1, scoreOf(signals) + 0.3 * saturate(similarity * 3, 3))
+      : 0,
+    reasons,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -731,9 +813,16 @@ export const buildFeedSuggestions = async (
     const age = row?.checkedAt
       ? (now.getTime() - row.checkedAt.getTime()) / 86_400_000
       : Infinity
-    const stale = row?.status === 'nofeed' ? NOFEED_RECHECK_DAYS : RECHECK_DAYS
+    const hasNewCatalogRoute =
+      row?.status === 'nofeed' &&
+      !!c.catalogFeedUrl &&
+      row.feedUrl !== c.catalogFeedUrl
+    const stale =
+      row?.status === 'nofeed' && !c.catalogFeedUrl
+        ? NOFEED_RECHECK_DAYS
+        : RECHECK_DAYS
     let feed: SiteFeed | null | undefined
-    if (row && age < stale) {
+    if (row && age < stale && !hasNewCatalogRoute) {
       if (row.status === 'nofeed' || !row.feedUrl) continue
       feed = {
         feedUrl: row.feedUrl,
@@ -753,7 +842,9 @@ export const buildFeedSuggestions = async (
       if (fetcher.used() >= MAX_REQUESTS_PER_RUN) break
       checked++
       const host = [...c.hosts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
-      feed = host ? await findSiteFeed(host, fetcher, now) : null
+      feed = host
+        ? await findSiteFeed(host, fetcher, now, c.catalogFeedUrl)
+        : null
       if (!feed) {
         await repo.upsert(
           {
@@ -761,6 +852,7 @@ export const buildFeedSuggestions = async (
             userId,
             site: c.site,
             siteUrl: `https://${host ?? c.site}/`,
+            feedUrl: c.catalogFeedUrl ?? row?.feedUrl,
             status: 'nofeed',
             score: 0,
             checkedAt: now,

@@ -79,7 +79,9 @@ const guideName = (r: FeedSuggestionReason) =>
 // How strongly a reason ties a feed to a suggestion, from 0 to 1. Neighbour
 // counts are an overlap percentage; the rest are counts of pieces.
 export const reasonStrength = (r: FeedSuggestionReason): number =>
-  r.kind == 'neighbour'
+  r.kind == 'similar'
+    ? 0.65
+    : r.kind == 'neighbour'
     ? Math.min(1, r.count / 100) * 0.6
     : Math.min(1, r.count / 5)
 
@@ -89,6 +91,8 @@ export const reasonAmount = (r: FeedSuggestionReason): string => {
       return `${r.count}×`
     case 'neighbour':
       return `${r.count}%`
+    case 'similar':
+      return 'Similar'
     case 'save':
       return `${r.count} saved`
     case 'writer':

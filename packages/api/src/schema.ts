@@ -2969,8 +2969,8 @@ const schema = gql`
   }
 
   # Why a feed is suggested: one of your feeds linked to it, you saved from
-  # it, a writer you read writes it, or it links to the same places as one of
-  # your favourite feeds.
+  # it, a writer you read writes it, it links to the same places as one of
+  # your favourite feeds, or it is a related publisher in the reviewed catalog.
   type FeedSuggestionReason {
     kind: String!
     guide: String!
