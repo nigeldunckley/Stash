@@ -16,6 +16,7 @@ import {
 import { IconButton } from '../../elements/stash'
 import { useGetLibraryItems } from '../../../lib/networking/library_items/useLibraryItems'
 import { useGetShortcuts } from '../../../lib/networking/shortcuts/useShortcuts'
+import { useFeedSuggestions } from '../../../lib/networking/feedSuggestions'
 import { theme } from '../../tokens/stitches.config'
 import { usePersistedState } from '../../../lib/hooks/usePersistedState'
 import { NavMenuFooter } from './Footer'
@@ -184,18 +185,20 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
       />
       <NavButton
         {...props}
-        text="Discover"
-        section="l/discover"
-        isSelected={props.section == 'discover'}
-        icon={<Compass size={18} />}
-      />
-      <NavButton
-        {...props}
         text="Feeds"
         section="subscriptions"
         isSelected={props.section == 'subscriptions'}
         icon={<Rss size={18} />}
         count={<NavCount folder="following" query="-is:seen" />}
+      />
+      <NavButton
+        {...props}
+        text="Discover"
+        section="l/discover"
+        isSelected={props.section == 'discover'}
+        icon={<Compass size={16} />}
+        count={<DiscoverCount />}
+        child
       />
       <NavButton
         {...props}
@@ -255,6 +258,27 @@ function NavCount(props: {
       }}
     >
       {count > 999 ? '999+' : count}
+    </SpanBox>
+  )
+}
+
+// How many new feed suggestions are waiting, in the accent colour.
+function DiscoverCount(): JSX.Element | null {
+  const { data } = useFeedSuggestions()
+  const count = data?.suggestions.filter((s) => s.status == 'NEW').length ?? 0
+  if (!count) return null
+  return (
+    <SpanBox
+      aria-label={`${count} new`}
+      css={{
+        ml: 'auto',
+        fontFamily: '$mono',
+        fontSize: '11px',
+        color: '$stAccentText',
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      {count} new
     </SpanBox>
   )
 }
@@ -358,6 +382,8 @@ const Shortcuts = (props: NavigationMenuProps): JSX.Element | null => {
 }
 
 type NavButtonProps = {
+  // Sits under the entry above it, as Discover does under Feeds.
+  child?: boolean
   text: string
   icon: ReactNode
   count?: ReactNode
@@ -382,8 +408,9 @@ function NavButton(props: NavButtonProps): JSX.Element {
         display: 'flex',
         width: 'calc(100% - 20px)',
         maxWidth: 'calc(100% - 20px)',
-        height: '36px',
+        height: props.child ? '32px' : '36px',
         px: '10px',
+        pl: props.child ? '28px' : '10px',
 
         backgroundColor: props.isSelected
           ? '$thLibrarySelectionColor'
@@ -412,6 +439,7 @@ function NavButton(props: NavButtonProps): JSX.Element {
         },
       }}
       title={props.text}
+      data-nav={props.section}
       onClick={(e) => {
         router.push(`/` + props.section)
       }}

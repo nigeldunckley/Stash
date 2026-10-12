@@ -11,7 +11,7 @@ import { useMemo } from 'react'
 import { HighlightsContainer } from '../../components/nav-containers/HighlightsContainer'
 import { usePersistedState } from '../../lib/hooks/usePersistedState'
 import { State } from '../../lib/networking/fragments/articleFragment'
-import { DiscoverContainer } from '../../components/templates/discoverFeed/DiscoverContainer'
+import { StashDiscover } from '../../components/templates/discover/StashDiscover'
 
 export default function Home(): JSX.Element {
   const router = useRouter()
@@ -99,12 +99,7 @@ export default function Home(): JSX.Element {
           />
         )
       case 'discover':
-        return (
-          <DiscoverContainer
-            showNavigationMenu={showNavigationMenu}
-            key={name}
-          />
-        )
+        return <StashDiscover key={name} />
 
       default:
         return <></>
