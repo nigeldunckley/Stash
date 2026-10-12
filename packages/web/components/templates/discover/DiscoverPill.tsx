@@ -47,8 +47,9 @@ const New = styled('span', {
   '@smDown': { display: 'none' },
 })
 
-export function DiscoverPill(): JSX.Element {
+export function DiscoverPill(): JSX.Element | null {
   const { data } = useFeedSuggestions()
+  if (data?.enabled === false) return null
   const fresh = (data?.suggestions ?? [])
     .filter((s) => s.status == 'NEW')
     .sort((a, b) => b.score - a.score)

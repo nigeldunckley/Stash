@@ -16,9 +16,18 @@ export type FeedSuggestionStatus =
   | 'nofeed'
 
 // One of your feeds (or your saves, or a writer) that led to a suggestion.
+// A starting point is a built-in suggestion, only offered while your reading
+// leads to too few of its own.
 export type FeedSuggestionReason = {
-  kind: 'link' | 'save' | 'writer' | 'neighbour' | 'similar'
-  // the feed URL of the guide, 'saves' or the writer's name
+  kind:
+    | 'link'
+    | 'save'
+    | 'writer'
+    | 'neighbour'
+    | 'similar'
+    | 'blogroll'
+    | 'starter'
+  // the feed URL of the guide, 'saves', 'writers' or 'starters'
   guide: string
   guideName: string
   count: number

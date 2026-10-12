@@ -2968,9 +2968,11 @@ const schema = gql`
     trialEndsAt: Date
   }
 
-  # Why a feed is suggested: one of your feeds linked to it, you saved from
-  # it, a writer you read writes it, it links to the same places as one of
-  # your favourite feeds, or it is a related publisher in the reviewed catalog.
+  # Why a feed is suggested: one of your feeds linked to it or lists it in
+  # its blogroll, you saved from it, a writer you read writes it, it links to
+  # the same places as one of your favourite feeds, it is a related publisher
+  # in the reviewed catalog, or it's a starting point offered while your
+  # reading leads to too few.
   type FeedSuggestionReason {
     kind: String!
     guide: String!
@@ -3002,6 +3004,8 @@ const schema = gql`
     suggestions: [FeedSuggestion!]!
     builtAt: Date
     articlesConsidered: Int!
+    # False when you've turned suggestions off in Settings.
+    enabled: Boolean!
   }
 
   enum FeedSuggestionsErrorCode {
@@ -3061,6 +3065,23 @@ const schema = gql`
 
   type RefreshFeedSuggestionsError {
     errorCodes: [RefreshFeedSuggestionsErrorCode!]!
+  }
+
+  union SetFeedSuggestionsEnabledResult =
+      SetFeedSuggestionsEnabledSuccess
+    | SetFeedSuggestionsEnabledError
+
+  type SetFeedSuggestionsEnabledSuccess {
+    enabled: Boolean!
+  }
+
+  enum SetFeedSuggestionsEnabledErrorCode {
+    BAD_REQUEST
+    UNAUTHORIZED
+  }
+
+  type SetFeedSuggestionsEnabledError {
+    errorCodes: [SetFeedSuggestionsEnabledErrorCode!]!
   }
 
   input ScanFeedsInput {
@@ -3689,6 +3710,9 @@ const schema = gql`
       input: UpdateFeedSuggestionInput!
     ): UpdateFeedSuggestionResult!
     refreshFeedSuggestions: RefreshFeedSuggestionsResult!
+    setFeedSuggestionsEnabled(
+      enabled: Boolean!
+    ): SetFeedSuggestionsEnabledResult!
     addPopularRead(name: String!): AddPopularReadResult!
     saveDiscoverArticle(
       input: SaveDiscoverArticleInput!

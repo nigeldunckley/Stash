@@ -1,6 +1,9 @@
 import { BookmarkSimple, PenNib } from '@phosphor-icons/react'
 import { useMemo, useRef, useState } from 'react'
-import { FeedSuggestion } from '../../../lib/networking/feedSuggestions'
+import {
+  FeedSuggestion,
+  isChannel,
+} from '../../../lib/networking/feedSuggestions'
 import { SiteIcon } from '../../elements/stash'
 import { motion, reducedMotion } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
@@ -581,7 +584,7 @@ export function ReadingMap(props: {
             </Chip>
           )}
           <Button tone="quiet" onClick={() => props.onOpen(s)}>
-            Read a sample
+            {isChannel(s) ? 'Watch a sample' : 'Read a sample'}
           </Button>
         </CardActs>
       </Card>

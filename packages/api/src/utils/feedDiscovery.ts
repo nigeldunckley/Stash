@@ -351,3 +351,171 @@ export const nudgeGuide = (weight: number, liked: boolean): number =>
     GUIDE_MAX,
     Math.max(GUIDE_MIN, weight + (liked ? GUIDE_STEP : -GUIDE_STEP))
   )
+
+// ---------------------------------------------------------------------------
+// Blogrolls
+
+// A site a feed's blogroll lists, with its feed when the blogroll gives one.
+export type BlogrollSite = {
+  site: string
+  host: string
+  feedUrl?: string
+  name?: string
+}
+
+const MAX_BLOGROLL = 80
+
+const attrOf = (tag: string, name: string): string | undefined => {
+  const m = new RegExp(`\\s${name}\\s*=\\s*("([^"]*)"|'([^']*)')`, 'i').exec(
+    tag
+  )
+  const value = m?.[2] ?? m?.[3]
+  return value === undefined ? undefined : decodeEntities(value).trim()
+}
+
+const decodeEntities = (text: string) =>
+  text
+    .replace(/&quot;/g, '"')
+    .replace(/&#0*39;|&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+
+const httpUrl = (value: string | undefined, base?: string) => {
+  if (!value) return undefined
+  try {
+    const url = new URL(value, base)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+      ? url.toString()
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+// Where a home page keeps its blogroll: an OPML file it links with
+// rel="blogroll", or else a page on the same site called a blogroll.
+export const blogrollLinkIn = (
+  html: string,
+  pageUrl: string
+): { opml?: string; page?: string } => {
+  const tags = html.match(/<(link|a)\b[^>]*>/gi) ?? []
+  for (const tag of tags) {
+    if (!/^<link/i.test(tag)) continue
+    const rel = (attrOf(tag, 'rel') ?? '').toLowerCase().split(/\s+/)
+    if (rel.includes('blogroll')) {
+      const opml = httpUrl(attrOf(tag, 'href'), pageUrl)
+      if (opml) return { opml }
+    }
+  }
+  const home = hostOf(pageUrl)
+  const anchors = html.match(/<a\b[^>]*>[\s\S]{0,80}?<\/a>/gi) ?? []
+  for (const anchor of anchors) {
+    const href = httpUrl(attrOf(anchor, 'href'), pageUrl)
+    if (!href || !home || hostOf(href) !== home) continue
+    const text = anchor.replace(/<[^>]+>/g, ' ').trim()
+    const path = new URL(href).pathname
+    if (/blog\s*roll/i.test(text) || /\/blogroll\/?$/i.test(path)) {
+      return { page: href }
+    }
+  }
+  return {}
+}
+
+// The sites an OPML blogroll lists.
+export const blogrollFromOpml = (xml: string): BlogrollSite[] => {
+  const sites = new Map<string, BlogrollSite>()
+  for (const tag of xml.match(/<outline\b[^>]*>/gi) ?? []) {
+    const feedUrl = httpUrl(attrOf(tag, 'xmlUrl'))
+    const siteUrl = httpUrl(attrOf(tag, 'htmlUrl')) ?? feedUrl
+    const host = hostOf(siteUrl)
+    if (!host || isPlatformHost(host)) continue
+    const site = siteOf(host)
+    if (sites.has(site)) continue
+    sites.set(site, {
+      site,
+      host,
+      feedUrl,
+      name: attrOf(tag, 'title') || attrOf(tag, 'text') || undefined,
+    })
+    if (sites.size >= MAX_BLOGROLL) break
+  }
+  return [...sites.values()]
+}
+
+// The sites a blogroll page links to, leaving out the site's own pages and
+// the platforms everyone links to.
+export const blogrollFromPage = (
+  html: string,
+  pageUrl: string
+): BlogrollSite[] => {
+  const own = hostOf(pageUrl)
+  const ownSite = own && siteOf(own)
+  // Headers and footers link to the same things on every page.
+  const body = html
+    .replace(/<(header|footer|nav)\b[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ')
+  const sites = new Map<string, BlogrollSite>()
+  const anchors = body.match(/<a\b[^>]*>[\s\S]{0,200}?<\/a>/gi) ?? []
+  for (const anchor of anchors) {
+    const href = httpUrl(attrOf(anchor, 'href'), pageUrl)
+    const host = hostOf(href)
+    if (!host || isPlatformHost(host)) continue
+    const site = siteOf(host)
+    if (site === ownSite || sites.has(site)) continue
+    const name = decodeEntities(anchor.replace(/<[^>]+>/g, ' '))
+      .replace(/\s+/g, ' ')
+      .trim()
+    sites.set(site, { site, host, name: name || undefined })
+    if (sites.size >= MAX_BLOGROLL) break
+  }
+  return [...sites.values()]
+}
+
+// What one blogroll entry is worth as a link: a short blogroll is a strong
+// recommendation, a long one less so.
+export const blogrollWeight = (size: number): number =>
+  size <= 0 ? 0 : 2.5 * Math.min(1, 20 / size)
+
+// ---------------------------------------------------------------------------
+// YouTube channels
+
+// The key for a YouTube channel an article links to, from the path of a
+// youtube.com link: "@handle" or "channel/UC…". Anything else is undefined.
+export const youtubeChannelKey = (path: string): string | undefined => {
+  const handle = /^@([\w.-]{3,30})(?:[/?#]|$)/.exec(path)
+  if (handle) return `youtube.com/@${handle[1].toLowerCase()}`
+  const id = /^channel\/(UC[\w-]{22})(?:[/?#]|$)/.exec(path)
+  if (id) return `youtube.com/channel/${id[1]}`
+  return undefined
+}
+
+export const youtubeChannelPage = (key: string): string => `https://www.${key}`
+
+export const isYouTubeChannelKey = (key: string): boolean =>
+  key.startsWith('youtube.com/')
+
+// ---------------------------------------------------------------------------
+// Starting points
+
+// A few well-kept independent sites, offered only while your own reading
+// leads to fewer than three suggestions. They are ranked by how close their
+// latest posts are to what you read.
+export const STARTING_POINTS: { host: string; topic: string }[] = [
+  { host: 'kottke.org', topic: 'Culture' },
+  { host: 'daringfireball.net', topic: 'Apple' },
+  { host: 'sixcolors.com', topic: 'Apple' },
+  { host: 'www.macstories.net', topic: 'Apple' },
+  { host: 'www.themarginalian.org', topic: 'Ideas' },
+  { host: 'austinkleon.com', topic: 'Creativity' },
+  { host: 'aeon.co', topic: 'Essays' },
+  { host: 'publicdomainreview.org', topic: 'History' },
+  { host: 'simonwillison.net', topic: 'Technology' },
+  { host: 'www.robinsloan.com', topic: 'Writing' },
+  { host: 'om.co', topic: 'Technology' },
+  { host: 'eyeondesign.aiga.org', topic: 'Design' },
+]
+
+// How many suggestions of its own your reading has to lead to before the
+// starting points step aside.
+export const STARTERS_BELOW = 3

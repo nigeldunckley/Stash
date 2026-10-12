@@ -1043,6 +1043,7 @@ union FeedSuggestionsResult = FeedSuggestionsError | FeedSuggestionsSuccess
 type FeedSuggestionsSuccess {
   articlesConsidered: Int!
   builtAt: Date
+  enabled: Boolean!
   suggestions: [FeedSuggestion!]!
 }
 
@@ -1805,6 +1806,7 @@ type Mutation {
   setBookmarkArticle(input: SetBookmarkArticleInput!): SetBookmarkArticleResult!
   setDeviceToken(input: SetDeviceTokenInput!): SetDeviceTokenResult!
   setFavoriteArticle(id: ID!): SetFavoriteArticleResult!
+  setFeedSuggestionsEnabled(enabled: Boolean!): SetFeedSuggestionsEnabledResult!
   setIntegration(input: SetIntegrationInput!): SetIntegrationResult!
   setLabels(input: SetLabelsInput!): SetLabelsResult!
   setLabelsForHighlight(input: SetLabelsForHighlightInput!): SetLabelsResult!
@@ -2651,6 +2653,21 @@ union SetFavoriteArticleResult = SetFavoriteArticleError | SetFavoriteArticleSuc
 
 type SetFavoriteArticleSuccess {
   success: Boolean!
+}
+
+type SetFeedSuggestionsEnabledError {
+  errorCodes: [SetFeedSuggestionsEnabledErrorCode!]!
+}
+
+enum SetFeedSuggestionsEnabledErrorCode {
+  BAD_REQUEST
+  UNAUTHORIZED
+}
+
+union SetFeedSuggestionsEnabledResult = SetFeedSuggestionsEnabledError | SetFeedSuggestionsEnabledSuccess
+
+type SetFeedSuggestionsEnabledSuccess {
+  enabled: Boolean!
 }
 
 type SetFollowError {
