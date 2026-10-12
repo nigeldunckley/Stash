@@ -33,6 +33,7 @@ import {
   whySentence,
 } from './discoverText'
 import { flyToFeeds } from './flyToFeeds'
+import { ReadingMap } from './ReadingMap'
 import { SuggestionSheet } from './SuggestionSheet'
 
 // Discover: feeds worth meeting, found in what you read. It lives apart from
@@ -779,6 +780,13 @@ export function StashDiscover(): JSX.Element {
             feeds, the more Stash has to go on.
           </Empty>
         ) : null}
+
+        <ReadingMap
+          suggestions={fresh}
+          onOpen={(s) => setOpen(s.id)}
+          onFollow={follow}
+          onTry={tryIt}
+        />
 
         {hero && (
           <Spread aria-label="Try this week">
