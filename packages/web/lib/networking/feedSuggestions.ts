@@ -20,7 +20,7 @@ export type FeedSuggestionReason = {
   // link: one of your feeds links to it; save: you save from it; writer: a
   // writer you finish writes it; neighbour: it links to the same places as
   // one of your favourite feeds.
-  kind: 'link' | 'save' | 'writer' | 'neighbour'
+  kind: 'link' | 'save' | 'writer' | 'neighbour' | 'similar'
   guide: string
   guideName: string
   count: number
