@@ -247,7 +247,6 @@ export function useSuggestionActions() {
       setStatus(suggestion.id, action == 'TRY' ? 'TRIAL' : 'FOLLOWING')
       const result = await subscribeMutation({
         url: suggestion.feedUrl,
-        name: suggestion.title,
         subscriptionType: SubscriptionType.RSS,
       })
       const subscriptionId = result.subscribe.subscriptions?.[0]?.id

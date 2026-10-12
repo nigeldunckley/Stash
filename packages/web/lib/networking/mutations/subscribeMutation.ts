@@ -22,8 +22,7 @@ type Subscribe = {
 }
 
 export type SubscribeMutationInput = {
-  name?: string
-  url?: string
+  url: string
   subscriptionType?: SubscriptionType
   includeShorts?: boolean
 }
