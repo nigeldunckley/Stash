@@ -4,6 +4,10 @@
 // are to public sites your own articles already link to.
 
 import axios from 'axios'
+import dns from 'dns'
+import http from 'http'
+import https from 'https'
+import * as privateIpLib from 'private-ip'
 import { parseHTML } from 'linkedom'
 import Parser, { Item } from 'rss-parser'
 import { In } from 'typeorm'
@@ -335,33 +339,78 @@ type Fetcher = {
   used: () => number
 }
 
+// Candidate sites come from links in articles, so anyone can name one.
+// Every connection is checked after DNS resolves, so a public name that
+// resolves to a private address is refused, and redirects are followed by
+// hand so each hop is checked too.
+const isPrivateIP = privateIpLib.default
+
+const publicLookup = (
+  hostname: string,
+  options: dns.LookupOptions,
+  callback: (
+    err: NodeJS.ErrnoException | null,
+    address: string | dns.LookupAddress[],
+    family?: number
+  ) => void
+) => {
+  dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
+    if (err) return callback(err, '')
+    const list = addresses as dns.LookupAddress[]
+    if (!list.length || list.some((a) => isPrivateIP(a.address))) {
+      return callback(new Error(`Refused private address for ${hostname}`), '')
+    }
+    if (options.all) return callback(null, list)
+    callback(null, list[0].address, list[0].family)
+  })
+}
+
+const httpAgent = new http.Agent({ lookup: publicLookup } as http.AgentOptions)
+const httpsAgent = new https.Agent({
+  lookup: publicLookup,
+} as https.AgentOptions)
+
+const MAX_REDIRECTS = 3
+
 export const politeFetcher = (limit = MAX_REQUESTS_PER_RUN): Fetcher => {
   let used = 0
   return {
     used: () => used,
     get: async (url: string) => {
       if (used >= limit) return null
+      let next = url
       try {
-        validateUrl(url)
-      } catch {
-        return null
-      }
-      if (used > 0) await wait(REQUEST_GAP_MS)
-      used++
-      try {
-        const res = await axios.get<string>(url, {
-          ...rssParserConfig(),
-          timeout: 10_000,
-          maxContentLength: 3 * 1024 * 1024,
-          responseType: 'text',
-          maxRedirects: 3,
-          validateStatus: (s) => s >= 200 && s < 300,
-        })
-        const header = res.headers['content-type']
-        return {
-          data: String(res.data ?? ''),
-          contentType: String(Array.isArray(header) ? header[0] : header ?? ''),
+        for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+          validateUrl(next)
+          if (used >= limit) return null
+          if (used > 0) await wait(REQUEST_GAP_MS)
+          used++
+          const res = await axios.get<string>(next, {
+            ...rssParserConfig(),
+            timeout: 10_000,
+            maxContentLength: 3 * 1024 * 1024,
+            responseType: 'text',
+            maxRedirects: 0,
+            httpAgent,
+            httpsAgent,
+            proxy: false,
+            validateStatus: (s) => s >= 200 && s < 400,
+          })
+          if (res.status >= 300) {
+            const location = res.headers['location']
+            if (!location) return null
+            next = new URL(String(location), next).toString()
+            continue
+          }
+          const header = res.headers['content-type']
+          return {
+            data: String(res.data ?? ''),
+            contentType: String(
+              Array.isArray(header) ? header[0] : header ?? ''
+            ),
+          }
         }
+        return null
       } catch {
         return null
       }
@@ -670,7 +719,10 @@ export const buildFeedSuggestions = async (
     }
   }
 
-  const touched = new Set<string>()
+  // Suggestions your reading no longer leads to fade out. Ones it still
+  // leads to keep their last score when tonight's checks run out.
+  const inGraph = new Set(graph.candidates.map((c) => c.site))
+  const followedNow = new Set<string>()
   let checked = 0
   for (const c of graph.candidates) {
     const row = existing.get(c.site)
@@ -721,7 +773,10 @@ export const buildFeedSuggestions = async (
 
     // A feed that turns out to be one you follow.
     const feedSite = hostOf(feed.siteUrl)
-    if (feedSite && graph.followedSites.has(siteOf(feedSite))) continue
+    if (feedSite && graph.followedSites.has(siteOf(feedSite))) {
+      followedNow.add(c.site)
+      continue
+    }
 
     const { signals, score, reasons } = scoreCandidate(
       c,
@@ -730,7 +785,6 @@ export const buildFeedSuggestions = async (
       trust,
       now
     )
-    touched.add(c.site)
     await repo.upsert(
       {
         id: row?.id,
@@ -757,9 +811,13 @@ export const buildFeedSuggestions = async (
     )
   }
 
-  // Suggestions your reading no longer leads to fade out.
   const faded = [...existing.values()]
-    .filter((s) => s.status === 'new' && !touched.has(s.site) && s.score > 0)
+    .filter(
+      (s) =>
+        s.status === 'new' &&
+        s.score > 0 &&
+        (!inGraph.has(s.site) || followedNow.has(s.site))
+    )
     .map((s) => s.id)
   if (faded.length) await repo.update({ id: In(faded) }, { score: 0 })
 
@@ -808,7 +866,9 @@ export const listFeedSuggestions = async (
     visible.map((r) => ({
       row: r,
       score: r.status === 'new' ? r.score : Infinity,
-      leadGuide: r.reasons[0]?.guide,
+      // Only new suggestions are kept varied; your trials and history
+      // are listed in full.
+      leadGuide: r.status === 'new' ? r.reasons[0]?.guide : undefined,
     }))
   )
   const run = await getRepository(FeedSuggestionGuide).findOneBy({

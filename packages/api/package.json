@@ -107,6 +107,7 @@
     "posthog-node": "^3.6.3",
     "private-ip": "2.3.3",
     "prom-client": "^15.1.0",
+    "psl": "^1.1.33",
     "rate-limit-redis": "^4.2.0",
     "redis": "^4.6.13",
     "reflect-metadata": "0.2.2",

@@ -51,6 +51,8 @@ describe('feed discovery', () => {
     it('folds subdomains into their site, except shared hosts', () => {
       expect(siteOf('blog.example.com')).to.eql('example.com')
       expect(siteOf('feeds.bbc.co.uk')).to.eql('bbc.co.uk')
+      expect(siteOf('www.publisher.com.br')).to.eql('publisher.com.br')
+      expect(siteOf('other.com.br')).to.eql('other.com.br')
       expect(siteOf('stratechery.substack.com')).to.eql(
         'stratechery.substack.com'
       )

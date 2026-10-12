@@ -1,3 +1,5 @@
+import psl from 'psl'
+
 // The pure parts of feed discovery: how much each article counts, which sites
 // are never worth suggesting, and how a suggestion is scored. Nothing here
 // touches the network or the database, so it can be tested on its own.
@@ -129,7 +131,9 @@ export const isPlatformHost = (host: string): boolean =>
   !(host.endsWith('.substack.com') && host !== 'substack.com')
 
 // The site a host belongs to for counting, so "blog.example.com" and
-// "example.com" count together, but separate Substack newsletters don't.
+// "example.com" count together. The public suffix list knows where a site
+// starts (bbc.co.uk, publisher.com.br); hosts that publish many separate
+// sites (Substack, GitHub Pages, Blogspot) keep their subdomain.
 const SHARED_SUFFIXES = [
   'substack.com',
   'github.io',
@@ -138,20 +142,17 @@ const SHARED_SUFFIXES = [
   'tumblr.com',
   'bearblog.dev',
   'micro.blog',
-  'co.uk',
-  'org.uk',
-  'com.au',
-  'co.nz',
-  'co.jp',
 ]
 
 export const siteOf = (host: string): string => {
   const shared = SHARED_SUFFIXES.find((s) => host.endsWith(`.${s}`))
-  const keep = shared ? shared.split('.').length + 1 : 2
-  const parts = host.split('.')
-  // Subdomains of ordinary sites (blog., feeds.) fold into the site, except
-  // where the subdomain is the publication itself.
-  return parts.slice(-keep).join('.')
+  if (shared) {
+    return host
+      .split('.')
+      .slice(-(shared.split('.').length + 1))
+      .join('.')
+  }
+  return psl.get(host) ?? host
 }
 
 // Hosts of absolute links in a piece of HTML, counted.
