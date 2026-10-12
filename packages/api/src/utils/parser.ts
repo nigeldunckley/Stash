@@ -81,6 +81,29 @@ const DOM_PURIFY_CONFIG = {
 const ARTICLE_PREFIX = 'omnivore:'
 
 export const FAKE_URL_PREFIX = 'https://omnivore.work/no_url?q='
+// Feed readers put up with small mistakes in a feed, so Stash does too: a
+// stray PHP warning or blank line printed before the feed, control
+// characters, and bare '&' in titles ("Q&A") each make the strict XML parser
+// reject the whole feed. Only used once the feed as served fails to parse.
+export const repairFeedXml = (xml: string): string => {
+  const start = xml.search(/<\?xml|<(rss|feed|rdf:RDF)[\s>]/i)
+  return (start > 0 ? xml.slice(start) : xml)
+    .split(/(<!\[CDATA\[[\s\S]*?\]\]>)/)
+    .map((part, i) =>
+      // odd parts are CDATA sections, which may hold anything
+      i % 2
+        ? part
+        : part
+            // eslint-disable-next-line no-control-regex
+            .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+            .replace(
+              /&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#\d+|#x[0-9a-fA-F]+);)/g,
+              '&amp;'
+            )
+    )
+    .join('')
+}
+
 export const rssParserConfig = () => {
   const fingerprint = generateFingerprint()
 
@@ -913,7 +936,9 @@ export const parseFeed = async (
     const parser = new Parser(rssParserConfig())
 
     const feed = content
-      ? await parser.parseString(content)
+      ? await parser
+          .parseString(content)
+          .catch(() => parser.parseString(repairFeedXml(content as string)))
       : await parser.parseURL(url)
 
     const feedUrl = feed.feedUrl || url
