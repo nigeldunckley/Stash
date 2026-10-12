@@ -1,5 +1,3 @@
-import psl from 'psl'
-
 // The pure parts of feed discovery: how much each article counts, which sites
 // are never worth suggesting, and how a suggestion is scored. Nothing here
 // touches the network or the database, so it can be tested on its own.
@@ -143,6 +141,10 @@ const SHARED_SUFFIXES = [
   'bearblog.dev',
   'micro.blog',
 ]
+
+// psl ships types its package exports don't point to, so it's typed here.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const psl = require('psl') as { get: (domain: string) => string | null }
 
 export const siteOf = (host: string): string => {
   const shared = SHARED_SUFFIXES.find((s) => host.endsWith(`.${s}`))
