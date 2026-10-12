@@ -528,7 +528,11 @@ function SuggestionCard(props: {
       <CardMeta>
         {s.status == 'TRIAL' ? (
           <Chip accent>
-            {days ? `Trial · ${days} day${days == 1 ? '' : 's'} left` : 'Trial'}
+            {days == 0
+              ? 'Trial over · keep it?'
+              : days
+              ? `Trial · ${days} day${days == 1 ? '' : 's'} left`
+              : 'Trial'}
           </Chip>
         ) : s.status == 'FOLLOWING' ? (
           <Chip accent>Following</Chip>
@@ -680,10 +684,19 @@ export function StashDiscover(): JSX.Element {
     [actions]
   )
 
+  const drop = useCallback(
+    async (s: FeedSuggestion) => {
+      setOpen(undefined)
+      const undo = await actions.drop(s)
+      showUndoToast(`Stopped trying ${s.title}`, undo)
+    },
+    [actions]
+  )
+
   const lookAgain = async () => {
     setLooking(true)
     try {
-      await refreshFeedSuggestions()
+      if (!(await refreshFeedSuggestions())) throw new Error('not queued')
       showUndoToast(
         'Looking through your reading. Check back in a few minutes.'
       )
@@ -942,6 +955,7 @@ export function StashDiscover(): JSX.Element {
           tryIt(s)
         }}
         onDismiss={dismiss}
+        onDrop={drop}
       />
     </Page>
   )

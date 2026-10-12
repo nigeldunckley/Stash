@@ -204,6 +204,7 @@ type Props = {
   onFollow: (s: FeedSuggestion, from: HTMLElement | null) => void
   onTry: (s: FeedSuggestion) => void
   onDismiss: (s: FeedSuggestion) => void
+  onDrop: (s: FeedSuggestion) => void
 }
 
 export function SuggestionSheet(props: Props): JSX.Element {
@@ -364,6 +365,15 @@ export function SuggestionSheet(props: Props): JSX.Element {
                     onClick={() => props.onFollow(s, iconRef.current)}
                   >
                     {trying ? `Keep ${s.title}` : `Follow ${s.title}`}
+                  </Button>
+                )}
+                {trying && (
+                  <Button
+                    tone="quiet"
+                    onClick={() => props.onDrop(s)}
+                    data-wide
+                  >
+                    Stop trying
                   </Button>
                 )}
                 {lead && !following && !trying && (

@@ -147,23 +147,36 @@ const GQL_REFRESH_FEED_SUGGESTIONS = gql`
 export const FEED_SUGGESTIONS_KEY = 'feedSuggestions'
 
 // New suggestions, plus the ones you're trying or have followed from here,
-// so the page can show what you did with each.
-const SHOWN: FeedSuggestionStatus[] = ['NEW', 'TRIAL', 'FOLLOWING']
+// so the page can show what you did with each. Each status is asked for on
+// its own so a long history never crowds out what's new.
+const SHOWN: [FeedSuggestionStatus, number][] = [
+  ['NEW', 40],
+  ['TRIAL', 20],
+  ['FOLLOWING', 12],
+]
 
 export function useFeedSuggestions(enabled = true) {
   return useQuery({
     queryKey: [FEED_SUGGESTIONS_KEY],
     queryFn: async (): Promise<FeedSuggestions> => {
-      const response = (await gqlFetcher(GQL_FEED_SUGGESTIONS, {
-        statuses: SHOWN,
-        first: 40,
-      })) as {
-        feedSuggestions: FeedSuggestions & { errorCodes?: string[] }
+      const pages = await Promise.all(
+        SHOWN.map(async ([status, first]) => {
+          const response = (await gqlFetcher(GQL_FEED_SUGGESTIONS, {
+            statuses: [status],
+            first,
+          })) as {
+            feedSuggestions: FeedSuggestions & { errorCodes?: string[] }
+          }
+          if (response.feedSuggestions.errorCodes?.length) {
+            throw new Error(response.feedSuggestions.errorCodes[0])
+          }
+          return response.feedSuggestions
+        })
+      )
+      return {
+        ...pages[0],
+        suggestions: pages.flatMap((page) => page.suggestions),
       }
-      if (response.feedSuggestions.errorCodes?.length) {
-        throw new Error(response.feedSuggestions.errorCodes[0])
-      }
-      return response.feedSuggestions
     },
     enabled,
     staleTime: 5 * 60 * 1000,
@@ -280,9 +293,36 @@ export function useSuggestionActions() {
     [queryClient]
   )
 
+  // Ending a trial unsubscribes from the feed. Undo starts the trial again.
+  const drop = useCallback(
+    async (suggestion: FeedSuggestion): Promise<() => Promise<void>> => {
+      queryClient.setQueryData<FeedSuggestions>(
+        [FEED_SUGGESTIONS_KEY],
+        (data) =>
+          data && {
+            ...data,
+            suggestions: data.suggestions.filter((s) => s.id != suggestion.id),
+          }
+      )
+      if (suggestion.subscriptionId) {
+        await unsubscribeMutation(suggestion.title, suggestion.subscriptionId)
+      }
+      await updateFeedSuggestion(suggestion.id, 'DROP')
+      await refreshFeeds()
+      return async () => {
+        await subscribe(suggestion, 'TRY')
+        await queryClient.invalidateQueries({
+          queryKey: [FEED_SUGGESTIONS_KEY],
+        })
+      }
+    },
+    [queryClient, refreshFeeds, subscribe]
+  )
+
   return {
     follow: (s: FeedSuggestion) => subscribe(s, 'FOLLOW'),
     tryForAWeek: (s: FeedSuggestion) => subscribe(s, 'TRY'),
     dismiss,
+    drop,
   }
 }
