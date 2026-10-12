@@ -5,7 +5,10 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   FEED_SUGGESTIONS_KEY,
   FeedSuggestion,
+  isChannel,
+  isStarter,
   refreshFeedSuggestions,
+  setFeedSuggestionsEnabled,
   updateFeedSuggestion,
   useFeedSuggestions,
   useSuggestionActions,
@@ -538,7 +541,10 @@ function SuggestionCard(props: {
         ) : s.status == 'FOLLOWING' ? (
           <Chip accent>Following</Chip>
         ) : (
-          cadence(s.postsPerWeek) && <Chip>{cadence(s.postsPerWeek)}</Chip>
+          <>
+            {isChannel(s) && <Chip>YouTube</Chip>}
+            {cadence(s.postsPerWeek) && <Chip>{cadence(s.postsPerWeek)}</Chip>}
+          </>
         )}
       </CardMeta>
     </Card>
@@ -622,14 +628,23 @@ export function StashDiscover(): JSX.Element {
         .sort((a, b) => b.score - a.score),
     [suggestions, actedOn]
   )
-  const hero = fresh.find((s) => s.feedUrl)
-  const writers = fresh.filter(
-    (s) => s != hero && s.reasons[0]?.kind == 'writer'
-  )
+  // What your reading led to, channels for the Watch tab, and starting
+  // points while there's too little of the first.
+  const own = fresh.filter((s) => !isChannel(s) && !isStarter(s))
+  const channels = fresh.filter(isChannel)
+  const starters = fresh.filter(isStarter)
+  const hero = own.find((s) => s.feedUrl)
+  const writers = own.filter((s) => s != hero && s.reasons[0]?.kind == 'writer')
   const shelves = useMemo(
     () =>
       shelvesFor(
-        fresh.filter((s) => s != hero && s.reasons[0]?.kind != 'writer')
+        fresh.filter(
+          (s) =>
+            s != hero &&
+            s.reasons[0]?.kind != 'writer' &&
+            !isChannel(s) &&
+            !isStarter(s)
+        )
       ),
     [fresh, hero]
   )
@@ -658,7 +673,10 @@ export function StashDiscover(): JSX.Element {
         showErrorToast(`Could not follow ${s.title}`)
         return
       }
-      showUndoToast(`Following ${s.title}`, undo)
+      showUndoToast(
+        isChannel(s) ? `Following ${s.title} in Watch` : `Following ${s.title}`,
+        undo
+      )
     },
     [actions, markActed, queryClient]
   )
@@ -708,20 +726,39 @@ export function StashDiscover(): JSX.Element {
     }
   }
 
+  const turnOn = async () => {
+    setLooking(true)
+    try {
+      await setFeedSuggestionsEnabled(true)
+      await queryClient.invalidateQueries({ queryKey: [FEED_SUGGESTIONS_KEY] })
+      showUndoToast(
+        'Suggestions are on. Stash is looking through your reading now.'
+      )
+    } catch {
+      showErrorToast('Could not turn suggestions on')
+    } finally {
+      setLooking(false)
+    }
+  }
+
+  const off = data?.enabled === false
+  // Starting points aren't something your reading found.
+  const found = fresh.filter((s) => !isStarter(s))
   const articles = data?.articlesConsidered ?? 0
-  const lede =
-    data?.builtAt && articles > 0 ? (
-      <>
-        From <b>{articles} articles you read</b> in the last two months,{' '}
-        {fresh.length == 0
-          ? 'nothing new cleared the bar today.'
-          : fresh.length == 1
-          ? 'one feed worth meeting.'
-          : `${fresh.length} feeds worth meeting.`}
-      </>
-    ) : (
-      <>Feeds worth meeting, found in what you read and who you follow.</>
-    )
+  const lede = off ? (
+    <>Suggestions are off, so Stash isn&apos;t looking for new feeds.</>
+  ) : data?.builtAt && articles > 0 ? (
+    <>
+      From <b>{articles} articles you read</b> in the last two months,{' '}
+      {found.length == 0
+        ? 'nothing new cleared the bar today.'
+        : found.length == 1
+        ? 'one feed worth meeting.'
+        : `${found.length} feeds worth meeting.`}
+    </>
+  ) : (
+    <>Feeds worth meeting, found in what you read and who you follow.</>
+  )
 
   return (
     <Page>
@@ -738,7 +775,7 @@ export function StashDiscover(): JSX.Element {
             </Title>
             <Lede>{lede}</Lede>
           </MastRow>
-          <MastFoot>
+          <MastFoot css={off ? { display: 'none' } : undefined}>
             <Label>
               {data?.builtAt
                 ? `Updated ${shortTimeAgo(
@@ -763,6 +800,15 @@ export function StashDiscover(): JSX.Element {
         ) : isError ? (
           <Empty>
             Discover couldn&apos;t load just now. Try again in a moment.
+          </Empty>
+        ) : off ? (
+          <Empty>
+            Turn suggestions back on and Stash will look through what you read
+            each night for feeds worth meeting. Nothing is suggested while
+            they&apos;re off.
+            <Button tone="primary" onClick={turnOn} disabled={looking}>
+              {looking ? 'Turning on…' : 'Turn suggestions on'}
+            </Button>
           </Empty>
         ) : !data?.builtAt ? (
           <Empty>
@@ -918,6 +964,48 @@ export function StashDiscover(): JSX.Element {
             </ShelfRow>
           </Shelf>
         ))}
+
+        {channels.length > 0 && (
+          <Shelf aria-label="For your Watch tab">
+            <Eyebrow>
+              <b>For your Watch tab</b>
+              <Label css={{ '@smDown': { display: 'none' } }}>
+                YouTube channels the pieces you read link to
+              </Label>
+            </Eyebrow>
+            <ShelfRow>
+              {channels.map((s) => (
+                <SuggestionCard
+                  key={s.id}
+                  s={s}
+                  onOpen={(x) => setOpen(x.id)}
+                  onFollow={follow}
+                />
+              ))}
+            </ShelfRow>
+          </Shelf>
+        )}
+
+        {starters.length > 0 && (
+          <Shelf aria-label="Starting points">
+            <Eyebrow>
+              <b>Starting points</b>
+              <Label css={{ '@smDown': { display: 'none' } }}>
+                Well-kept sites to begin with, until your reading leads further
+              </Label>
+            </Eyebrow>
+            <ShelfRow>
+              {starters.map((s) => (
+                <SuggestionCard
+                  key={s.id}
+                  s={s}
+                  onOpen={(x) => setOpen(x.id)}
+                  onFollow={follow}
+                />
+              ))}
+            </ShelfRow>
+          </Shelf>
+        )}
 
         {writers.length > 0 && (
           <Shelf aria-label="Writers you keep reading">

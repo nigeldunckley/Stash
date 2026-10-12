@@ -31,6 +31,7 @@ import {
 import {
   fallbackIconFor,
   iconFor,
+  isGuide,
   matchPercent,
   reasonLine,
   whyLine,
@@ -698,7 +699,7 @@ export function TrialVerdict(props: { s: FeedSuggestion }): JSX.Element {
   const read = week.reduce((sum, d) => sum + d.read, 0)
   const ended = new Date(s.trialEndsAt as string)
   const today = localDate(new Date()) == localDate(ended)
-  const via = s.reasons.find((r) => r.kind == 'link' || r.kind == 'neighbour')
+  const via = s.reasons.find(isGuide)
 
   return (
     <Verdict aria-label={`Trial of ${s.title}`}>

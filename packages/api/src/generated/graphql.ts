@@ -1158,6 +1158,7 @@ export type FeedSuggestionsSuccess = {
   __typename?: 'FeedSuggestionsSuccess';
   articlesConsidered: Scalars['Int'];
   builtAt?: Maybe<Scalars['Date']>;
+  enabled: Scalars['Boolean'];
   suggestions: Array<FeedSuggestion>;
 };
 
@@ -1991,6 +1992,7 @@ export type Mutation = {
   setBookmarkArticle: SetBookmarkArticleResult;
   setDeviceToken: SetDeviceTokenResult;
   setFavoriteArticle: SetFavoriteArticleResult;
+  setFeedSuggestionsEnabled: SetFeedSuggestionsEnabledResult;
   setIntegration: SetIntegrationResult;
   setLabels: SetLabelsResult;
   setLabelsForHighlight: SetLabelsResult;
@@ -2286,6 +2288,11 @@ export type MutationSetDeviceTokenArgs = {
 
 export type MutationSetFavoriteArticleArgs = {
   id: Scalars['ID'];
+};
+
+
+export type MutationSetFeedSuggestionsEnabledArgs = {
+  enabled: Scalars['Boolean'];
 };
 
 
@@ -3423,6 +3430,23 @@ export type SetFavoriteArticleResult = SetFavoriteArticleError | SetFavoriteArti
 export type SetFavoriteArticleSuccess = {
   __typename?: 'SetFavoriteArticleSuccess';
   success: Scalars['Boolean'];
+};
+
+export type SetFeedSuggestionsEnabledError = {
+  __typename?: 'SetFeedSuggestionsEnabledError';
+  errorCodes: Array<SetFeedSuggestionsEnabledErrorCode>;
+};
+
+export enum SetFeedSuggestionsEnabledErrorCode {
+  BadRequest = 'BAD_REQUEST',
+  Unauthorized = 'UNAUTHORIZED'
+}
+
+export type SetFeedSuggestionsEnabledResult = SetFeedSuggestionsEnabledError | SetFeedSuggestionsEnabledSuccess;
+
+export type SetFeedSuggestionsEnabledSuccess = {
+  __typename?: 'SetFeedSuggestionsEnabledSuccess';
+  enabled: Scalars['Boolean'];
 };
 
 export type SetFollowError = {
@@ -5108,6 +5132,10 @@ export type ResolversTypes = {
   SetFavoriteArticleErrorCode: SetFavoriteArticleErrorCode;
   SetFavoriteArticleResult: ResolversTypes['SetFavoriteArticleError'] | ResolversTypes['SetFavoriteArticleSuccess'];
   SetFavoriteArticleSuccess: ResolverTypeWrapper<SetFavoriteArticleSuccess>;
+  SetFeedSuggestionsEnabledError: ResolverTypeWrapper<SetFeedSuggestionsEnabledError>;
+  SetFeedSuggestionsEnabledErrorCode: SetFeedSuggestionsEnabledErrorCode;
+  SetFeedSuggestionsEnabledResult: ResolversTypes['SetFeedSuggestionsEnabledError'] | ResolversTypes['SetFeedSuggestionsEnabledSuccess'];
+  SetFeedSuggestionsEnabledSuccess: ResolverTypeWrapper<SetFeedSuggestionsEnabledSuccess>;
   SetFollowError: ResolverTypeWrapper<SetFollowError>;
   SetFollowErrorCode: SetFollowErrorCode;
   SetFollowInput: SetFollowInput;
@@ -5696,6 +5724,9 @@ export type ResolversParentTypes = {
   SetFavoriteArticleError: SetFavoriteArticleError;
   SetFavoriteArticleResult: ResolversParentTypes['SetFavoriteArticleError'] | ResolversParentTypes['SetFavoriteArticleSuccess'];
   SetFavoriteArticleSuccess: SetFavoriteArticleSuccess;
+  SetFeedSuggestionsEnabledError: SetFeedSuggestionsEnabledError;
+  SetFeedSuggestionsEnabledResult: ResolversParentTypes['SetFeedSuggestionsEnabledError'] | ResolversParentTypes['SetFeedSuggestionsEnabledSuccess'];
+  SetFeedSuggestionsEnabledSuccess: SetFeedSuggestionsEnabledSuccess;
   SetFollowError: SetFollowError;
   SetFollowInput: SetFollowInput;
   SetFollowResult: ResolversParentTypes['SetFollowError'] | ResolversParentTypes['SetFollowSuccess'];
@@ -6659,6 +6690,7 @@ export type FeedSuggestionsResultResolvers<ContextType = ResolverContext, Parent
 export type FeedSuggestionsSuccessResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['FeedSuggestionsSuccess'] = ResolversParentTypes['FeedSuggestionsSuccess']> = {
   articlesConsidered?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   builtAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  enabled?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   suggestions?: Resolver<Array<ResolversTypes['FeedSuggestion']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 };
@@ -7306,6 +7338,7 @@ export type MutationResolvers<ContextType = ResolverContext, ParentType extends 
   setBookmarkArticle?: Resolver<ResolversTypes['SetBookmarkArticleResult'], ParentType, ContextType, RequireFields<MutationSetBookmarkArticleArgs, 'input'>>;
   setDeviceToken?: Resolver<ResolversTypes['SetDeviceTokenResult'], ParentType, ContextType, RequireFields<MutationSetDeviceTokenArgs, 'input'>>;
   setFavoriteArticle?: Resolver<ResolversTypes['SetFavoriteArticleResult'], ParentType, ContextType, RequireFields<MutationSetFavoriteArticleArgs, 'id'>>;
+  setFeedSuggestionsEnabled?: Resolver<ResolversTypes['SetFeedSuggestionsEnabledResult'], ParentType, ContextType, RequireFields<MutationSetFeedSuggestionsEnabledArgs, 'enabled'>>;
   setIntegration?: Resolver<ResolversTypes['SetIntegrationResult'], ParentType, ContextType, RequireFields<MutationSetIntegrationArgs, 'input'>>;
   setLabels?: Resolver<ResolversTypes['SetLabelsResult'], ParentType, ContextType, RequireFields<MutationSetLabelsArgs, 'input'>>;
   setLabelsForHighlight?: Resolver<ResolversTypes['SetLabelsResult'], ParentType, ContextType, RequireFields<MutationSetLabelsForHighlightArgs, 'input'>>;
@@ -7943,6 +7976,20 @@ export type SetFavoriteArticleResultResolvers<ContextType = ResolverContext, Par
 
 export type SetFavoriteArticleSuccessResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['SetFavoriteArticleSuccess'] = ResolversParentTypes['SetFavoriteArticleSuccess']> = {
   success?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type SetFeedSuggestionsEnabledErrorResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['SetFeedSuggestionsEnabledError'] = ResolversParentTypes['SetFeedSuggestionsEnabledError']> = {
+  errorCodes?: Resolver<Array<ResolversTypes['SetFeedSuggestionsEnabledErrorCode']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type SetFeedSuggestionsEnabledResultResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['SetFeedSuggestionsEnabledResult'] = ResolversParentTypes['SetFeedSuggestionsEnabledResult']> = {
+  __resolveType: TypeResolveFn<'SetFeedSuggestionsEnabledError' | 'SetFeedSuggestionsEnabledSuccess', ParentType, ContextType>;
+};
+
+export type SetFeedSuggestionsEnabledSuccessResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['SetFeedSuggestionsEnabledSuccess'] = ResolversParentTypes['SetFeedSuggestionsEnabledSuccess']> = {
+  enabled?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 };
 
@@ -8962,6 +9009,9 @@ export type Resolvers<ContextType = ResolverContext> = {
   SetFavoriteArticleError?: SetFavoriteArticleErrorResolvers<ContextType>;
   SetFavoriteArticleResult?: SetFavoriteArticleResultResolvers<ContextType>;
   SetFavoriteArticleSuccess?: SetFavoriteArticleSuccessResolvers<ContextType>;
+  SetFeedSuggestionsEnabledError?: SetFeedSuggestionsEnabledErrorResolvers<ContextType>;
+  SetFeedSuggestionsEnabledResult?: SetFeedSuggestionsEnabledResultResolvers<ContextType>;
+  SetFeedSuggestionsEnabledSuccess?: SetFeedSuggestionsEnabledSuccessResolvers<ContextType>;
   SetFollowError?: SetFollowErrorResolvers<ContextType>;
   SetFollowResult?: SetFollowResultResolvers<ContextType>;
   SetFollowSuccess?: SetFollowSuccessResolvers<ContextType>;

@@ -17,10 +17,12 @@ export type FeedSuggestionStatus =
   | 'DISMISSED'
 
 export type FeedSuggestionReason = {
-  // link: one of your feeds links to it; save: you save from it; writer: a
-  // writer you finish writes it; neighbour: it links to the same places as
-  // one of your favourite feeds.
-  kind: 'link' | 'save' | 'writer' | 'neighbour'
+  // link: one of your feeds links to it; blogroll: one of your feeds lists
+  // it in its blogroll; save: you save from it; writer: a writer you finish
+  // writes it; neighbour: it links to the same places as one of your
+  // favourite feeds; starter: a starting point, offered only while your
+  // reading leads to too few suggestions (its title is the topic).
+  kind: 'link' | 'blogroll' | 'save' | 'writer' | 'neighbour' | 'starter'
   guide: string
   guideName: string
   count: number
@@ -40,6 +42,7 @@ export type FeedSuggestion = {
   id: string
   siteUrl: string
   feedUrl?: string
+  // 'rss', or 'youtube' for a channel
   kind: string
   title: string
   description?: string
@@ -60,7 +63,14 @@ export type FeedSuggestions = {
   suggestions: FeedSuggestion[]
   builtAt?: string
   articlesConsidered: number
+  // false when you've turned suggestions off in Settings
+  enabled: boolean
 }
+
+export const isChannel = (s: FeedSuggestion): boolean => s.kind == 'youtube'
+
+export const isStarter = (s: FeedSuggestion): boolean =>
+  s.reasons[0]?.kind == 'starter'
 
 const SUGGESTION_FIELDS = gql`
   fragment FeedSuggestionFields on FeedSuggestion {
@@ -107,6 +117,7 @@ const GQL_FEED_SUGGESTIONS = gql`
         }
         builtAt
         articlesConsidered
+        enabled
       }
       ... on FeedSuggestionsError {
         errorCodes
@@ -138,6 +149,19 @@ const GQL_REFRESH_FEED_SUGGESTIONS = gql`
         queued
       }
       ... on RefreshFeedSuggestionsError {
+        errorCodes
+      }
+    }
+  }
+`
+
+const GQL_SET_FEED_SUGGESTIONS_ENABLED = gql`
+  mutation SetFeedSuggestionsEnabled($enabled: Boolean!) {
+    setFeedSuggestionsEnabled(enabled: $enabled) {
+      ... on SetFeedSuggestionsEnabledSuccess {
+        enabled
+      }
+      ... on SetFeedSuggestionsEnabledError {
         errorCodes
       }
     }
@@ -202,6 +226,30 @@ export async function updateFeedSuggestion(
     throw new Error(response.updateFeedSuggestion.errorCodes[0])
   }
   return response.updateFeedSuggestion.suggestion
+}
+
+// Turning suggestions off forgets them all on the server; turning them on
+// starts the first look straight away.
+export async function setFeedSuggestionsEnabled(
+  enabled: boolean
+): Promise<boolean> {
+  const response = (await gqlFetcher(GQL_SET_FEED_SUGGESTIONS_ENABLED, {
+    enabled,
+  })) as {
+    setFeedSuggestionsEnabled: { enabled?: boolean; errorCodes?: string[] }
+  }
+  const result = response.setFeedSuggestionsEnabled
+  if (result.errorCodes?.length || result.enabled === undefined) {
+    throw new Error(result.errorCodes?.[0] ?? 'NOT_SET')
+  }
+  return result.enabled
+}
+
+// Whether suggestions are on. They count as on until the server says
+// otherwise, so nothing flickers away while loading.
+export function useFeedSuggestionsEnabled(): boolean {
+  const { data } = useFeedSuggestions()
+  return data?.enabled !== false
 }
 
 export async function refreshFeedSuggestions(): Promise<boolean> {

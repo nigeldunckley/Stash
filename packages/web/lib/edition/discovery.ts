@@ -1,4 +1,8 @@
-import { FeedSuggestion } from '../networking/feedSuggestions'
+import {
+  FeedSuggestion,
+  isChannel,
+  isStarter,
+} from '../networking/feedSuggestions'
 
 // What The Edition borrows from Discover: one story a day from a feed you
 // don't follow yet, a whole Discovery Edition on Saturdays, and a verdict
@@ -19,8 +23,14 @@ const dayNumber = (date: string) =>
 export const isSaturday = (date: string): boolean =>
   new Date(`${date}T12:00:00`).getDay() == 6
 
+// The Edition is for reading, and for what your own reading led to, so
+// channels and starting points stay on Discover.
 const withStory = (s: FeedSuggestion) =>
-  s.status == 'NEW' && !!s.feedUrl && !!s.latest[0]?.title
+  s.status == 'NEW' &&
+  !!s.feedUrl &&
+  !!s.latest[0]?.title &&
+  !isChannel(s) &&
+  !isStarter(s)
 
 // The day's "Recommended for you": one of the few strongest suggestions with
 // a story to show, turning daily so the same one doesn't sit there all week.

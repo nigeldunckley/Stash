@@ -1,5 +1,8 @@
 import { appDataSource } from '../data_source'
-import { buildFeedSuggestions } from '../services/feed_suggestions'
+import {
+  buildFeedSuggestions,
+  feedSuggestionsEnabled,
+} from '../services/feed_suggestions'
 import { enqueueBuildFeedSuggestions } from '../utils/createTask'
 import { logger } from '../utils/logger'
 
@@ -17,6 +20,7 @@ export const buildFeedSuggestionsJob = async (
 ) => {
   if (data.userId) {
     try {
+      if (!(await feedSuggestionsEnabled(data.userId))) return
       await buildFeedSuggestions(data.userId)
     } catch (error) {
       logger.error('feed-suggestions: build failed', {
@@ -27,8 +31,12 @@ export const buildFeedSuggestionsJob = async (
     return
   }
 
+  // Readers who turned suggestions off in Settings are left out.
   const users = (await appDataSource.query(
-    `SELECT id FROM omnivore.user WHERE status = 'ACTIVE'`
+    `SELECT u.id FROM omnivore.user u
+     LEFT JOIN omnivore.user_personalization p ON p.user_id = u.id
+     WHERE u.status = 'ACTIVE'
+       AND coalesce(p.fields->>'suggestFeeds', 'true') <> 'false'`
   )) as { id: string }[]
   for (const { id } of users) {
     await enqueueBuildFeedSuggestions(id)

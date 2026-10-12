@@ -1,12 +1,17 @@
 import { expect } from 'chai'
 import 'mocha'
 import {
+  addBlogrolls,
   buildReadingGraph,
   feedLinksIn,
   readFeed,
   scoreCandidate,
 } from '../../src/services/feed_suggestions'
 import {
+  blogrollFromOpml,
+  blogrollFromPage,
+  blogrollLinkIn,
+  blogrollWeight,
   engagementOf,
   isHealthy,
   isPlatformHost,
@@ -17,6 +22,7 @@ import {
   postsPerWeek,
   ReadItem,
   siteOf,
+  youtubeChannelKey,
 } from '../../src/utils/feedDiscovery'
 import { Subscription, SubscriptionStatus } from '../../src/entity/subscription'
 
@@ -263,6 +269,160 @@ describe('feed discovery', () => {
         count: 1,
       })
       expect(scored.signals.taste).to.be.greaterThan(0)
+    })
+  })
+
+  describe('blogrolls', () => {
+    it('finds an OPML blogroll first, then a blogroll page', () => {
+      expect(
+        blogrollLinkIn(
+          `<link rel="blogroll" type="text/xml" href="/blogroll.opml">
+           <a href="/blogroll/">Blogroll</a>`,
+          'https://kottke.org/'
+        )
+      ).to.eql({ opml: 'https://kottke.org/blogroll.opml' })
+      expect(
+        blogrollLinkIn(
+          `<a href="https://elsewhere.com/blogroll">Blogroll</a>
+           <a href="/links/">My blog roll</a>`,
+          'https://kottke.org/'
+        )
+      ).to.eql({ page: 'https://kottke.org/links/' })
+      expect(blogrollLinkIn('<a href="/about">About</a>', 'https://a.com/')).to
+        .be.empty
+    })
+
+    it('reads the sites an OPML file lists', () => {
+      const sites = blogrollFromOpml(`<opml><body>
+        <outline text="Six Colors" xmlUrl="https://sixcolors.com/feed/" htmlUrl="https://sixcolors.com/"/>
+        <outline text="Six Colors again" xmlUrl="https://sixcolors.com/feed.xml"/>
+        <outline text="Someone on X" htmlUrl="https://x.com/someone"/>
+        <outline title="Robin &amp; Co" xmlUrl="https://www.robinsloan.com/feed.xml"/>
+      </body></opml>`)
+      expect(sites).to.eql([
+        {
+          site: 'sixcolors.com',
+          host: 'sixcolors.com',
+          feedUrl: 'https://sixcolors.com/feed/',
+          name: 'Six Colors',
+        },
+        {
+          site: 'robinsloan.com',
+          host: 'robinsloan.com',
+          feedUrl: 'https://www.robinsloan.com/feed.xml',
+          name: 'Robin & Co',
+        },
+      ])
+    })
+
+    it('reads the sites a blogroll page links to', () => {
+      const sites = blogrollFromPage(
+        `<header><a href="https://twitter.com/me">me</a><a href="https://shop.example/">Shop</a></header>
+         <main><a href="/about">About</a>
+         <a href="https://sixcolors.com/">Six Colors</a>
+         <a href="https://www.macstories.net/">MacStories</a>
+         <a href="https://github.com/me">GitHub</a></main>`,
+        'https://kottke.org/blogroll/'
+      )
+      expect(sites.map((s) => s.site)).to.eql([
+        'sixcolors.com',
+        'macstories.net',
+      ])
+      expect(sites[1].name).to.eql('MacStories')
+    })
+
+    it('weighs a short blogroll more than a long one', () => {
+      expect(blogrollWeight(10)).to.be.greaterThan(blogrollWeight(60))
+      expect(blogrollWeight(0)).to.eql(0)
+    })
+
+    it('adds blogroll sites as candidates with a blogroll reason', async () => {
+      const a = item({ progress: 100 })
+      const graph = addBlogrolls(
+        buildReadingGraph(
+          {
+            items: [a],
+            links: [],
+            subscriptions: [
+              sub('https://daringfireball.net/feeds/main', 'Daring Fireball'),
+            ],
+          },
+          new Map()
+        ),
+        new Map([
+          [
+            'https://daringfireball.net/feeds/main',
+            [
+              { site: 'sixcolors.com', host: 'sixcolors.com' },
+              // followed already
+              { site: 'daringfireball.net', host: 'daringfireball.net' },
+            ],
+          ],
+        ]),
+        new Map()
+      )
+      expect(graph.candidates.map((c) => c.site)).to.eql(['sixcolors.com'])
+      expect(graph.leading[0]).to.deep.include({ host: 'daringfireball.net' })
+
+      const now = new Date('2026-10-12T00:00:00Z')
+      const scored = scoreCandidate(
+        graph.candidates[0],
+        {
+          feedUrl: 'https://sixcolors.com/feed/',
+          siteUrl: 'https://sixcolors.com/',
+          postsPerWeek: 5,
+          lastPostAt: new Date('2026-10-10T00:00:00Z'),
+          latest: [],
+          outHosts: [],
+          hasFullText: true,
+          hasImages: false,
+          words: '',
+        },
+        graph,
+        () => 1,
+        now
+      )
+      expect(scored.reasons[0]).to.include({
+        kind: 'blogroll',
+        guideName: 'Daring Fireball',
+      })
+      expect(scored.signals.links).to.be.greaterThan(0)
+    })
+  })
+
+  describe('YouTube channels', () => {
+    it('keys channel links by handle or channel ID', () => {
+      expect(youtubeChannelKey('@Veritasium')).to.eql('youtube.com/@veritasium')
+      expect(youtubeChannelKey('@veritasium/videos')).to.eql(
+        'youtube.com/@veritasium'
+      )
+      expect(youtubeChannelKey('channel/UCHnyfMqiRRG1u-2MsSQLbXA')).to.eql(
+        'youtube.com/channel/UCHnyfMqiRRG1u-2MsSQLbXA'
+      )
+      expect(youtubeChannelKey('watch?v=abc')).to.be.undefined
+    })
+
+    it('turns channel links in articles into candidates', () => {
+      const a = item({ progress: 100 })
+      const graph = buildReadingGraph(
+        {
+          items: [a],
+          links: [],
+          channelLinks: [{ id: a.id, path: '@Veritasium' }],
+          subscriptions: [
+            sub('https://daringfireball.net/feeds/main', 'Daring Fireball'),
+            sub(
+              'https://www.youtube.com/feeds/videos.xml?channel_id=UCHnyfMqiRRG1u-2MsSQLbXA',
+              'Veritasium'
+            ),
+          ],
+        },
+        new Map()
+      )
+      expect(graph.candidates.map((c) => c.site)).to.eql([
+        'youtube.com/@veritasium',
+      ])
+      expect([...graph.followedChannels]).to.eql(['UCHnyfMqiRRG1u-2MsSQLbXA'])
     })
   })
 })

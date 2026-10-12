@@ -77,10 +77,13 @@ const guideName = (r: FeedSuggestionReason) =>
     : r.guideName
 
 // How strongly a reason ties a feed to a suggestion, from 0 to 1. Neighbour
-// counts are an overlap percentage; the rest are counts of pieces.
+// counts are an overlap percentage; a blogroll is a recommendation outright;
+// the rest are counts of pieces.
 export const reasonStrength = (r: FeedSuggestionReason): number =>
   r.kind == 'neighbour'
     ? Math.min(1, r.count / 100) * 0.6
+    : r.kind == 'blogroll'
+    ? 0.8
     : Math.min(1, r.count / 5)
 
 export const reasonAmount = (r: FeedSuggestionReason): string => {
@@ -93,6 +96,10 @@ export const reasonAmount = (r: FeedSuggestionReason): string => {
       return `${r.count} saved`
     case 'writer':
       return `${r.count} read`
+    case 'blogroll':
+      return 'blogroll'
+    case 'starter':
+      return ''
   }
 }
 
@@ -105,8 +112,9 @@ export function layoutReadingMap(
   suggestions: FeedSuggestion[],
   shape: MapShape
 ): { guides: MapGuide[]; nodes: MapNode[]; edges: MapEdge[] } {
+  // Starting points weren't led to by anything you read.
   const picked = suggestions
-    .filter((s) => s.reasons.length)
+    .filter((s) => s.reasons.length && s.reasons[0].kind != 'starter')
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_NODES)
 

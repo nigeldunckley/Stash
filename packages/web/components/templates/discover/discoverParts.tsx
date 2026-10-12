@@ -3,7 +3,7 @@ import { FeedSuggestionReason } from '../../../lib/networking/feedSuggestions'
 import { pressable, SiteIcon } from '../../elements/stash'
 import { motion } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
-import { guideIcon } from './discoverText'
+import { guideIcon, isGuide } from './discoverText'
 
 // Small pieces shared by the Discover page and its sheet.
 
@@ -175,9 +175,7 @@ export function Chain(props: {
   reasons: FeedSuggestionReason[]
   children: ReactNode
 }): JSX.Element | null {
-  const guides = props.reasons
-    .filter((r) => r.kind == 'link' || r.kind == 'neighbour')
-    .slice(0, 2)
+  const guides = props.reasons.filter(isGuide).slice(0, 2)
   if (!guides.length) return null
   return (
     <ChainRoot aria-label="Who led you here">

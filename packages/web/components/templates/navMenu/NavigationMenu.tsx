@@ -16,7 +16,10 @@ import {
 import { IconButton } from '../../elements/stash'
 import { useGetLibraryItems } from '../../../lib/networking/library_items/useLibraryItems'
 import { useGetShortcuts } from '../../../lib/networking/shortcuts/useShortcuts'
-import { useFeedSuggestions } from '../../../lib/networking/feedSuggestions'
+import {
+  useFeedSuggestions,
+  useFeedSuggestionsEnabled,
+} from '../../../lib/networking/feedSuggestions'
 import { theme } from '../../tokens/stitches.config'
 import { usePersistedState } from '../../../lib/hooks/usePersistedState'
 import { NavMenuFooter } from './Footer'
@@ -154,6 +157,8 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
       isSessionStorage: false,
       initialValue: true,
     })
+  // Discover is hidden while suggestions are turned off in Settings.
+  const suggesting = useFeedSuggestionsEnabled()
   return (
     <VStack
       css={{
@@ -191,15 +196,17 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         icon={<Rss size={18} />}
         count={<NavCount folder="following" query="-is:seen" />}
       />
-      <NavButton
-        {...props}
-        text="Discover"
-        section="l/discover"
-        isSelected={props.section == 'discover'}
-        icon={<Compass size={16} />}
-        count={<DiscoverCount />}
-        child
-      />
+      {suggesting && (
+        <NavButton
+          {...props}
+          text="Discover"
+          section="l/discover"
+          isSelected={props.section == 'discover'}
+          icon={<Compass size={16} />}
+          count={<DiscoverCount />}
+          child
+        />
+      )}
       <NavButton
         {...props}
         text="Highlights"

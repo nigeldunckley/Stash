@@ -13,6 +13,8 @@ export const reasonLine = (reason: FeedSuggestionReason): string => {
   switch (reason.kind) {
     case 'link':
       return `Linked ${times(reason.count)} by ${reason.guideName}`
+    case 'blogroll':
+      return `In ${reason.guideName}’s blogroll`
     case 'save':
       return reason.count > 1
         ? `You saved ${reason.count} of its pieces`
@@ -21,6 +23,10 @@ export const reasonLine = (reason: FeedSuggestionReason): string => {
       return `${reason.guideName} writes here · you finished ${reason.count}`
     case 'neighbour':
       return `Links to the same places as ${reason.guideName}`
+    case 'starter':
+      return reason.title
+        ? `A starting point · ${reason.title}`
+        : 'A starting point'
   }
 }
 
@@ -29,8 +35,13 @@ export const whyLine = (s: FeedSuggestion): string =>
 
 // One sentence, for the featured suggestion.
 export const whySentence = (s: FeedSuggestion): string => {
+  if (s.reasons[0]?.kind == 'starter') {
+    return 'A well-kept place to start while Stash learns what you read.'
+  }
   const links = s.reasons.filter((r) => r.kind == 'link')
   const parts: string[] = []
+  const roll = s.reasons.find((r) => r.kind == 'blogroll')
+  if (roll) parts.push(`${roll.guideName} lists it in their blogroll`)
   if (links.length == 1) {
     parts.push(
       `${links[0].guideName} linked here ${times(links[0].count)} lately`
@@ -79,10 +90,13 @@ export const fallbackIconFor = (s: FeedSuggestion): string | undefined =>
   faviconFor(s.siteUrl)
 
 // A guide is one of your feeds; its key is the feed's address.
+export const isGuide = (reason: FeedSuggestionReason): boolean =>
+  reason.kind == 'link' ||
+  reason.kind == 'blogroll' ||
+  reason.kind == 'neighbour'
+
 export const guideIcon = (reason: FeedSuggestionReason): string | undefined =>
-  reason.kind == 'link' || reason.kind == 'neighbour'
-    ? faviconFor(reason.guide)
-    : undefined
+  isGuide(reason) ? faviconFor(reason.guide) : undefined
 
 export const matchPercent = (s: FeedSuggestion): number =>
   Math.round(Math.min(1, s.score / 0.8) * 100)
