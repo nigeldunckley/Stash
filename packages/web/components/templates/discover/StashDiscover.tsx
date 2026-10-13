@@ -1,4 +1,4 @@
-import { ArrowClockwise, Check, Plus } from '@phosphor-icons/react'
+import { ArrowClockwise, Check, Plus, X } from '@phosphor-icons/react'
 import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -10,6 +10,7 @@ import {
   refreshFeedSuggestions,
   setFeedSuggestionsEnabled,
   updateFeedSuggestion,
+  useDismissedSuggestions,
   useFeedSuggestions,
   useSuggestionActions,
 } from '../../../lib/networking/feedSuggestions'
@@ -24,7 +25,16 @@ import {
 } from '../../elements/stash'
 import { motion, reducedMotion } from '../../elements/stash/motion'
 import { keyframes, styled } from '../../tokens/stitches.config'
-import { Button, Chain, Chip, Label, Pill, Tile, Why } from './discoverParts'
+import {
+  Button,
+  Chain,
+  Chip,
+  Label,
+  NotForMe,
+  Pill,
+  Tile,
+  Why,
+} from './discoverParts'
 import {
   cadence,
   fallbackIconFor,
@@ -271,6 +281,15 @@ const Card = styled('article', {
   [reducedMotion]: { '&:hover': { transform: 'none' } },
   variants: {
     done: { true: { opacity: 0.72 } },
+    // Turned down: it shrinks away before the next one takes its place.
+    leaving: {
+      true: {
+        opacity: 0,
+        transform: 'scale(0.96)',
+        pointerEvents: 'none',
+        transition: `opacity ${motion.base}, transform ${motion.base}`,
+      },
+    },
   },
 })
 
@@ -395,6 +414,8 @@ type ShelfGroup = {
 }
 
 const isNew = (s: FeedSuggestion) => s.status == 'NEW'
+// How long a turned-down card takes to leave.
+const LEAVE_MS = 200
 
 // Groups suggestions by what led to them, so each shelf explains itself.
 const shelvesFor = (items: FeedSuggestion[]): ShelfGroup[] => {
@@ -493,10 +514,36 @@ function FollowButton(props: {
   )
 }
 
+function Dismiss(props: {
+  s: FeedSuggestion
+  onDismiss: (s: FeedSuggestion) => void
+  css?: Record<string, string>
+}): JSX.Element | null {
+  if (props.s.status != 'NEW') return null
+  return (
+    <NotForMe
+      floating
+      type="button"
+      aria-label={`Not for me: don't suggest ${props.s.title} again`}
+      title="Not for me"
+      css={props.css}
+      onClick={(event) => {
+        event.stopPropagation()
+        props.onDismiss(props.s)
+      }}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      <X size={13} weight="bold" />
+    </NotForMe>
+  )
+}
+
 function SuggestionCard(props: {
   s: FeedSuggestion
   onOpen: (s: FeedSuggestion) => void
   onFollow: (s: FeedSuggestion, from: HTMLElement | null) => void
+  onDismiss: (s: FeedSuggestion) => void
+  leaving?: boolean
 }): JSX.Element {
   const { s } = props
   const iconRef = useRef<HTMLSpanElement>(null)
@@ -505,6 +552,7 @@ function SuggestionCard(props: {
     <Card
       tabIndex={0}
       done={s.status == 'FOLLOWING'}
+      leaving={props.leaving}
       onClick={() => props.onOpen(s)}
       onKeyDown={(e) => {
         if (e.key == 'Enter' || e.key == ' ') {
@@ -514,6 +562,7 @@ function SuggestionCard(props: {
       }}
       aria-label={s.title}
     >
+      <Dismiss s={s} onDismiss={props.onDismiss} />
       <Pictures s={s} />
       <NameRow>
         <span ref={iconRef} style={{ display: 'inline-flex' }}>
@@ -555,6 +604,8 @@ function WriterCardView(props: {
   s: FeedSuggestion
   onOpen: (s: FeedSuggestion) => void
   onFollow: (s: FeedSuggestion, from: HTMLElement | null) => void
+  onDismiss: (s: FeedSuggestion) => void
+  leaving?: boolean
 }): JSX.Element {
   const { s } = props
   const writer = s.reasons.find((r) => r.kind == 'writer')
@@ -564,6 +615,7 @@ function WriterCardView(props: {
     <WriterCard
       tabIndex={0}
       done={s.status == 'FOLLOWING'}
+      leaving={props.leaving}
       onClick={() => props.onOpen(s)}
       onKeyDown={(e) => {
         if (e.key == 'Enter' || e.key == ' ') {
@@ -573,6 +625,11 @@ function WriterCardView(props: {
       }}
       aria-label={name}
     >
+      <Dismiss
+        s={s}
+        onDismiss={props.onDismiss}
+        css={{ top: '10px', right: '10px' }}
+      />
       <Monogram ref={monoRef} aria-hidden="true">
         {name.charAt(0)}
       </Monogram>
@@ -609,6 +666,8 @@ export function StashDiscover(): JSX.Element {
   const queryClient = useQueryClient()
   const { data, isPending, isError, refetch } = useFeedSuggestions()
   const actions = useSuggestionActions()
+  const turnedDown =
+    useDismissedSuggestions(data?.enabled !== false).data?.length ?? 0
   const [open, setOpen] = useState<string>()
   const [looking, setLooking] = useState(false)
   const builtBeforeLook = useRef<string>()
@@ -695,13 +754,31 @@ export function StashDiscover(): JSX.Element {
     [actions, markActed]
   )
 
+  // A card you turn down shrinks away first, then the next best suggestion
+  // takes its place.
+  const [leaving, setLeaving] = useState<Set<string>>(new Set())
   const dismiss = useCallback(
     async (s: FeedSuggestion) => {
       setOpen(undefined)
-      const undo = await actions.dismiss(s)
-      showUndoToast(`Won't suggest ${s.title} again`, undo)
+      setLeaving((ids) => new Set(ids).add(s.id))
+      await new Promise((resolve) => setTimeout(resolve, LEAVE_MS))
+      try {
+        const undo = await actions.dismiss(s)
+        showUndoToast(`Won't suggest ${s.title} again`, undo)
+      } catch {
+        await queryClient.invalidateQueries({
+          queryKey: [FEED_SUGGESTIONS_KEY],
+        })
+        showErrorToast(`Could not hide ${s.title}`)
+      } finally {
+        setLeaving((ids) => {
+          const next = new Set(ids)
+          next.delete(s.id)
+          return next
+        })
+      }
     },
-    [actions]
+    [actions, queryClient]
   )
 
   const drop = useCallback(
@@ -806,15 +883,31 @@ export function StashDiscover(): JSX.Element {
                   ).toLowerCase()} · each night at 03:00`
                 : 'Updated each night at 03:00'}
             </Label>
-            <Button
-              tone="quiet"
-              onClick={lookAgain}
-              disabled={looking}
-              css={{ height: '28px', padding: '0 6px', fontSize: '$caption' }}
-            >
-              <ArrowClockwise size={13} />
-              {looking ? 'Looking…' : 'Look again'}
-            </Button>
+            <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+              {turnedDown > 0 && (
+                <Button
+                  as={Link}
+                  href="/settings/suggestions"
+                  tone="quiet"
+                  css={{
+                    height: '28px',
+                    padding: '0 6px',
+                    fontSize: '$caption',
+                  }}
+                >
+                  {turnedDown} turned down
+                </Button>
+              )}
+              <Button
+                tone="quiet"
+                onClick={lookAgain}
+                disabled={looking}
+                css={{ height: '28px', padding: '0 6px', fontSize: '$caption' }}
+              >
+                <ArrowClockwise size={13} />
+                {looking ? 'Looking…' : 'Look again'}
+              </Button>
+            </span>
           </MastFoot>
         </div>
 
@@ -855,10 +948,22 @@ export function StashDiscover(): JSX.Element {
           onOpen={(s) => setOpen(s.id)}
           onFollow={follow}
           onTry={tryIt}
+          onDismiss={dismiss}
         />
 
         {hero && (
-          <Spread aria-label="Try this week">
+          <Spread
+            aria-label="Try this week"
+            css={
+              leaving.has(hero.id)
+                ? {
+                    opacity: 0,
+                    transform: 'scale(0.98)',
+                    transition: `opacity ${motion.base}, transform ${motion.base}`,
+                  }
+                : undefined
+            }
+          >
             <SpreadImage
               onClick={() => setOpen(hero.id)}
               aria-label={`Read a sample of ${hero.title}`}
@@ -936,6 +1041,11 @@ export function StashDiscover(): JSX.Element {
                   </Chip>
                 )}
                 <Button onClick={() => setOpen(hero.id)}>Read a sample</Button>
+                {hero.status == 'NEW' && (
+                  <Button tone="quiet" onClick={() => dismiss(hero)}>
+                    Not for me
+                  </Button>
+                )}
               </Acts>
             </SpreadCopy>
           </Spread>
@@ -956,6 +1066,8 @@ export function StashDiscover(): JSX.Element {
                   s={s}
                   onOpen={(x) => setOpen(x.id)}
                   onFollow={follow}
+                  onDismiss={dismiss}
+                  leaving={leaving.has(s.id)}
                 />
               ))}
             </ShelfRow>
@@ -982,6 +1094,8 @@ export function StashDiscover(): JSX.Element {
                   s={s}
                   onOpen={(x) => setOpen(x.id)}
                   onFollow={follow}
+                  onDismiss={dismiss}
+                  leaving={leaving.has(s.id)}
                 />
               ))}
             </ShelfRow>
@@ -1003,6 +1117,8 @@ export function StashDiscover(): JSX.Element {
                   s={s}
                   onOpen={(x) => setOpen(x.id)}
                   onFollow={follow}
+                  onDismiss={dismiss}
+                  leaving={leaving.has(s.id)}
                 />
               ))}
             </ShelfRow>
@@ -1024,6 +1140,8 @@ export function StashDiscover(): JSX.Element {
                   s={s}
                   onOpen={(x) => setOpen(x.id)}
                   onFollow={follow}
+                  onDismiss={dismiss}
+                  leaving={leaving.has(s.id)}
                 />
               ))}
             </ShelfRow>
@@ -1045,6 +1163,8 @@ export function StashDiscover(): JSX.Element {
                   s={s}
                   onOpen={(x) => setOpen(x.id)}
                   onFollow={follow}
+                  onDismiss={dismiss}
+                  leaving={leaving.has(s.id)}
                 />
               ))}
             </Writers>

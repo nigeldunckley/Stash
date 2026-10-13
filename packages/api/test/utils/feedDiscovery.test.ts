@@ -18,12 +18,15 @@ import {
   isPlatformHost,
   linkHosts,
   looksLikePerson,
+  needsTopUp,
   nudgeGuide,
   pickVaried,
   postsPerWeek,
   ReadItem,
   SCORE_FLOOR,
   siteOf,
+  TOP_UP_BELOW,
+  TOP_UP_GAP_MS,
   youtubeChannelKey,
 } from '../../src/utils/feedDiscovery'
 import { Subscription, SubscriptionStatus } from '../../src/entity/subscription'
@@ -143,6 +146,24 @@ describe('feed discovery', () => {
       expect(nudgeGuide(1.95, true)).to.eql(2)
       expect(nudgeGuide(0.35, false)).to.eql(0.3)
       expect(nudgeGuide(1, true)).to.be.closeTo(1.15, 0.001)
+    })
+  })
+
+  describe('needsTopUp', () => {
+    const now = new Date('2026-10-13T09:00:00Z')
+    const ago = (ms: number) => new Date(now.getTime() - ms)
+
+    it('looks for more once few suggestions are left', () => {
+      expect(needsTopUp(TOP_UP_BELOW - 1, ago(TOP_UP_GAP_MS), now)).to.be.true
+      expect(needsTopUp(0, undefined, now)).to.be.true
+    })
+
+    it('waits while plenty are left', () => {
+      expect(needsTopUp(TOP_UP_BELOW, ago(TOP_UP_GAP_MS * 10), now)).to.be.false
+    })
+
+    it('looks at most every half hour', () => {
+      expect(needsTopUp(0, ago(TOP_UP_GAP_MS - 1000), now)).to.be.false
     })
   })
 

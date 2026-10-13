@@ -187,6 +187,30 @@ const SHOWN: [FeedSuggestionStatus, number][] = [
   ['FOLLOWING', 12],
 ]
 
+export const DISMISSED_KEY = 'dismissedFeedSuggestions'
+// When to look again after the server starts looking for more.
+const TOP_UP_CHECKS = [60_000, 180_000]
+
+// Feeds you've said no to, latest first, so they can be let back in.
+export function useDismissedSuggestions(enabled = true) {
+  return useQuery({
+    queryKey: [DISMISSED_KEY],
+    queryFn: async (): Promise<FeedSuggestion[]> => {
+      const response = (await gqlFetcher(GQL_FEED_SUGGESTIONS, {
+        statuses: ['DISMISSED'],
+        first: 100,
+      })) as {
+        feedSuggestions: FeedSuggestions & { errorCodes?: string[] }
+      }
+      if (response.feedSuggestions.errorCodes?.length) {
+        throw new Error(response.feedSuggestions.errorCodes[0])
+      }
+      return response.feedSuggestions.suggestions
+    },
+    enabled,
+  })
+}
+
 export function useFeedSuggestions(enabled = true) {
   return useQuery({
     queryKey: [FEED_SUGGESTIONS_KEY],
@@ -288,6 +312,18 @@ export function useSuggestionActions() {
     [queryClient]
   )
 
+  // A feed you turn down makes room for the next best one straight away.
+  // When few are left the server also looks for more, so check back once
+  // that look has had time to finish.
+  const fillTheGap = useCallback(() => {
+    const refetch = () => {
+      void queryClient.invalidateQueries({ queryKey: [FEED_SUGGESTIONS_KEY] })
+      void queryClient.invalidateQueries({ queryKey: [DISMISSED_KEY] })
+    }
+    refetch()
+    TOP_UP_CHECKS.forEach((ms) => setTimeout(refetch, ms))
+  }, [queryClient])
+
   const refreshFeeds = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
     await queryClient.invalidateQueries({ queryKey: ['libraryItems'] })
@@ -338,8 +374,29 @@ export function useSuggestionActions() {
           }
       )
       await updateFeedSuggestion(suggestion.id, 'DISMISS')
+      fillTheGap()
       return async () => {
         await updateFeedSuggestion(suggestion.id, 'RESTORE')
+        await queryClient.invalidateQueries({
+          queryKey: [FEED_SUGGESTIONS_KEY],
+        })
+        await queryClient.invalidateQueries({ queryKey: [DISMISSED_KEY] })
+      }
+    },
+    [queryClient, fillTheGap]
+  )
+
+  // Lets a feed you turned down be suggested again.
+  const restore = useCallback(
+    async (suggestion: FeedSuggestion): Promise<() => Promise<void>> => {
+      queryClient.setQueryData<FeedSuggestion[]>([DISMISSED_KEY], (data) =>
+        data?.filter((s) => s.id != suggestion.id)
+      )
+      await updateFeedSuggestion(suggestion.id, 'RESTORE')
+      await queryClient.invalidateQueries({ queryKey: [FEED_SUGGESTIONS_KEY] })
+      return async () => {
+        await updateFeedSuggestion(suggestion.id, 'DISMISS')
+        await queryClient.invalidateQueries({ queryKey: [DISMISSED_KEY] })
         await queryClient.invalidateQueries({
           queryKey: [FEED_SUGGESTIONS_KEY],
         })
@@ -364,6 +421,7 @@ export function useSuggestionActions() {
       }
       await updateFeedSuggestion(suggestion.id, 'DROP')
       await refreshFeeds()
+      fillTheGap()
       return async () => {
         await subscribe(suggestion, 'TRY')
         await queryClient.invalidateQueries({
@@ -371,7 +429,7 @@ export function useSuggestionActions() {
         })
       }
     },
-    [queryClient, refreshFeeds, subscribe]
+    [queryClient, refreshFeeds, subscribe, fillTheGap]
   )
 
   return {
@@ -379,5 +437,6 @@ export function useSuggestionActions() {
     tryForAWeek: (s: FeedSuggestion) => subscribe(s, 'TRY'),
     dismiss,
     drop,
+    restore,
   }
 }

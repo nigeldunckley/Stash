@@ -4,12 +4,20 @@ import { useQueryClient } from '@tanstack/react-query'
 import { SettingsLayout } from '../../components/templates/SettingsLayout'
 import { styled } from '../../components/tokens/stitches.config'
 import { Switch } from '../../components/elements/stash/Switch'
-import { showUndoToast } from '../../components/elements/stash'
+import { showUndoToast, SiteIcon } from '../../components/elements/stash'
 import { Button } from '../../components/templates/discover/discoverParts'
 import {
+  fallbackIconFor,
+  iconFor,
+} from '../../components/templates/discover/discoverText'
+import {
   FEED_SUGGESTIONS_KEY,
+  FeedSuggestion,
+  isChannel,
   setFeedSuggestionsEnabled,
+  useDismissedSuggestions,
   useFeedSuggestions,
+  useSuggestionActions,
 } from '../../lib/networking/feedSuggestions'
 import { shortTimeAgo } from '../../lib/textFormatting'
 import { showErrorToast } from '../../lib/toastHelpers'
@@ -126,6 +134,119 @@ const Foot = styled('div', {
   '& a': { color: '$stInk', fontWeight: 500 },
 })
 
+const Turned = styled('ul', {
+  margin: 0,
+  padding: 0,
+  listStyle: 'none',
+  display: 'grid',
+  '& > li': {
+    display: 'grid',
+    gridTemplateColumns: '24px minmax(0, 1fr) auto',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '10px 0',
+    borderTop: '1px solid $stLine',
+  },
+  '& > li:first-child': { borderTop: 'none', paddingTop: 0 },
+  '& > li:last-child': { paddingBottom: 0 },
+  '& b': {
+    display: 'block',
+    fontSize: '$small',
+    fontWeight: 600,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  '& small': {
+    display: 'block',
+    fontFamily: '$mono',
+    fontSize: '$micro',
+    color: '$stMuted',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+})
+
+const hostOf = (url: string): string => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
+}
+
+// Feeds you've said no to, each with a way to let it back in.
+function TurnedDown(): JSX.Element {
+  const { data, isPending } = useDismissedSuggestions()
+  const actions = useSuggestionActions()
+  const [shown, setShown] = useState(8)
+  const items = data ?? []
+
+  const restore = async (s: FeedSuggestion) => {
+    try {
+      const undo = await actions.restore(s)
+      showUndoToast(`${s.title} can be suggested again`, undo)
+    } catch {
+      showErrorToast(`Could not bring back ${s.title}`)
+    }
+  }
+
+  return (
+    <Section aria-label="Not for you">
+      <div style={{ display: 'grid', gap: 4 }}>
+        <Eyebrow>Not for you</Eyebrow>
+        <Text>
+          {items.length
+            ? 'Feeds you turned down, or let go after a trial. Stash never suggests them again unless you bring them back here.'
+            : 'Turn a suggestion down with the × on Discover or in The Edition, and Stash will never suggest it again. It will be listed here in case you change your mind.'}
+        </Text>
+      </div>
+      {isPending ? null : items.length > 0 ? (
+        <>
+          <Turned>
+            {items.slice(0, shown).map((s) => (
+              <li key={s.id}>
+                <SiteIcon
+                  src={iconFor(s)}
+                  fallbackSrc={fallbackIconFor(s)}
+                  name={s.title}
+                  size={22}
+                />
+                <div style={{ minWidth: 0 }}>
+                  <b>{s.title}</b>
+                  <small>
+                    {isChannel(s) ? 'YouTube channel' : hostOf(s.siteUrl)}
+                  </small>
+                </div>
+                <Button
+                  onClick={() => restore(s)}
+                  css={{
+                    height: '28px',
+                    padding: '0 10px',
+                    fontSize: '$caption',
+                  }}
+                >
+                  Suggest again
+                </Button>
+              </li>
+            ))}
+          </Turned>
+          {items.length > shown && (
+            <Button
+              tone="quiet"
+              onClick={() => setShown(items.length)}
+              css={{ justifySelf: 'start', padding: '0 4px' }}
+            >
+              Show all {items.length}
+            </Button>
+          )}
+        </>
+      ) : null}
+    </Section>
+  )
+}
+
 const SOURCES: [string, string][] = [
   [
     'Links in what you read',
@@ -217,7 +338,7 @@ export default function SuggestionSettings(): JSX.Element {
               <p>
                 Turning suggestions off forgets every suggestion and trial, and
                 what Stash has learned from your choices. Feeds you followed
-                stay followed.
+                stay followed, and feeds you turned down stay turned down.
               </p>
               <div>
                 <Button
@@ -261,6 +382,8 @@ export default function SuggestionSettings(): JSX.Element {
             </Foot>
           </Section>
         )}
+
+        {on && !isPending && <TurnedDown />}
       </Wrap>
     </SettingsLayout>
   )

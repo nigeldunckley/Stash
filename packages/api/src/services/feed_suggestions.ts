@@ -15,7 +15,7 @@ import https from 'https'
 import * as privateIpLib from 'private-ip'
 import { parseHTML } from 'linkedom'
 import Parser, { Item } from 'rss-parser'
-import { In } from 'typeorm'
+import { In, Not } from 'typeorm'
 import {
   FeedSuggestion,
   FeedSuggestionPost,
@@ -50,6 +50,7 @@ import {
   looksLikePerson,
   normaliseName,
   nudgeGuide,
+  needsTopUp,
   pickVaried,
   postsPerWeek,
   ReadItem,
@@ -1361,8 +1362,13 @@ export const setFeedSuggestionsEnabled = async (
   return enabled
 }
 
+// Feeds you said no to are the exception: they're never suggested again,
+// even after suggestions are turned off and back on.
 const forgetFeedSuggestions = async (userId: string) => {
-  await getRepository(FeedSuggestion).delete({ userId })
+  await getRepository(FeedSuggestion).delete({
+    userId,
+    status: Not('dismissed'),
+  })
   await getRepository(FeedSuggestionGuide).delete({ userId })
 }
 
@@ -1376,7 +1382,8 @@ export const listFeedSuggestions = async (
 ) => {
   const rows = await getRepository(FeedSuggestion).find({
     where: { userId, status: In(statuses) },
-    order: { score: 'DESC' },
+    // What's new is listed best first; your history, latest first.
+    order: statuses.includes('new') ? { score: 'DESC' } : { updatedAt: 'DESC' },
     take: 200,
   })
   const visible = rows.filter(
@@ -1490,4 +1497,26 @@ export const actOnFeedSuggestion = async (
   }
   await repo.update(row.id, update)
   return { ...row, ...update } as FeedSuggestion
+}
+
+// Whether turning down a suggestion should look for more now. It does when
+// few of your own suggestions are left, and the last look wasn't just now.
+export const shouldTopUpFeedSuggestions = async (
+  userId: string,
+  now = new Date()
+): Promise<boolean> => {
+  const left = await getRepository(FeedSuggestion)
+    .createQueryBuilder('s')
+    .where('s.userId = :userId AND s.status = :status AND s.score >= :floor', {
+      userId,
+      status: 'new',
+      floor: SCORE_FLOOR,
+    })
+    .andWhere(`NOT (s.reasons @> '[{"kind": "starter"}]')`)
+    .getCount()
+  const run = await getRepository(FeedSuggestionGuide).findOneBy({
+    userId,
+    guide: RUN_GUIDE,
+  })
+  return needsTopUp(left, run?.updatedAt, now)
 }

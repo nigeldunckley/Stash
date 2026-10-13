@@ -1,5 +1,6 @@
 import { FeedSuggestion } from '../../entity/feed_suggestion'
 import {
+  FeedSuggestionAction,
   FeedSuggestionsError,
   FeedSuggestionsErrorCode,
   FeedSuggestionsSuccess,
@@ -21,6 +22,7 @@ import {
   feedSuggestionsEnabled,
   listFeedSuggestions,
   setFeedSuggestionsEnabled,
+  shouldTopUpFeedSuggestions,
 } from '../../services/feed_suggestions'
 import { Merge } from '../../util'
 import { enqueueBuildFeedSuggestions } from '../../utils/createTask'
@@ -63,7 +65,7 @@ export const updateFeedSuggestionResolver = authorized<
   Merge<UpdateFeedSuggestionSuccess, { suggestion: FeedSuggestion }>,
   UpdateFeedSuggestionError,
   MutationUpdateFeedSuggestionArgs
->(async (_, { input }, { uid }) => {
+>(async (_, { input }, { uid, log }) => {
   const suggestion = await actOnFeedSuggestion(
     uid,
     input.id,
@@ -72,6 +74,19 @@ export const updateFeedSuggestionResolver = authorized<
   )
   if (!suggestion) {
     return { errorCodes: [UpdateFeedSuggestionErrorCode.NotFound] }
+  }
+  // Turning one down makes room, so look for more when few are left.
+  if (
+    input.action == FeedSuggestionAction.Dismiss ||
+    input.action == FeedSuggestionAction.Drop
+  ) {
+    try {
+      if (await shouldTopUpFeedSuggestions(uid)) {
+        await enqueueBuildFeedSuggestions(uid)
+      }
+    } catch (error) {
+      log.error('topping up feed suggestions failed', error)
+    }
   }
   return { suggestion }
 })

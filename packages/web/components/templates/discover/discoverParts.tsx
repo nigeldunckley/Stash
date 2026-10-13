@@ -209,3 +209,52 @@ export const Tile = styled('div', {
     color: '$stLineStrong',
   },
 })
+
+// Turns a suggestion down for good. On a card it floats over the top right
+// corner: shown on hover with a pointer, always on touch screens.
+export const NotForMe = styled('button', {
+  all: 'unset',
+  boxSizing: 'border-box',
+  position: 'relative',
+  display: 'inline-grid',
+  placeItems: 'center',
+  flex: 'none',
+  width: '26px',
+  height: '26px',
+  borderRadius: '$round',
+  color: '$stMuted',
+  cursor: 'pointer',
+  transition: `color ${motion.fast}, background ${motion.fast}, opacity ${motion.fast}, transform ${motion.fast}`,
+  ...pressable,
+  '@media (pointer: coarse)': {
+    '&::before': { content: '""', position: 'absolute', inset: '-9px' },
+  },
+  '@media (hover: hover)': {
+    '&:hover': { color: '$stInk', background: '$stSunken' },
+  },
+  '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '1px' },
+  variants: {
+    floating: {
+      true: {
+        position: 'absolute',
+        top: '16px',
+        right: '16px',
+        zIndex: 1,
+        color: '#fff',
+        background: 'rgba(9, 9, 11, 0.42)',
+        backdropFilter: 'blur(10px) saturate(1.4)',
+        WebkitBackdropFilter: 'blur(10px) saturate(1.4)',
+        boxShadow: '0 0 0 1px rgba(255, 255, 255, 0.14)',
+        '@media (hover: hover)': {
+          opacity: 0,
+          transform: 'scale(0.9)',
+          '&:hover': { color: '#fff', background: 'rgba(9, 9, 11, 0.62)' },
+          'article:hover > &, article:focus-within > &, &:focus-visible': {
+            opacity: 1,
+            transform: 'none',
+          },
+        },
+      },
+    },
+  },
+})

@@ -519,3 +519,17 @@ export const STARTING_POINTS: { host: string; topic: string }[] = [
 // How many suggestions of its own your reading has to lead to before the
 // starting points step aside.
 export const STARTERS_BELOW = 3
+
+// Saying no to a suggestion looks for more straight away, rather than at
+// 03:00, once fewer than this many of your own are left to take its place.
+// A look runs at most every half hour, however many you turn down.
+export const TOP_UP_BELOW = 12
+export const TOP_UP_GAP_MS = 30 * 60_000
+
+export const needsTopUp = (
+  left: number,
+  lastBuilt: Date | undefined,
+  now = new Date()
+): boolean =>
+  left < TOP_UP_BELOW &&
+  (!lastBuilt || now.getTime() - lastBuilt.getTime() >= TOP_UP_GAP_MS)

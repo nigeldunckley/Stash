@@ -457,6 +457,7 @@ export function ReadingMap(props: {
   onOpen: (s: FeedSuggestion) => void
   onFollow: (s: FeedSuggestion, from: HTMLElement | null) => void
   onTry: (s: FeedSuggestion) => void
+  onDismiss: (s: FeedSuggestion) => void
 }): JSX.Element | null {
   const placed = useMemo(
     () => layoutReadingMap(props.suggestions, MAC_MAP).nodes.map((n) => n.s),
@@ -586,6 +587,11 @@ export function ReadingMap(props: {
           <Button tone="quiet" onClick={() => props.onOpen(s)}>
             {isChannel(s) ? 'Watch a sample' : 'Read a sample'}
           </Button>
+          {s.status == 'NEW' && (
+            <Button tone="quiet" onClick={() => props.onDismiss(s)}>
+              Not for me
+            </Button>
+          )}
         </CardActs>
       </Card>
     </Root>
