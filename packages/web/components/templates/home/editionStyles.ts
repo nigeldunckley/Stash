@@ -94,70 +94,6 @@ export const MastSub = styled('div', {
   '@mdDown': { flexDirection: 'column', alignItems: 'flex-start', gap: '8px' },
 })
 
-export const TimeRow = styled('div', {
-  display: 'flex',
-  flexWrap: 'wrap',
-  alignItems: 'center',
-  gap: '6px 14px',
-  marginTop: '12px',
-  fontSize: '$small',
-  color: '$stMuted',
-})
-
-export const Chips = styled('div', {
-  display: 'flex',
-  flexWrap: 'wrap',
-  alignItems: 'center',
-  gap: '6px',
-  '& > span': { marginRight: '4px' },
-})
-
-export const Chip = styled('button', {
-  all: 'unset',
-  boxSizing: 'border-box',
-  height: '28px',
-  padding: '0 11px',
-  display: 'inline-flex',
-  alignItems: 'center',
-  fontFamily: '$mono',
-  fontSize: '12px',
-  borderRadius: '999px',
-  border: '1px solid $stLine',
-  color: '$stInk2',
-  background: '$stSurface',
-  cursor: 'pointer',
-  transition: `background ${motion.fast}, color ${motion.fast}, border-color ${motion.fast}`,
-  '&:hover': { borderColor: '$stLineStrong' },
-  '&[aria-pressed="true"]': {
-    background: '$stInk',
-    color: '$stSurface',
-    borderColor: '$stInk',
-  },
-  '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '2px' },
-})
-
-export const Fit = styled('span', {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '10px',
-  fontFamily: '$mono',
-  fontSize: '$micro',
-  '& > i': {
-    display: 'block',
-    width: '120px',
-    height: '4px',
-    borderRadius: '2px',
-    background: '$stLine',
-    overflow: 'hidden',
-  },
-  '& > i > b': {
-    display: 'block',
-    height: '100%',
-    background: '$stAccent',
-    transition: `width ${motion.base}`,
-  },
-})
-
 export const fill = keyframes({
   from: { transform: 'scaleX(0.2)', opacity: 0.4 },
   to: { transform: 'none', opacity: 1 },
@@ -511,81 +447,6 @@ export const Stack = styled('div', {
   minWidth: 0,
 })
 
-export const Brief = styled('ul', { listStyle: 'none', margin: 0, padding: 0 })
-
-export const BriefRow = styled('li', {
-  ...selectable,
-  outlineOffset: '2px',
-  display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1fr) auto',
-  gap: '12px',
-  alignItems: 'center',
-  padding: '11px 0',
-  borderBottom: '1px solid $stLine',
-})
-
-export const BriefTitle = styled('button', {
-  ...headline,
-  display: 'block',
-  marginTop: '3px',
-  fontSize: '17px',
-  lineHeight: 1.3,
-})
-
-export const BriefEnd = styled('div', {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px',
-})
-
-export const Resume = styled('a', {
-  display: 'grid',
-  gridTemplateColumns: '56px minmax(0, 1fr)',
-  gap: '12px',
-  alignItems: 'center',
-  color: 'inherit',
-  textDecoration: 'none',
-  '& + &': { marginTop: '12px' },
-  '&:hover strong': { textDecoration: 'underline' },
-  strong: {
-    display: 'block',
-    fontFamily: '$serif',
-    fontSize: '16px',
-    fontWeight: 500,
-    lineHeight: 1.25,
-  },
-})
-
-export const Thumb = styled(CoverImage, {
-  aspectRatio: '1',
-  borderRadius: '$sm',
-})
-
-export const ResumeMeta = styled(Meta, {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '8px',
-  marginTop: '4px',
-})
-
-export const Videos = styled('div', {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-  gap: '14px',
-})
-
-export const Video = styled('button', {
-  all: 'unset',
-  display: 'grid',
-  gap: '6px',
-  minWidth: 0,
-  cursor: 'pointer',
-  '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '2px' },
-  '& > span:first-child': { aspectRatio: '16 / 9', borderRadius: '$sm' },
-  strong: { fontSize: '$small', fontWeight: 500, lineHeight: 1.3 },
-  '&:hover strong': { textDecoration: 'underline' },
-})
-
 export const Colophon = styled('footer', {
   borderTop: '2px solid $stInk',
   paddingTop: '14px',
@@ -643,5 +504,139 @@ export const Making = styled('div', {
     background: '$stSunken',
     animation: `${pulse} 1.4s ease-in-out infinite`,
     [reducedMotion]: { animation: 'none' },
+  },
+})
+
+export const Kicker = styled('div', {
+  fontFamily: '$mono',
+  fontSize: '$micro',
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  color: '$stAccentText',
+})
+
+export const Shelf = styled('ol', {
+  listStyle: 'none',
+  margin: 0,
+  padding: 0,
+  display: 'grid',
+})
+
+export const ShelfRow = styled('li', {
+  ...selectable,
+  outlineOffset: '2px',
+  display: 'grid',
+  gridTemplateColumns: '84px minmax(0, 1fr)',
+  gap: '16px',
+  alignItems: 'start',
+  padding: '14px 0',
+  borderBottom: '1px solid $stLine',
+  '&:first-child': { paddingTop: 0 },
+  '@mdDown': { gridTemplateColumns: '64px minmax(0, 1fr)', gap: '12px' },
+})
+
+export const ShelfThumb = styled(CoverImage, {
+  aspectRatio: '1',
+  borderRadius: '$sm',
+  cursor: 'pointer',
+})
+
+export const ShelfCopy = styled('div', {
+  display: 'grid',
+  gap: '5px',
+  minWidth: 0,
+})
+
+export const ShelfTitle = styled('button', {
+  ...headline,
+  fontSize: '19px',
+  lineHeight: 1.22,
+  '@mdDown': { fontSize: '17px' },
+})
+
+export const ShelfFoot = styled('div', {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '8px',
+  marginTop: '-2px',
+})
+
+export const Quotes = styled('div', { display: 'grid' })
+
+export const Quote = styled('figure', {
+  margin: 0,
+  padding: '0 0 20px',
+  display: 'grid',
+  gap: '10px',
+  '& + &': { paddingTop: '20px', borderTop: '1px solid $stLine' },
+  blockquote: {
+    margin: 0,
+    fontFamily: '$serif',
+    fontStyle: 'italic',
+    fontSize: '22px',
+    lineHeight: 1.38,
+    color: '$stInk',
+    textWrap: 'pretty',
+    hangingPunctuation: 'first',
+    '&::before': {
+      content: '"\\201C"',
+      fontStyle: 'normal',
+      color: '$stAccent',
+    },
+    '&::after': { content: '"\\201D"' },
+    '@mdDown': { fontSize: '19px' },
+  },
+  figcaption: {
+    fontFamily: '$mono',
+    fontSize: '$micro',
+    letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+    color: '$stMuted',
+    a: { color: 'inherit', textDecoration: 'none' },
+    'a:hover': { color: '$stInk', textDecoration: 'underline' },
+  },
+})
+
+export const Stats = styled('dl', {
+  margin: 0,
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+  borderTop: '2px solid $stInk',
+  borderBottom: '1px solid $stLine',
+  '& > div': {
+    padding: '16px 18px 18px',
+    borderLeft: '1px solid $stLine',
+    minWidth: 0,
+    display: 'grid',
+    gap: '6px',
+  },
+  '& > div:first-child': { borderLeft: 'none', paddingLeft: 0 },
+  dd: {
+    margin: 0,
+    order: -1,
+    fontFamily: '$display',
+    fontSize: '28px',
+    fontWeight: 600,
+    letterSpacing: '-0.03em',
+    lineHeight: 1.1,
+    fontVariantNumeric: 'tabular-nums',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  dt: {
+    fontFamily: '$mono',
+    fontSize: '$micro',
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+    color: '$stMuted',
+  },
+  '@mdDown': {
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    '& > div': { padding: '14px 0 14px 14px' },
+    '& > div:nth-child(odd)': { borderLeft: 'none', paddingLeft: 0 },
+    '& > div:nth-child(n + 3)': { borderTop: '1px solid $stLine' },
+    dd: { fontSize: '24px' },
   },
 })

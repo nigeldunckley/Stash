@@ -23,6 +23,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     items: [
       { name: 'Feeds', destination: '/settings/feeds' },
       { name: 'Suggested feeds', destination: '/settings/suggestions' },
+      { name: 'The Edition', destination: '/settings/edition' },
       { name: 'Save from Safari', destination: '/settings/save' },
       { name: 'Install', destination: '/settings/installation' },
     ],

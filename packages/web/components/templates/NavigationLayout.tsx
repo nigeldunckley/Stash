@@ -23,6 +23,7 @@ import { useQueryClient } from '@tanstack/react-query'
 
 export type NavigationSection =
   | 'home'
+  | 'edition'
   | 'library'
   | 'subscriptions'
   | 'highlights'

@@ -9,6 +9,7 @@ import {
   DotsThree,
   Highlighter,
   House,
+  Newspaper,
   Plus,
   Rss,
   Trash,
@@ -28,6 +29,7 @@ import { StashMark } from '../../elements/images/OmnivoreNameLogo'
 import { Dropdown, DropdownOption } from '../../elements/DropdownElements'
 import { useRouter } from 'next/router'
 import { NavigationSection } from '../NavigationLayout'
+import { useEditionStatus } from '../../../lib/edition/useEdition'
 import { TreeApi } from 'react-arborist'
 import React from 'react'
 import { NavMoreButtonDownIcon } from '../../elements/icons/NavMoreButtonDown'
@@ -159,6 +161,8 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
     })
   // Discover is hidden while suggestions are turned off in Settings.
   const suggesting = useFeedSuggestionsEnabled()
+  // The Edition appears only while this week's issue is out and unread.
+  const edition = useEditionStatus()
   return (
     <VStack
       css={{
@@ -175,11 +179,21 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
     >
       <NavButton
         {...props}
-        text="Edition"
+        text="Home"
         section="home"
         isSelected={props.section == 'home'}
         icon={<House size={18} />}
       />
+      {(edition.out || props.section == 'edition') && (
+        <NavButton
+          {...props}
+          text="The Edition"
+          section="edition"
+          isSelected={props.section == 'edition'}
+          icon={<Newspaper size={18} />}
+          count={edition.fresh ? <FreshDot /> : undefined}
+        />
+      )}
       <NavButton
         {...props}
         text="Library"
@@ -266,6 +280,23 @@ function NavCount(props: {
     >
       {count > 999 ? '999+' : count}
     </SpanBox>
+  )
+}
+
+// A new issue of The Edition that hasn't been opened yet.
+function FreshDot(): JSX.Element {
+  return (
+    <SpanBox
+      aria-label="New issue"
+      css={{
+        ml: 'auto',
+        width: '7px',
+        height: '7px',
+        borderRadius: '50%',
+        background: '$stAccent',
+        flex: 'none',
+      }}
+    />
   )
 }
 

@@ -63,6 +63,10 @@ const moduleExports = {
       destination: '/l/home',
     })
     rewrites.push({
+      source: '/edition',
+      destination: '/l/edition',
+    })
+    rewrites.push({
       source: '/discover',
       destination: '/l/discover',
     })

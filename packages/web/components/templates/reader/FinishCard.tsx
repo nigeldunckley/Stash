@@ -1,14 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'next/router'
 import { useMemo, useState } from 'react'
-import { loadEditionState } from '../../../lib/edition/store'
-import { editionDateFor } from '../../../lib/edition/engine'
 import { State } from '../../../lib/networking/fragments/articleFragment'
 import {
   ArticleAttributes,
   useArchiveItem,
+  LibraryItemNode,
   useGetLibraryItems,
-  useGetLibraryItemsByIds,
 } from '../../../lib/networking/library_items/useLibraryItems'
 import { formatMinutes, readingMinutes } from '../../../lib/readingTime'
 import { siteName } from '../../../lib/textFormatting'
@@ -147,8 +144,8 @@ type FinishCardProps = {
 }
 
 // Shown at the end of an article. Stopping and carrying on get equal
-// weight, and "Next up" comes from today's edition when there is one, so
-// it is something chosen for you rather than simply the newest save.
+// weight, and "Next up" follows Home's Up next: something you've started
+// first, then the newest save.
 export function FinishCard(props: FinishCardProps): JSX.Element {
   const router = useRouter()
   const archiveItem = useArchiveItem()
@@ -156,37 +153,13 @@ export function FinishCard(props: FinishCardProps): JSX.Element {
   const { item } = props
   const archived = item.state == State.ARCHIVED
 
-  // The latest edition as stored; reading it never builds a new one.
-  const editionQuery = useQuery({
-    queryKey: ['edition-latest'],
-    queryFn: loadEditionState,
-    staleTime: 5 * 60 * 1000,
-    retry: false,
+  // The same order as Home's Up next: anything started, then the newest
+  // unread save.
+  const readingQuery = useGetLibraryItems('reader-next-reading', 'inbox', {
+    limit: 4,
+    sortDescending: true,
+    searchQuery: 'is:reading sort:read-desc',
   })
-  // Only today's: an older one would offer stale picks as today's.
-  const latest = editionQuery.data?.editions[0]
-  const edition =
-    latest &&
-    editionQuery.data &&
-    latest.date == editionDateFor(new Date(), editionQuery.data.hour)
-      ? latest
-      : undefined
-  const entries = useMemo(
-    () =>
-      (edition?.entries ?? []).filter(
-        (entry) =>
-          entry.slot != 'watch' &&
-          entry.id != item.id &&
-          !edition?.skipped.includes(entry.id)
-      ),
-    [edition, item.id]
-  )
-  const editionItems = useGetLibraryItemsByIds(
-    `finish-edition-${edition?.date}`,
-    entries.map((entry) => entry.id),
-    entries.length > 0
-  )
-
   const inboxQuery = useGetLibraryItems('reader-next', 'inbox', {
     limit: 4,
     sortDescending: true,
@@ -194,23 +167,16 @@ export function FinishCard(props: FinishCardProps): JSX.Element {
   })
 
   const next = useMemo(() => {
-    const found = new Map(
-      (editionItems.data?.pages ?? [])
+    const first = (pages?: { edges: { node: LibraryItemNode }[] }[]) =>
+      (pages ?? [])
         .flatMap((page) => page.edges)
-        .map((edge) => [edge.node.id, edge.node])
-    )
-    for (const entry of entries) {
-      const node = found.get(entry.id)
-      if (node && isOpen(node)) {
-        return { node, why: 'From today’s edition' }
-      }
-    }
-    const node = (inboxQuery.data?.pages ?? [])
-      .flatMap((page) => page.edges)
-      .map((edge) => edge.node)
-      .find((node) => node.id != item.id && isOpen(node))
+        .map((edge) => edge.node)
+        .find((node) => node.id != item.id && isOpen(node))
+    const started = first(readingQuery.data?.pages)
+    if (started) return { node: started, why: 'Pick up again' }
+    const node = first(inboxQuery.data?.pages)
     return node ? { node, why: 'Newest in your inbox' } : undefined
-  }, [editionItems.data, entries, inboxQuery.data, item.id])
+  }, [readingQuery.data, inboxQuery.data, item.id])
 
   const site = siteName(item.originalArticleUrl, item.url, item.siteName)
   const minutes = formatMinutes(readingMinutes(item.wordsCount))

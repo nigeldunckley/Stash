@@ -5,6 +5,7 @@ import {
   NavigationSection,
 } from '../../components/templates/NavigationLayout'
 import { StashEdition } from '../../components/templates/home/StashEdition'
+import { StashHome } from '../../components/templates/home/StashHome'
 import { StashFeeds } from '../../components/templates/feeds/StashFeeds'
 import { LibraryContainer } from '../../components/templates/library/LibraryContainer'
 import { useMemo } from 'react'
@@ -44,6 +45,8 @@ export default function Home(): JSX.Element {
     }
     switch (name) {
       case 'home':
+        return <StashHome key={name} />
+      case 'edition':
         return <StashEdition key={name} />
       case 'highlights':
         return <HighlightsContainer />
@@ -110,6 +113,8 @@ export default function Home(): JSX.Element {
     switch (section) {
       case 'home':
         return 'Home'
+      case 'edition':
+        return 'The Edition'
       case 'discover':
         return 'Discover'
       case 'library':

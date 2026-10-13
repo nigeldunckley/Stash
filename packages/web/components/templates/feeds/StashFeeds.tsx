@@ -24,7 +24,6 @@ import {
   useRef,
   useState,
 } from 'react'
-import { State } from '../../../lib/networking/fragments/articleFragment'
 import {
   BulkAction,
   LibraryItemNode,
@@ -79,6 +78,13 @@ import {
   PEEK_WIDTH,
 } from './FeedPeek'
 import { SourceSettings } from './SourceSettings'
+import {
+  Dot,
+  isVisible,
+  publishedLabel,
+  RowSource,
+  useMediaQuery,
+} from './feedRowParts'
 import { DiscoverPill } from '../discover/DiscoverPill'
 import { navigateWithMorph } from '../../../lib/viewTransition'
 
@@ -341,19 +347,6 @@ const Empty = styled('div', {
   borderRadius: '$md',
 })
 
-// The source at the start of a row's subtitle, with its favicon.
-const RowSource = styled('span', {
-  '& > span:first-child': { verticalAlign: '-3px', marginRight: '6px' },
-  time: { fontVariantNumeric: 'tabular-nums' },
-})
-
-// A thin dot between byline parts, lighter than the text around it.
-const Dot = () => (
-  <span aria-hidden="true" style={{ margin: '0 6px', opacity: 0.5 }}>
-    ·
-  </span>
-)
-
 const MobileSources = styled('div', {
   display: 'grid',
   gap: '2px',
@@ -366,27 +359,6 @@ type View = 'unseen' | 'all'
 
 const PEEK_WIDTH_KEY = 'feeds-peek-width'
 const LAYOUT_KEY = 'feeds-watch-layout'
-
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(false)
-  useEffect(() => {
-    const list = window.matchMedia(query)
-    const update = () => setMatches(list.matches)
-    update()
-    list.addEventListener('change', update)
-    return () => list.removeEventListener('change', update)
-  }, [query])
-  return matches
-}
-
-// The full publish date, for the tooltip on a row's age.
-const publishedLabel = (item: LibraryItemNode) => {
-  const date = item.publishedAt || item.savedAt
-  return date ? new Date(date).toLocaleString() : undefined
-}
-
-const isVisible = (item: LibraryItemNode) =>
-  item.state !== State.ARCHIVED && item.state !== State.DELETED
 
 const byName = (a: Subscription, b: Subscription) =>
   a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
