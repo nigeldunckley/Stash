@@ -24,6 +24,7 @@ import createHttpTaskWithToken, {
   FetchContentJobData,
 } from '../../utils/createTask'
 import { cleanUrl, generateFingerprint, wordsCount } from '../../utils/helpers'
+import { imageFromHtml, largestMediaImage } from '../../utils/feedImages'
 import { logger } from '../../utils/logger'
 import {
   parsePreparedContent,
@@ -101,6 +102,7 @@ type RssFeedItemMedia = {
   }
 }
 export type RssFeedItem = Item & {
+  'content:encoded'?: string
   'media:thumbnail'?: RssFeedItemMedia
   'media:content'?: RssFeedItemMedia[]
   'media:group'?: unknown
@@ -219,20 +221,28 @@ export const isContentFetchBlocked = (feedUrl: string) => {
 }
 
 const getThumbnail = (item: RssFeedItem): string | undefined => {
-  if (item['media:thumbnail']?.$?.url) {
-    return item['media:thumbnail'].$.url
-  }
-
-  const media = item['media:content']?.find(
-    (media) =>
-      media.$?.medium === 'image' || media.$?.type?.startsWith('image/')
-  )?.$?.url
+  // Feeds commonly include both a small media:thumbnail and a full-size
+  // media:content. Keep the largest source so cards and Reader headers can
+  // request sharp versions later.
+  const media = largestMediaImage(item['media:content'])
   if (media) {
     return media
   }
 
   if (item.enclosure?.url && item.enclosure.type?.startsWith('image/')) {
     return item.enclosure.url
+  }
+
+  const contentImage = imageFromHtml(
+    item['content:encoded'] || item.content || '',
+    item.link
+  )
+  if (contentImage) {
+    return contentImage
+  }
+
+  if (item['media:thumbnail']?.$?.url) {
+    return item['media:thumbnail'].$.url
   }
 
   // Otherwise the thumbnail job picks the largest picture in the content.

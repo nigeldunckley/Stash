@@ -358,6 +358,21 @@ describe('feed discovery', () => {
       })
       expect(scored.signals.taste).to.be.greaterThan(0)
     })
+
+    it('uses the full-size picture from feed content instead of a thumbnail', async () => {
+      const xml = `<?xml version="1.0"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/"><channel>
+        <title>Example</title><link>https://example.com/</link><description>Example feed</description>
+        <item><title>Story</title><link>https://example.com/story</link>
+        <media:thumbnail url="https://example.com/tiny.jpg" />
+        <content:encoded><![CDATA[<img src="https://example.com/placeholder.jpg" srcset="/story-320.jpg 320w, /story-1200.jpg 1200w">]]></content:encoded>
+        </item></channel></rss>`
+      const feed = await readFeed(
+        xml,
+        'https://example.com/feed',
+        'https://example.com/'
+      )
+      expect(feed?.latest[0].image).to.eql('https://example.com/story-1200.jpg')
+    })
   })
 
   describe('blogrolls', () => {

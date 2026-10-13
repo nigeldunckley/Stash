@@ -31,6 +31,11 @@ export function createImageProxyUrl(
 export const createThumbnailProxyUrl = (url: string): string =>
   createImageProxyUrl(url, 320, 320)
 
+// Cards span several hundred CSS pixels on desktop. A 320px square is visibly
+// soft on high-density screens, even when the source is sharp.
+export const createCardImageProxyUrl = (url: string): string =>
+  createImageProxyUrl(originalImageUrl(url), 640, 640)
+
 // Returns the source image of a URL that was already run through the proxy
 // (feed items used to store their thumbnail that way), so it can be signed
 // again at another size.
@@ -49,6 +54,6 @@ export function originalImageUrl(url: string): string {
 }
 
 // A large, uncropped version of an item's image for headers and cards:
-// 1200px wide, height kept in proportion.
+// 1600px wide, height kept in proportion.
 export const createHeaderImageProxyUrl = (url: string): string =>
-  createImageProxyUrl(originalImageUrl(url), 1200, 0)
+  createImageProxyUrl(originalImageUrl(url), 1600, 0)

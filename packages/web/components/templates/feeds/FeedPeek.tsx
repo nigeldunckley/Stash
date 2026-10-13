@@ -526,7 +526,7 @@ function PeekArticle(props: FeedPeekProps): JSX.Element {
   const minutes = readingMinutes(item.wordsCount)
   return (
     <>
-      {showHero && <Hero src={item.image} />}
+      {showHero && <Hero src={item.headerImage || item.image} />}
       <Body>
         <Title>{item.title}</Title>
         <Meta>

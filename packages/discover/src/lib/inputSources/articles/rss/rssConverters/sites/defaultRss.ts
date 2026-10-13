@@ -4,32 +4,59 @@ import {
   removeHTMLTag,
   streamHeadAndRetrieveOpenGraph,
 } from '../generic'
-import { get } from 'lodash'
 import { JSDOM } from 'jsdom'
 import { OmnivoreFeed } from '../../../../../../types/Feeds'
 import { OmnivoreArticle } from '../../../../../../types/OmnivoreArticle'
 
 const getImage = (article: any): string | undefined => {
-  // If there's a thumbnail exposed in the RSS Feed, we should default to that as it is the most likely
-  if (article['media:thumbnail']) {
-    return (
-      get(article, '[media:thumbnail][@_url]') ||
-      get(article, '[media:thumbnail][0][@_url]')
-    )
-  }
-
-  // Otherwise, if there's Media Content, we should grab that, We will grab the first as it's the most likely
-  // to represent the article.
-  if (article['media:content']) {
-    return (
-      get(article, '[media:content][@_url]') ||
-      get(article, '[media:content][0][@_url]')
-    )
-  }
+  const media = article['media:content']
+  const mediaImages = (Array.isArray(media) ? media : [media]).filter(
+    (entry) =>
+      entry?.['@_url'] &&
+      (!entry['@_medium'] || entry['@_medium'] === 'image') &&
+      (!entry['@_type'] || entry['@_type'].startsWith('image/'))
+  )
+  mediaImages.sort(
+    (a, b) =>
+      Number(b['@_width'] || 0) * Number(b['@_height'] || 0) -
+      Number(a['@_width'] || 0) * Number(a['@_height'] || 0)
+  )
+  if (mediaImages.length) return mediaImages[0]['@_url']
 
   const extractImageFromHtml = (document: string) => {
     const dom = new JSDOM(document)
-    return dom.window.document.getElementsByTagName('img')[0]?.src
+    let best: { url: string; width: number } | undefined
+    for (const image of dom.window.document.getElementsByTagName('img')) {
+      const width = Number(image.getAttribute('width'))
+      const height = Number(image.getAttribute('height'))
+      const variants = (image.srcset || image.getAttribute('data-srcset') || '')
+        .split(',')
+        .map((part) => {
+          const [url, descriptor] = part.trim().split(/\s+/)
+          return { url, width: parseInt(descriptor, 10) || 0 }
+        })
+        .sort((a, b) => b.width - a.width)
+      if (
+        !variants[0]?.url &&
+        ((width > 0 && width < 150) || (height > 0 && height < 100))
+      )
+        continue
+      const source =
+        variants[0]?.url || image.getAttribute('data-src') || image.src
+      if (source) {
+        try {
+          const url = new URL(source, article.link)
+          if (url.protocol !== 'http:' && url.protocol !== 'https:') continue
+          const sourceWidth = variants[0]?.width || width || height
+          if (!best || sourceWidth > best.width) {
+            best = { url: url.toString(), width: sourceWidth }
+          }
+        } catch {
+          continue
+        }
+      }
+    }
+    return best?.url
   }
 
   // I've noticed some RSS feeds have some of the content encoded like this, and sometimes this contains an img tag
@@ -47,6 +74,9 @@ const getImage = (article: any): string | undefined => {
       return img
     }
   }
+
+  const thumbnail = article['media:thumbnail']
+  return (Array.isArray(thumbnail) ? thumbnail[0] : thumbnail)?.['@_url']
 }
 
 const getDescription = (article: any): string | undefined => {

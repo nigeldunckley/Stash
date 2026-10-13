@@ -66,6 +66,7 @@ import {
   youtubeChannelPage,
 } from '../utils/feedDiscovery'
 import { getAbsoluteUrl, wait } from '../utils/helpers'
+import { imageFromHtml } from '../utils/feedImages'
 import { logger } from '../utils/logger'
 import { rssParserConfig } from '../utils/parser'
 import {
@@ -634,12 +635,6 @@ export const feedLinksIn = (html: string, pageUrl: string): string[] => {
     .map((l) => l.href)
 }
 
-const imageIn = (html?: string): string | undefined => {
-  if (!html) return undefined
-  const m = /<img[^>]+src\s*=\s*["'](https?:\/\/[^"']+)["']/i.exec(html)
-  return m?.[1]
-}
-
 const textOf = (html?: string) =>
   (html ?? '')
     .replace(/<[^>]+>/g, ' ')
@@ -709,8 +704,8 @@ export const readFeed = async (
         item.enclosure?.type?.startsWith('image') && item.enclosure.url
           ? item.enclosure.url
           : item['media:content']?.$?.url ||
-            item['media:thumbnail']?.$?.url ||
-            imageIn(html)
+            imageFromHtml(html, item.link || siteUrl) ||
+            item['media:thumbnail']?.$?.url
       if (image) images++
       return {
         title: textOf(item.title) || 'Untitled',
