@@ -1,4 +1,4 @@
-import { ArrowSquareOut, Check, Plus } from '@phosphor-icons/react'
+import { ArrowSquareOut, Check, Plus, X } from '@phosphor-icons/react'
 import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useCallback, useMemo, useState } from 'react'
@@ -25,6 +25,7 @@ import {
   Chain,
   Chip,
   Label,
+  NotForMe,
   Pill,
   Tile,
 } from '../discover/discoverParts'
@@ -341,23 +342,37 @@ const Lower = styled('div', {
   '@mdDown': { gridTemplateColumns: 'minmax(0, 1fr)', gap: '28px' },
 })
 
+// Follow, with a quiet way to turn the suggestion down beside it.
 function FollowToggle(props: {
   s: FeedSuggestion
   onFollow: (s: FeedSuggestion) => void
+  onDismiss: (s: FeedSuggestion) => void
 }): JSX.Element {
   const done = props.s.status != 'NEW'
   return (
-    <FollowPill
-      type="button"
-      aria-pressed={done}
-      aria-label={
-        done ? `Following ${props.s.title}` : `Follow ${props.s.title}`
-      }
-      onClick={() => !done && props.onFollow(props.s)}
-    >
-      {done ? <Check size={12} weight="bold" /> : <Plus size={12} />}
-      {done ? (props.s.status == 'TRIAL' ? 'Trying' : 'Following') : 'Follow'}
-    </FollowPill>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      {!done && (
+        <NotForMe
+          type="button"
+          aria-label={`Not for me: don't suggest ${props.s.title} again`}
+          title="Not for me"
+          onClick={() => props.onDismiss(props.s)}
+        >
+          <X size={12} weight="bold" />
+        </NotForMe>
+      )}
+      <FollowPill
+        type="button"
+        aria-pressed={done}
+        aria-label={
+          done ? `Following ${props.s.title}` : `Follow ${props.s.title}`
+        }
+        onClick={() => !done && props.onFollow(props.s)}
+      >
+        {done ? <Check size={12} weight="bold" /> : <Plus size={12} />}
+        {done ? (props.s.status == 'TRIAL' ? 'Trying' : 'Following') : 'Follow'}
+      </FollowPill>
+    </span>
   )
 }
 
@@ -482,6 +497,9 @@ export function DiscoveryEdition(props: {
                 <Btn type="button" onClick={() => acts.follow(lead)}>
                   Follow
                 </Btn>
+                <Button tone="quiet" onClick={() => acts.dismiss(lead)}>
+                  Not for me
+                </Button>
               </>
             ) : (
               statusChip(lead)
@@ -530,7 +548,11 @@ export function DiscoveryEdition(props: {
                   )}
                   <StoryFoot>
                     <Meta>{minutes(p.minutes)}</Meta>
-                    <FollowToggle s={s} onFollow={acts.follow} />
+                    <FollowToggle
+                      s={s}
+                      onFollow={acts.follow}
+                      onDismiss={acts.dismiss}
+                    />
                   </StoryFoot>
                 </Story>
               )
@@ -563,7 +585,11 @@ export function DiscoveryEdition(props: {
                       </BriefTitle>
                     </div>
                     <BriefEnd>
-                      <FollowToggle s={s} onFollow={acts.follow} />
+                      <FollowToggle
+                        s={s}
+                        onFollow={acts.follow}
+                        onDismiss={acts.dismiss}
+                      />
                     </BriefEnd>
                   </BriefRow>
                 )
