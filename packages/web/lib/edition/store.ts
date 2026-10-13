@@ -1,6 +1,6 @@
-// Loads today's edition, or makes it the first time it is opened after the
-// edition hour. Editions are kept with your account (in the personalization
-// settings), so the Mac and iPhone show the same one.
+// Loads this week's issue of The Edition, or makes it the first time it is
+// opened once it is out. Issues and settings are kept with your account (in
+// the personalization settings), so the Mac and iPhone show the same one.
 
 import { gql } from 'graphql-request'
 import { gqlSearchQuery } from '../networking/library_items/gql'
@@ -9,17 +9,35 @@ import type {
   LibraryItems,
 } from '../networking/library_items/useLibraryItems'
 import { gqlFetcher } from '../networking/networkHelpers'
-import { Buzz, Edition, buildEdition, editionDateFor } from './engine'
+import { issueNumber } from './discovery'
+import { Buzz, Edition, HighlightInput, buildEdition } from './engine'
+import {
+  DEFAULT_ISSUE_DAY,
+  DEFAULT_ISSUE_HOUR,
+  issueIsOut,
+  weekStart,
+} from './weekly'
 
-export type EditionState = {
+export type EditionSettings = {
+  // The day (0 is Sunday) and hour a new issue comes out.
+  day: number
   hour: number
-  editions: Edition[]
+  // Show the issue's strip on Home while it is out and unopened.
+  showOnHome: boolean
+  // How many saves Home's Up next shows.
+  upNext: number
+  // Issue dates opened, and marked read.
+  opened: string[]
+  read: string[]
 }
 
-export const DEFAULT_EDITION_HOUR = 6
-const KEEP_EDITIONS = 14
+export type EditionState = EditionSettings & { editions: Edition[] }
 
-type Fields = Record<string, unknown> & { edition?: Partial<EditionState> }
+export const DEFAULT_UP_NEXT = 5
+const KEEP_EDITIONS = 12
+
+type Stored = { weekly?: Partial<EditionSettings>; editions?: unknown }
+type Fields = Record<string, unknown> & { edition?: Stored }
 
 const GQL_GET_FIELDS = gql`
   query EditionFields {
@@ -62,15 +80,27 @@ const readFields = async (): Promise<Fields> => {
   return fields && typeof fields === 'object' ? fields : {}
 }
 
-const stateOf = (fields: Fields): EditionState => ({
-  hour:
-    typeof fields.edition?.hour === 'number'
-      ? fields.edition.hour
-      : DEFAULT_EDITION_HOUR,
-  editions: Array.isArray(fields.edition?.editions)
-    ? (fields.edition?.editions as Edition[])
-    : [],
-})
+const numberOr = (value: unknown, fallback: number) =>
+  typeof value === 'number' ? value : fallback
+const datesOf = (value: unknown) =>
+  Array.isArray(value) ? value.filter((v) => typeof v === 'string') : []
+
+const stateOf = (fields: Fields): EditionState => {
+  const weekly = fields.edition?.weekly ?? {}
+  const editions = fields.edition?.editions
+  return {
+    day: numberOr(weekly.day, DEFAULT_ISSUE_DAY),
+    hour: numberOr(weekly.hour, DEFAULT_ISSUE_HOUR),
+    showOnHome: weekly.showOnHome !== false,
+    upNext: numberOr(weekly.upNext, DEFAULT_UP_NEXT),
+    opened: datesOf(weekly.opened),
+    read: datesOf(weekly.read),
+    // Daily editions from before The Edition went weekly are left behind.
+    editions: Array.isArray(editions)
+      ? (editions as Edition[]).filter((e) => e?.kind === 'weekly')
+      : [],
+  }
+}
 
 export const loadEditionState = async (): Promise<EditionState> =>
   stateOf(await readFields())
@@ -83,8 +113,14 @@ export const updateEditionState = async (
   const fields = await readFields()
   const next = change(stateOf(fields))
   next.editions = next.editions.slice(0, KEEP_EDITIONS)
+  const { editions, ...settings } = next
+  const weekly = {
+    ...settings,
+    opened: settings.opened.slice(-KEEP_EDITIONS),
+    read: settings.read.slice(-KEEP_EDITIONS),
+  }
   const data = (await gqlFetcher(GQL_SET_FIELDS, {
-    input: { fields: { ...fields, edition: next } },
+    input: { fields: { ...fields, edition: { weekly, editions } } },
   })) as { setUserPersonalization?: { errorCodes?: string[] } }
   if (data.setUserPersonalization?.errorCodes?.length) {
     throw new Error(data.setUserPersonalization.errorCodes[0])
@@ -167,40 +203,121 @@ const hackerNewsBuzz = async (
   return buzz
 }
 
+const GQL_HIGHLIGHTS = gql`
+  query EditionHighlights($first: Int, $after: String) {
+    highlights(first: $first, after: $after) {
+      ... on HighlightsSuccess {
+        edges {
+          node {
+            id
+            type
+            quote
+            createdAt
+            libraryItem {
+              id
+              slug
+              title
+              siteName
+              originalArticleUrl
+              url
+            }
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+      ... on HighlightsError {
+        errorCodes
+      }
+    }
+  }
+`
+
+type HighlightNode = {
+  id: string
+  type: string
+  quote?: string
+  createdAt: string
+  libraryItem?: {
+    id: string
+    slug: string
+    title: string
+    siteName?: string
+    originalArticleUrl?: string
+    url: string
+  }
+}
+
+const hostOf = (url?: string) => {
+  try {
+    return url ? new URL(url).hostname.replace(/^www\./, '') : ''
+  } catch {
+    return ''
+  }
+}
+
+// Your most recent highlights, up to `max`. If they can't be read the issue
+// goes out without them.
+const recentHighlights = async (max: number): Promise<HighlightInput[]> => {
+  const found: HighlightInput[] = []
+  let after: string | undefined
+  try {
+    while (found.length < max) {
+      const data = (await gqlFetcher(GQL_HIGHLIGHTS, { first: 50, after })) as {
+        highlights?: {
+          edges?: { node: HighlightNode }[]
+          pageInfo?: { hasNextPage: boolean; endCursor: string }
+        }
+      }
+      const edges = data.highlights?.edges ?? []
+      edges.forEach(({ node }) => {
+        const item = node.libraryItem
+        if (node.type !== 'HIGHLIGHT' || !item) return
+        found.push({
+          id: node.id,
+          quote: node.quote,
+          createdAt: node.createdAt,
+          item: {
+            id: item.id,
+            slug: item.slug,
+            title: item.title,
+            source:
+              item.siteName || hostOf(item.originalArticleUrl || item.url),
+          },
+        })
+      })
+      if (!data.highlights?.pageInfo?.hasNextPage || !edges.length) break
+      after = data.highlights.pageInfo.endCursor
+    }
+  } catch (error) {
+    console.log('error loading highlights for The Edition', error)
+  }
+  return found
+}
+
 const DAY = 24 * 3600 * 1000
 
 export const makeEdition = async (
   state: EditionState,
+  date: string,
   now: Date,
   sourceName: (item: LibraryItemNode) => string
 ): Promise<Edition> => {
-  const latest = state.editions[0]
-  // Everything since the last edition was made, or the last day and a half
-  // for the first one. Quiet days reach back up to four days.
-  const since =
-    latest && now.getTime() - Date.parse(latest.builtAt) < 4 * DAY
-      ? new Date(latest.builtAt)
-      : new Date(now.getTime() - 1.5 * DAY)
-  const reach = new Date(Math.min(since.getTime(), now.getTime() - 4 * DAY))
-
-  const [feedItems, queue, videos, history] = await Promise.all([
+  const since = weekStart(date)
+  const [missed, shelf, history, read, highlights] = await Promise.all([
     searchItems(
-      `in:following use:folders -type:video -is:seen saved:${isoDay(
-        reach
-      )}..* sort:saved-desc`,
-      200
-    ),
-    searchItems(
-      `in:inbox use:folders is:unread -type:video saved:${isoDay(
-        new Date(now.getTime() - 30 * DAY)
-      )}..* sort:saved-desc`,
-      60
-    ),
-    searchItems(
-      `in:following use:folders type:video -is:seen saved:${isoDay(
+      `in:following use:folders -type:video saved:${isoDay(
         since
       )}..* sort:saved-desc`,
-      40
+      300
+    ),
+    searchItems(
+      `in:inbox use:folders is:unread -type:video saved:*..${isoDay(
+        new Date(now.getTime() - 14 * DAY)
+      )} sort:saved-desc`,
+      80
     ),
     searchItems(
       `in:all saved:${isoDay(
@@ -208,33 +325,30 @@ export const makeEdition = async (
       )}..* sort:saved-desc`,
       400
     ),
+    searchItems(`in:all read:${isoDay(since)}..* sort:read-desc`, 200),
+    recentHighlights(200),
   ])
-
-  const arrivedSince = (item: LibraryItemNode) =>
-    Date.parse(item.savedAt || item.createdAt) >= since.getTime()
-  const recent = feedItems.filter(arrivedSince)
-  // On a quiet day, older unseen feed items fill the gaps.
-  const feedPool =
-    recent.length >= 12
-      ? recent
-      : [...recent, ...feedItems.filter((i) => !arrivedSince(i))].slice(0, 40)
 
   const skipped = new Set(state.editions.flatMap((e) => e.skipped))
   const featured = new Set(
-    state.editions.flatMap((e) => e.entries.map((entry) => entry.id))
+    state.editions.flatMap((e) => [
+      ...e.entries.map((entry) => entry.id),
+      ...(e.quotes ?? []).map((quote) => quote.id),
+    ])
   )
-  const candidates = [...feedPool, ...queue]
   const buzz = await hackerNewsBuzz(
-    candidates.filter((item) => !featured.has(item.id)).slice(0, 60)
+    missed.filter((item) => !featured.has(item.id)).slice(0, 60)
   )
 
   return buildEdition({
     now,
-    date: editionDateFor(now, state.hour),
-    number: (latest?.number ?? 0) + 1,
-    candidates,
-    videos: videos.filter(arrivedSince),
+    date,
+    number: issueNumber(date),
+    missed,
+    shelf,
     history,
+    read,
+    highlights,
     skipped,
     featured,
     buzz,
@@ -242,17 +356,18 @@ export const makeEdition = async (
   })
 }
 
-// Today's edition, made and saved now if it does not exist yet.
-export const loadTodaysEdition = async (
+// This week's issue, made and saved now if it is out and doesn't exist yet.
+// Between issues the state is returned as it is, holding the last one.
+export const loadThisWeeksEdition = async (
   sourceName: (item: LibraryItemNode) => string,
   now = new Date()
 ): Promise<EditionState> => {
   const state = await loadEditionState()
-  const date = editionDateFor(now, state.hour)
-  if (state.editions[0]?.date === date) {
+  const { out, date } = issueIsOut(now, state, [])
+  if (!out || state.editions[0]?.date === date) {
     return state
   }
-  const edition = await makeEdition(state, now, sourceName)
+  const edition = await makeEdition(state, date, now, sourceName)
   return updateEditionState((latest) =>
     // Another device may have made it in the meantime; keep theirs.
     latest.editions[0]?.date === date

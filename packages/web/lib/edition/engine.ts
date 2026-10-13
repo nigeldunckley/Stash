@@ -1,6 +1,8 @@
-// The Edition: a front page Stash lays out once a day from new feed items,
-// your saved queue and new videos. This file holds the ranking engine. It is
-// pure (no network), so the same inputs always make the same edition.
+// The Edition: a weekly issue Stash lays out from what the week left
+// behind: feed stories you never opened, saves left on the shelf, highlights
+// worth seeing again, and your week in reading. Home covers what's new, so
+// nothing here is from the last day. This file holds the ranking engine. It
+// is pure (no network), so the same inputs always make the same issue.
 //
 // Each candidate gets five signals, each between 0 and 1:
 // - relevance: how close its words are to what you read, save and
@@ -16,7 +18,7 @@ import { State } from '../networking/fragments/articleFragment'
 import type { LibraryItemNode } from '../networking/library_items/useLibraryItems'
 import { readingMinutes } from '../readingTime'
 
-export type EditionSlot = 'lead' | 'pick' | 'popular' | 'brief' | 'watch'
+export type EditionSlot = 'lead' | 'missed' | 'shelf'
 
 export type EditionEntry = {
   id: string
@@ -25,13 +27,35 @@ export type EditionEntry = {
   why?: string
 }
 
+// A passage you highlighted, kept with enough of its article to show it.
+export type EditionQuote = {
+  id: string
+  quote: string
+  itemId: string
+  slug: string
+  title: string
+  source: string
+  createdAt: string
+}
+
+export type WeekStats = {
+  finished: number
+  minutes: number
+  highlights: number
+  topSource?: string
+  longest?: { title: string; minutes: number }
+}
+
 export type Edition = {
-  // The morning the edition belongs to, as a local yyyy-mm-dd date.
+  kind: 'weekly'
+  // The day the issue came out, as a local yyyy-mm-dd date.
   date: string
   number: number
   builtAt: string
   entries: EditionEntry[]
   skipped: string[]
+  quotes: EditionQuote[]
+  week: WeekStats
   // How much there was to choose from, for the masthead.
   considered: number
   sources: number
@@ -40,25 +64,38 @@ export type Edition = {
 // Points and comments an item collected elsewhere, keyed by item id.
 export type Buzz = { points: number; comments: number; where: string }
 
+export type HighlightInput = {
+  id: string
+  quote?: string
+  createdAt: string
+  item: { id: string; slug: string; title: string; source: string }
+}
+
 export type BuildInput = {
   now: Date
   date: string
   number: number
-  // New feed items and saved, unread articles that could go in.
-  candidates: LibraryItemNode[]
-  videos: LibraryItemNode[]
+  // The week's feed stories, opened or not; the engine keeps the unopened.
+  missed: LibraryItemNode[]
+  // Saved, unread articles older than two weeks.
+  shelf: LibraryItemNode[]
   // Recent items with what you did with them, to learn from.
   history: LibraryItemNode[]
-  // Items skipped in earlier editions count against their feed.
+  // What you opened this week, for the week in reading.
+  read: LibraryItemNode[]
+  highlights: HighlightInput[]
+  // Items skipped in earlier issues count against their feed.
   skipped: Set<string>
-  // Items featured in earlier editions, which are not repeated.
+  // Items and highlights featured in earlier issues, which are not repeated.
   featured: Set<string>
   buzz?: Map<string, Buzz>
   sourceName: (item: LibraryItemNode) => string
 }
 
-const READING_BUDGET_MINUTES = 60
-const QUEUE_LIMIT = 3
+const MISSED = 3
+const SHELF = 3
+const QUOTES = 2
+const DAY_MS = 86_400_000
 
 const STOP_WORDS = new Set(
   `the and for with that this from your you are was were have has had not but
@@ -349,39 +386,99 @@ export const scoreItems = (
   })
 }
 
-// Local date (yyyy-mm-dd) of the edition that covers `now`. Before the
-// edition hour, that is still yesterday's.
-export const editionDateFor = (now: Date, hour: number): string => {
-  const day = new Date(now)
-  if (day.getHours() < hour) day.setDate(day.getDate() - 1)
-  const pad = (value: number) => String(value).padStart(2, '0')
-  return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`
+// A stable shuffle: the same issue date always gives the same order.
+const seeded = <T>(list: T[], seed: string): T[] => {
+  let hash = 2166136261
+  for (const char of seed) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619)
+  const next = () => {
+    hash = Math.imul(hash ^ (hash >>> 15), 2246822507)
+    hash = Math.imul(hash ^ (hash >>> 13), 3266489909)
+    return ((hash ^= hash >>> 16) >>> 0) / 4294967296
+  }
+  const out = [...list]
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(next() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
+export const weekStats = (
+  read: LibraryItemNode[],
+  highlights: HighlightInput[],
+  since: Date,
+  sourceName: (item: LibraryItemNode) => string
+): WeekStats => {
+  const inWeek = (date?: string) =>
+    !!date && Date.parse(date) >= since.getTime()
+  const opened = read.filter((item) => inWeek(item.readAt))
+  const finished = opened.filter(
+    (item) => (item.readingProgressPercent ?? 0) >= 90
+  )
+  const minutes = Math.round(
+    opened.reduce(
+      (sum, item) =>
+        sum +
+        (minutesOf(item) * Math.min(100, item.readingProgressPercent ?? 0)) /
+          100,
+      0
+    )
+  )
+  const bySource = new Map<string, number>()
+  opened
+    .filter((item) => (item.readingProgressPercent ?? 0) >= 30)
+    .forEach((item) => {
+      const name = sourceName(item)
+      bySource.set(name, (bySource.get(name) ?? 0) + 1)
+    })
+  const [topSource, topCount] = [...bySource.entries()].sort(
+    (a, b) => b[1] - a[1]
+  )[0] ?? [undefined, 0]
+  const longest = [...finished].sort((a, b) => minutesOf(b) - minutesOf(a))[0]
+  return {
+    finished: finished.length,
+    minutes,
+    highlights: highlights.filter((h) => inWeek(h.createdAt)).length,
+    topSource: topCount >= 2 ? topSource : undefined,
+    longest: longest && {
+      title: longest.title,
+      minutes: minutesOf(longest),
+    },
+  }
 }
 
 export const buildEdition = (input: BuildInput): Edition => {
   const { now, skipped, featured } = input
   const profile = learnProfile(input.history, skipped)
+  const dayAgo = now.getTime() - DAY_MS
 
-  const fresh = (item: LibraryItemNode) =>
+  const untouched = (item: LibraryItemNode) =>
     !featured.has(item.id) &&
     !skipped.has(item.id) &&
     item.state !== State.ARCHIVED &&
     item.state !== State.DELETED &&
-    (item.readingProgressPercent ?? 0) < 2 &&
-    !item.seenAt
+    (item.readingProgressPercent ?? 0) < 2
 
-  const pool = input.candidates.filter(fresh)
-  const scored = scoreItems(pool, profile, input).sort(
-    (a, b) => b.score - a.score
+  // Missed: the week's feed stories you never opened (scrolling past counts
+  // as missing them), leaving the last day to Home.
+  const missedPool = input.missed.filter(
+    (item) =>
+      untouched(item) &&
+      item.folder === 'following' &&
+      item.pageType !== 'VIDEO' &&
+      Date.parse(item.publishedAt || item.savedAt || item.createdAt) < dayAgo
   )
+  const scored = scoreItems(missedPool, profile, input)
+    // A week on, freshness says little; what you'd have liked says more.
+    .map((s) => ({
+      ...s,
+      score: s.score - 0.1 * s.freshness + 0.05 * s.relevance,
+    }))
+    .sort((a, b) => b.score - a.score)
 
   const entries: EditionEntry[] = []
   const chosen = new Set<string>()
   const perSource = new Map<string, number>()
-  let minutes = 0
-  let queued = 0
-
-  // The same story from another feed is only shown once.
   const stories: { url: string; words: string[] }[] = []
   const sameStory = (item: LibraryItemNode) =>
     stories.some(
@@ -389,9 +486,8 @@ export const buildEdition = (input: BuildInput): Edition => {
         story.url === normalisedUrl(item) ||
         overlap(story.words, wordsOf(item.title)) >= 0.5
     )
-
-  const take = (entry: Scored, slot: EditionSlot) => {
-    entries.push({ id: entry.item.id, slot, why: entry.why })
+  const take = (entry: Scored, slot: EditionSlot, why?: string) => {
+    entries.push({ id: entry.item.id, slot, why: why ?? entry.why })
     chosen.add(entry.item.id)
     stories.push({
       url: normalisedUrl(entry.item),
@@ -399,16 +495,11 @@ export const buildEdition = (input: BuildInput): Edition => {
     })
     const key = sourceKey(entry.item)
     perSource.set(key, (perSource.get(key) ?? 0) + 1)
-    minutes += minutesOf(entry.item)
-    if (isSavedByYou(entry.item)) queued += 1
   }
-
-  const allowed = (entry: Scored, maxPerSource: number, minimumMet: boolean) =>
+  const allowed = (entry: Scored) =>
     !chosen.has(entry.item.id) &&
     !sameStory(entry.item) &&
-    (perSource.get(sourceKey(entry.item)) ?? 0) < maxPerSource &&
-    (!isSavedByYou(entry.item) || queued < QUEUE_LIMIT) &&
-    (!minimumMet || minutes + minutesOf(entry.item) <= READING_BUDGET_MINUTES)
+    (perSource.get(sourceKey(entry.item)) ?? 0) < 1
 
   // Lead: the best long read with a picture.
   const lead =
@@ -417,67 +508,72 @@ export const buildEdition = (input: BuildInput): Edition => {
     scored[0]
   if (lead) take(lead, 'lead')
 
-  // Picked for you: closest to what you read, one per source.
-  const byRelevance = [...scored].sort(
-    (a, b) =>
-      b.relevance * 0.6 +
-      b.affinity * 0.4 +
-      b.score * 0.5 -
-      (a.relevance * 0.6 + a.affinity * 0.4 + a.score * 0.5)
-  )
-  for (const pass of [true, false]) {
-    for (const entry of byRelevance) {
-      if (entries.filter((e) => e.slot === 'pick').length >= 3) break
-      if (pass && (!hasImage(entry.item) || minutesOf(entry.item) < 3)) continue
-      if (allowed(entry, 1, entries.length >= 3)) take(entry, 'pick')
+  // Also missed: the next best, one per source, pictures first.
+  for (const withPicture of [true, false]) {
+    for (const entry of scored) {
+      if (entries.filter((e) => e.slot === 'missed').length >= MISSED) break
+      if (withPicture && !hasImage(entry.item)) continue
+      if (allowed(entry)) take(entry, 'missed')
     }
   }
 
-  // Popular: only stories with a real popularity signal.
-  const byPopularity = scored
-    .filter((s) => s.popularity >= 0.3)
-    .sort((a, b) => b.popularity - a.popularity || b.score - a.score)
-  for (const entry of byPopularity) {
-    if (entries.filter((e) => e.slot === 'popular').length >= 3) break
-    if (allowed(entry, 2, true)) take(entry, 'popular')
-  }
-
-  // Also today: the best of the rest, short ones first among equals.
-  const rest = scored
-    .filter((s) => !chosen.has(s.item.id))
-    .sort(
-      (a, b) =>
-        b.score -
-        (minutesOf(b.item) > 10 ? 0.05 : 0) -
-        (a.score - (minutesOf(a.item) > 10 ? 0.05 : 0))
-    )
-  // Once the hour is used up, only quick reads still fit, a few of them.
-  for (const entry of rest) {
-    const briefs = entries.filter((e) => e.slot === 'brief').length
-    if (briefs >= 5) break
-    const quick = minutesOf(entry.item) <= 5 && briefs < 3
-    if (allowed(entry, 2, !quick)) take(entry, 'brief')
-  }
-
-  // Watch: new videos from the channels you watch most.
-  const videos = scoreItems(input.videos.filter(fresh), profile, input)
+  // The back of the shelf: old saves, the longer and closer to what you
+  // read the better, one per source.
+  const shelf = scoreItems(input.shelf.filter(untouched), profile, input)
     .map((s) => ({
       ...s,
-      score: 0.5 * s.affinity + 0.3 * s.freshness + 0.2 * s.popularity,
+      score: 0.6 * s.score + 0.4 * (Math.min(30, minutesOf(s.item)) / 30),
     }))
     .sort((a, b) => b.score - a.score)
-    .slice(0, 2)
-  videos.forEach((entry) =>
-    entries.push({ id: entry.item.id, slot: 'watch', why: entry.why })
+  for (const entry of shelf) {
+    if (entries.filter((e) => e.slot === 'shelf').length >= SHELF) break
+    if (allowed(entry)) take(entry, 'shelf', 'Saved, never opened')
+  }
+
+  // Highlights worth seeing again: a fair length, a couple of weeks old,
+  // and not shown before. Newer ones fill in if there aren't enough.
+  const usable = input.highlights.filter(
+    (h) =>
+      !featured.has(h.id) &&
+      (h.quote?.trim().length ?? 0) >= 40 &&
+      (h.quote?.trim().length ?? 0) <= 320
   )
+  const settled = usable.filter(
+    (h) => Date.parse(h.createdAt) < now.getTime() - 14 * DAY_MS
+  )
+  const picked = seeded(settled, input.date).slice(0, QUOTES)
+  if (picked.length < QUOTES) {
+    picked.push(
+      ...seeded(
+        usable.filter((h) => !picked.includes(h)),
+        input.date
+      ).slice(0, QUOTES - picked.length)
+    )
+  }
 
   return {
+    kind: 'weekly',
     date: input.date,
     number: input.number,
     builtAt: now.toISOString(),
     entries,
     skipped: [],
-    considered: pool.length,
-    sources: new Set(pool.map(sourceKey)).size,
+    quotes: picked.map((h) => ({
+      id: h.id,
+      quote: (h.quote ?? '').trim(),
+      itemId: h.item.id,
+      slug: h.item.slug,
+      title: h.item.title,
+      source: h.item.source,
+      createdAt: h.createdAt,
+    })),
+    week: weekStats(
+      input.read,
+      input.highlights,
+      new Date(now.getTime() - 7 * DAY_MS),
+      input.sourceName
+    ),
+    considered: missedPool.length,
+    sources: new Set(missedPool.map(sourceKey)).size,
   }
 }

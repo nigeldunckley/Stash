@@ -7,11 +7,21 @@ export function navigationCommands(router: NextRouter | undefined): Action[] {
     {
       id: 'nav-home',
       section: { name: 'Go to', priority: 0 },
-      name: 'Edition',
+      name: 'Home',
       shortcut: ['g', 'h'],
-      keywords: 'go home edition',
+      keywords: 'go home new feeds up next',
       perform: () => {
         router?.push(`/home`)
+      },
+    },
+    {
+      id: 'nav-edition',
+      section: { name: 'Go to', priority: 0 },
+      name: 'The Edition',
+      shortcut: ['g', 'e'],
+      keywords: "edition weekly paper issue last week's edition",
+      perform: () => {
+        router?.push(`/edition`)
       },
     },
     {

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, reducedMotion } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
 import type { NavigationSection } from '../NavigationLayout'
+import { useEditionStatus } from '../../../lib/edition/useEdition'
 
 export const MOBILE_TOP_BAR_HEIGHT = 48
 
@@ -88,18 +89,51 @@ const More = styled('button', {
   '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '-2px' },
 })
 
-const TABS: { section: NavigationSection; label: string; href: string }[] = [
-  { section: 'home', label: 'Edition', href: '/l/home' },
-  { section: 'library', label: 'Library', href: '/l/library' },
-  { section: 'subscriptions', label: 'Feeds', href: '/l/subscriptions' },
-  { section: 'highlights', label: 'Highlights', href: '/l/highlights' },
-]
+const Fresh = styled('span', {
+  width: '6px',
+  height: '6px',
+  marginLeft: '5px',
+  borderRadius: '50%',
+  background: '$stAccent',
+})
+
+type TabItem = { section: NavigationSection; label: string; href: string }
+
+const HOME: TabItem = { section: 'home', label: 'Home', href: '/l/home' }
+const EDITION: TabItem = {
+  section: 'edition',
+  label: 'Edition',
+  href: '/l/edition',
+}
+const LIBRARY: TabItem = {
+  section: 'library',
+  label: 'Library',
+  href: '/l/library',
+}
+const FEEDS: TabItem = {
+  section: 'subscriptions',
+  label: 'Feeds',
+  href: '/l/subscriptions',
+}
+const HIGHLIGHTS: TabItem = {
+  section: 'highlights',
+  label: 'Highlights',
+  href: '/l/highlights',
+}
+
+// While The Edition is out it takes Highlights' place, which stays in More.
+const tabsFor = (editionOut: boolean): TabItem[] =>
+  editionOut
+    ? [HOME, EDITION, LIBRARY, FEEDS]
+    : [HOME, LIBRARY, FEEDS, HIGHLIGHTS]
 
 export function MobileTopBar(props: {
   section: NavigationSection
   onMore: () => void
 }): JSX.Element {
   const { query } = useKBar()
+  const edition = useEditionStatus()
+  const tabs = tabsFor(edition.out || props.section == 'edition')
   const [hidden, setHidden] = useState(false)
   const lastY = useRef(0)
 
@@ -127,7 +161,7 @@ export function MobileTopBar(props: {
   return (
     <Bar aria-label="Main" data-hidden={hidden}>
       <Tabs>
-        {TABS.map((item) => (
+        {tabs.map((item) => (
           <Tab
             key={item.section}
             href={item.href}
@@ -140,6 +174,7 @@ export function MobileTopBar(props: {
             }
           >
             {item.label}
+            {item.section == 'edition' && edition.fresh && <Fresh />}
           </Tab>
         ))}
       </Tabs>

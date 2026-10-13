@@ -3,37 +3,21 @@ import {
   ArrowRight,
   Bookmark,
   Check,
-  Plus,
   X,
 } from '@phosphor-icons/react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'next/router'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { flushSync } from 'react-dom'
-import { locale, timeZone } from '../../../lib/dateFormatting'
-import type {
-  Edition,
-  EditionEntry,
-  EditionSlot,
-} from '../../../lib/edition/engine'
-import {
-  EditionState,
-  loadTodaysEdition,
-  updateEditionState,
-} from '../../../lib/edition/store'
-import {
-  discoveryIssue,
-  isSaturday,
-  recommendedFor,
-  verdictsDue,
-} from '../../../lib/edition/discovery'
-import { useFeedSuggestions } from '../../../lib/networking/feedSuggestions'
-import { useHandleAddUrl } from '../../../lib/hooks/useHandleAddUrl'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { someoneNew, verdictsDue } from '../../../lib/edition/discovery'
+import type { Edition, EditionEntry } from '../../../lib/edition/engine'
+import { loadThisWeeksEdition } from '../../../lib/edition/store'
+import { useUpdateEdition, withDate } from '../../../lib/edition/useEdition'
+import { hourLabel, nextIssueAt, weekStart } from '../../../lib/edition/weekly'
 import useLibraryItemActions from '../../../lib/hooks/useLibraryItemActions'
 import { State } from '../../../lib/networking/fragments/articleFragment'
+import { useFeedSuggestions } from '../../../lib/networking/feedSuggestions'
 import {
   LibraryItemNode,
-  useGetLibraryItems,
   useGetLibraryItemsByIds,
 } from '../../../lib/networking/library_items/useLibraryItems'
 import {
@@ -42,40 +26,27 @@ import {
 } from '../../../lib/networking/subscriptions/feeds'
 import { useGetSubscriptions } from '../../../lib/networking/subscriptions/useGetSubscriptions'
 import { useGetViewer } from '../../../lib/networking/viewer/useGetViewer'
-import {
-  formatMinutes,
-  minutesLeft,
-  readingMinutes,
-} from '../../../lib/readingTime'
-import { faviconFor, shortTimeAgo, siteName } from '../../../lib/textFormatting'
+import { formatMinutes, readingMinutes } from '../../../lib/readingTime'
+import { faviconFor, siteName } from '../../../lib/textFormatting'
+import { showErrorToast } from '../../../lib/toastHelpers'
+import { navigateWithMorph } from '../../../lib/viewTransition'
 import {
   ContextMenu,
-  CoverImage,
   Kbd,
   linkEntries,
   MenuEntry,
-  ProgressLine,
+  showUndoToast,
   SiteIcon,
 } from '../../elements/stash'
-import { navigateWithMorph } from '../../../lib/viewTransition'
-
 import {
   Actions,
-  AddButton,
   Arrows,
-  Brief,
-  BriefEnd,
-  BriefRow,
-  BriefTitle,
   Btn,
-  CaptureForm,
-  Chip,
-  Chips,
   Colophon,
   Column,
   Dek,
   Fallback,
-  Fit,
+  Kicker,
   Lead,
   LeadCopy,
   LeadCover,
@@ -93,50 +64,40 @@ import {
   Page,
   Picks,
   Quiet,
-  Resume,
-  ResumeMeta,
+  Quote,
+  Quotes,
   SectionHead,
+  Shelf,
+  ShelfCopy,
+  ShelfFoot,
+  ShelfRow,
+  ShelfThumb,
+  ShelfTitle,
   ShortDate,
   Source,
   Stack,
+  Stats,
   Story,
   StoryCover,
   StoryDek,
   StoryFoot,
   StoryTitle,
-  Thumb,
   Ticks,
-  TimeRow,
-  Video,
-  Videos,
 } from './editionStyles'
-import {
-  DiscoveryEdition,
-  RecommendedBand,
-  TrialVerdict,
-  Verdicts,
-} from './EditionDiscovery'
+import { SomeoneNew, TrialVerdict, Verdicts } from './EditionDiscovery'
 
-// Home: The Edition, a front page made once a day. See lib/edition/engine.ts
-// for how stories are chosen.
-
-// Time you have, in minutes; null is the whole edition.
-const BUDGETS = [5, 15, 45] as const
-const minutesOf = (item: LibraryItemNode) =>
-  readingMinutes(item.wordsCount) ?? 4
-const isUrl = (value: string) => {
-  try {
-    const url = new URL(value)
-    return url.protocol === 'http:' || url.protocol === 'https:'
-  } catch {
-    return false
-  }
-}
+// The Edition: a weekly issue, out from Saturday morning until the end of
+// Sunday. It carries only what Home doesn't: the week's stories you missed,
+// old saves, highlights worth seeing again, someone new to read, and your
+// week in reading. See lib/edition/engine.ts for how stories are chosen.
 
 const isFeedItem = (item: LibraryItemNode) => item.folder === 'following'
 
+const dayOf = (date: string, options: Intl.DateTimeFormatOptions) =>
+  new Date(`${date}T12:00:00`).toLocaleDateString(undefined, options)
+
 const longDate = (date: string) =>
-  new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+  dayOf(date, {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -144,22 +105,41 @@ const longDate = (date: string) =>
   })
 
 const shortDate = (date: string) =>
-  new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
-    weekday: 'short',
+  dayOf(date, { weekday: 'short', day: 'numeric', month: 'short' })
+
+const weekday = (date?: string) =>
+  date
+    ? new Date(date).toLocaleDateString(undefined, { weekday: 'long' })
+    : undefined
+
+// "Saved 14 July · 3 months ago"
+const savedAgo = (date: string | undefined, now: Date) => {
+  if (!date) return 'Saved a while ago'
+  const then = new Date(date)
+  const days = Math.max(0, Math.round((now.getTime() - then.getTime()) / 864e5))
+  const ago =
+    days < 7
+      ? `${days} days ago`
+      : days < 45
+      ? `${Math.round(days / 7)} weeks ago`
+      : days < 365
+      ? `${Math.round(days / 30)} months ago`
+      : `${Math.round(days / 365)} ${days < 730 ? 'year' : 'years'} ago`
+  const when = then.toLocaleDateString(undefined, {
     day: 'numeric',
-    month: 'short',
+    month: 'long',
+    year: then.getFullYear() == now.getFullYear() ? undefined : 'numeric',
   })
+  return `Saved ${when} · ${ago}`
+}
 
-const hourLabel = (hour: number) => `${String(hour).padStart(2, '0')}:00`
-
-const SLOT_ORDER: EditionSlot[] = ['lead', 'pick', 'popular', 'brief']
+const SLOT_ORDER = ['lead', 'missed', 'shelf'] as const
 
 export function StashEdition(): JSX.Element {
   const router = useRouter()
-  const queryClient = useQueryClient()
   const { data: viewer } = useGetViewer()
-  const addUrl = useHandleAddUrl()
   const { moveItem } = useLibraryItemActions()
+  const updateEdition = useUpdateEdition()
   const { data: subscriptions, isPending: subscriptionsPending } =
     useGetSubscriptions({})
 
@@ -178,7 +158,7 @@ export function StashEdition(): JSX.Element {
 
   const stateQuery = useQuery({
     queryKey: ['edition'],
-    queryFn: () => loadTodaysEdition(sourceOf),
+    queryFn: () => loadThisWeeksEdition(sourceOf),
     enabled: !subscriptionsPending,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: true,
@@ -186,9 +166,20 @@ export function StashEdition(): JSX.Element {
   })
   const state = stateQuery.data
 
-  // Which stored edition is on screen: 0 is today's.
+  // Which stored issue is on screen: 0 is the latest.
   const [index, setIndex] = useState(0)
   const edition: Edition | undefined = state?.editions[index]
+  const latest = index === 0
+
+  // Opening the latest issue takes its strip off Home.
+  useEffect(() => {
+    if (!edition || !latest || !state || state.opened.includes(edition.date)) {
+      return
+    }
+    updateEdition((s) => ({ opened: withDate(s.opened, edition.date) })).catch(
+      (error) => console.log('error saving opened issue', error)
+    )
+  }, [edition, latest, state, updateEdition])
 
   // Skips show at once and are saved in the background.
   const [localSkips, setLocalSkips] = useState<Set<string>>(new Set())
@@ -214,21 +205,6 @@ export function StashEdition(): JSX.Element {
     return map
   }, [itemsQuery.data])
 
-  const continueQuery = useGetLibraryItems('home-continue', 'inbox', {
-    limit: 4,
-    sortDescending: true,
-    searchQuery: 'is:reading sort:read-desc',
-  })
-  const inProgress = useMemo(
-    () =>
-      (continueQuery.data?.pages ?? [])
-        .flatMap((page) => page.edges)
-        .map((edge) => edge.node)
-        .filter((item) => !ids.includes(item.id))
-        .slice(0, 2),
-    [continueQuery.data, ids]
-  )
-
   // Seen is not done: Feeds marks items seen as they scroll past, so only
   // reading, skipping, saving or archiving counts.
   const isDone = useCallback(
@@ -251,119 +227,46 @@ export function StashEdition(): JSX.Element {
     })
     return list
   }, [edition, items, skipped])
+  const inSlot = (slot: EditionEntry['slot']) =>
+    shown.filter((s) => s.slot === slot)
 
-  // "I have 15 min": keep the engine's order and take what fits, from the
-  // stories not read yet. The first that fits leads if the lead doesn't.
-  const [budget, setBudget] = useState<number | null>(null)
-  const fitted = useMemo(() => {
-    // The chips only show on today's edition, so earlier ones stay whole.
-    if (budget === null || index !== 0) return undefined
-    const chosen: Shown[] = []
-    let used = 0
-    // No one piece takes most of a longer slot, so it stays a mix.
-    const longest = Math.max(5, Math.round(budget * 0.6))
-    SLOT_ORDER.forEach((slot) =>
-      shown
-        .filter((s) => s.slot === slot && !isDone(s.item))
-        .forEach((s) => {
-          const minutes = minutesOf(s.item)
-          if (minutes <= longest && used + minutes <= budget) {
-            chosen.push(s)
-            used += minutes
-          }
-        })
-    )
-    return { chosen, used }
-  }, [budget, index, shown, isDone])
-  const visible = useMemo(() => {
-    if (!fitted) return shown
-    return fitted.chosen.map((s, i) =>
-      i === 0 && s.slot !== 'lead'
-        ? {
-            ...s,
-            slot: 'lead' as EditionSlot,
-            why: s.why ?? `Fits your ${budget} min`,
-          }
-        : s
-    )
-  }, [fitted, shown, budget])
-  const inSlot = (slot: EditionSlot) => visible.filter((s) => s.slot === slot)
-
-  // From Discover: one recommended story a day, The Discovery Edition on
-  // Saturdays, and verdicts on trials whose week is up. Only today's edition
-  // carries them, and each keeps its stories once shown so following one
-  // doesn't swap it for another.
+  // From Discover: someone new, and verdicts on trials whose week is up.
+  // Only the latest issue carries them, and it keeps the ones it first showed
+  // so trying one doesn't swap it for another.
   const { data: discover } = useFeedSuggestions()
   const suggestions = useMemo(() => discover?.suggestions ?? [], [discover])
-  const today = index === 0 && edition ? edition.date : undefined
-  const saturday = !!today && isSaturday(today)
-  const [shownIds, setShownIds] = useState<{
+  const [newcomerIds, setNewcomerIds] = useState<{
     date: string
-    recommended?: string
-    issue?: { lead: string; picks: string[]; writers: string[] }
+    ids: string[]
   }>()
   useEffect(() => {
-    if (!today || !discover || shownIds?.date === today) return
-    const recommended = saturday
-      ? undefined
-      : recommendedFor(today, suggestions)
-    const issue = saturday ? discoveryIssue(suggestions) : undefined
-    setShownIds({
-      date: today,
-      recommended: recommended?.id,
-      issue: issue && {
-        lead: issue.lead.id,
-        picks: issue.picks.map((s) => s.id),
-        writers: issue.writers.map((s) => s.id),
-      },
+    if (!latest || !edition || !discover) return
+    if (newcomerIds?.date === edition.date) return
+    setNewcomerIds({
+      date: edition.date,
+      ids: someoneNew(suggestions).map((s) => s.id),
     })
-  }, [today, saturday, discover, suggestions, shownIds])
-  const byId = useCallback(
-    (id: string) => suggestions.find((s) => s.id === id),
-    [suggestions]
-  )
-  const recommended =
-    shownIds?.date === today && shownIds?.recommended
-      ? byId(shownIds.recommended)
-      : undefined
-  const issueLead =
-    shownIds?.date === today && shownIds?.issue
-      ? byId(shownIds.issue.lead)
-      : undefined
-  const issue =
-    issueLead && shownIds?.issue
-      ? {
-          lead: issueLead,
-          picks: shownIds.issue.picks
-            .map(byId)
-            .filter((s): s is NonNullable<typeof s> => !!s),
-          writers: shownIds.issue.writers
-            .map(byId)
-            .filter((s): s is NonNullable<typeof s> => !!s),
-        }
-      : undefined
-  const verdicts = today ? verdictsDue(suggestions) : []
+  }, [latest, edition, discover, suggestions, newcomerIds])
+  const newcomers =
+    latest && newcomerIds && newcomerIds.date === edition?.date
+      ? newcomerIds.ids
+          .map((id) => suggestions.find((s) => s.id === id))
+          .filter((s): s is NonNullable<typeof s> => !!s)
+      : []
+  const verdicts = latest && edition ? verdictsDue(suggestions) : []
 
-  const stories = (edition?.entries ?? []).filter((e) => e.slot !== 'watch')
+  const stories = edition?.entries ?? []
   const doneCount = stories.filter((entry) => {
     const item = items.get(entry.id)
     return skipped.has(entry.id) || (item ? isDone(item) : false)
   }).length
-  const totalMinutes = shown
-    .filter((s) => s.slot !== 'watch')
-    .reduce((sum, s) => sum + (readingMinutes(s.item.wordsCount) ?? 4), 0)
-
-  // Keyboard order: lead, picks, popular, then the short list.
-  const order = useMemo(
-    () =>
-      SLOT_ORDER.flatMap((slot) => visible.filter((s) => s.slot === slot)).map(
-        (s) => s.item
-      ),
-    [visible]
+  const totalMinutes = shown.reduce(
+    (sum, s) => sum + (readingMinutes(s.item.wordsCount) ?? 4),
+    0
   )
-  // Being up to date, and "mark the rest as seen", cover the whole edition,
-  // not just what fits the time chosen.
-  const fullOrder = useMemo(
+
+  // Keyboard order: lead, the rest of the missed stories, then the shelf.
+  const order = useMemo(
     () =>
       SLOT_ORDER.flatMap((slot) => shown.filter((s) => s.slot === slot)).map(
         (s) => s.item
@@ -391,9 +294,15 @@ export function StashEdition(): JSX.Element {
     [router, viewer]
   )
 
-  const refreshItems = useCallback(() => {
-    itemsQuery.refetch()
-  }, [itemsQuery])
+  const openSlug = useCallback(
+    (slug: string) => {
+      const username = viewer?.profile.username
+      if (!username) return
+      window.localStorage.setItem('nav-return', router.asPath)
+      router.push(`/${username}/${slug}`)
+    },
+    [router, viewer]
+  )
 
   const saveSkips = useCallback(
     (skip: string[]) => {
@@ -406,58 +315,53 @@ export function StashEdition(): JSX.Element {
       markItemsSeen(feedIds).catch((error) =>
         console.log('error marking items seen', error)
       )
-      updateEditionState((latest) => ({
-        ...latest,
+      updateEdition((latest) => ({
         editions: latest.editions.map((e) =>
           e.date === edition.date
             ? { ...e, skipped: Array.from(new Set([...e.skipped, ...skip])) }
             : e
         ),
-      }))
-        .then((next) => queryClient.setQueryData(['edition'], next))
-        .catch((error) => console.log('error saving skip', error))
+      })).catch((error) => console.log('error saving skip', error))
     },
-    [edition, items, queryClient]
+    [edition, items, updateEdition]
   )
 
   const later = useCallback(
     async (item: LibraryItemNode) => {
       await moveItem(item.id, item.slug)
-      refreshItems()
+      itemsQuery.refetch()
     },
-    [moveItem, refreshItems]
+    [moveItem, itemsQuery]
   )
 
-  const setHour = useCallback(
-    (hour: number) => {
-      updateEditionState((latest) => ({ ...latest, hour }))
-        .then((next) =>
-          queryClient.setQueryData(['edition'], (current?: EditionState) =>
-            current ? { ...current, hour: next.hour } : next
-          )
-        )
-        .catch((error) => console.log('error saving edition hour', error))
-    },
-    [queryClient]
-  )
-
-  const captureRef = useRef<HTMLInputElement>(null)
-  const [capture, setCapture] = useState('')
-  const [captureOpen, setCaptureOpen] = useState(false)
-  const submitCapture = useCallback(
-    async (event: React.FormEvent) => {
-      event.preventDefault()
-      const value = capture.trim()
-      if (!value) return
-      if (isUrl(value)) {
-        setCapture('')
-        await addUrl(value, timeZone, locale)
-      } else {
-        router.push(`/l/search?q=${encodeURIComponent(value)}`)
-      }
-    },
-    [capture, addUrl, router]
-  )
+  // Marking the issue read puts The Edition away until the next one.
+  const isRead = !!edition && !!state?.read.includes(edition.date)
+  const markRead = useCallback(async () => {
+    if (!edition) return
+    const date = edition.date
+    try {
+      await updateEdition((s) => ({
+        read: withDate(s.read, date),
+        opened: withDate(s.opened, date),
+      }))
+      showUndoToast(
+        'The Edition is put away until the next issue',
+        async () => {
+          try {
+            await updateEdition((s) => ({
+              read: s.read.filter((d) => d !== date),
+            }))
+            router.push('/l/edition')
+          } catch {
+            showErrorToast('Could not bring it back')
+          }
+        }
+      )
+      router.push('/l/home')
+    } catch {
+      showErrorToast('Could not mark the issue read')
+    }
+  }, [edition, updateEdition, router])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -474,10 +378,6 @@ export function StashEdition(): JSX.Element {
       const position = order.findIndex((item) => item.id === selectedId)
       const current = order[position] ?? (selectedId ? undefined : order[0])
       switch (event.key) {
-        case '/':
-          event.preventDefault()
-          captureRef.current?.focus()
-          break
         case 'j':
           event.preventDefault()
           setSelectedId(order[Math.min(order.length - 1, position + 1)]?.id)
@@ -520,16 +420,16 @@ export function StashEdition(): JSX.Element {
   const timeOf = (item: LibraryItemNode) =>
     formatMinutes(readingMinutes(item.wordsCount))
 
-  const sourceLine = (entry: Shown, label?: string) => (
+  const sourceLine = (item: LibraryItemNode, label?: string) => (
     <Source>
       <SiteIcon
-        src={iconOf(entry.item)}
-        fallbackSrc={faviconFor(entry.item.originalArticleUrl, entry.item.url)}
-        name={sourceOf(entry.item)}
+        src={iconOf(item)}
+        fallbackSrc={faviconFor(item.originalArticleUrl, item.url)}
+        name={sourceOf(item)}
         size={14}
       />
-      <span>{sourceOf(entry.item)}</span>
-      {(label || entry.why) && <b>· {label ?? entry.why}</b>}
+      <span>{sourceOf(item)}</span>
+      {label && <b>· {label}</b>}
     </Source>
   )
 
@@ -594,11 +494,19 @@ export function StashEdition(): JSX.Element {
   )
 
   const lead = inSlot('lead')[0]
-  const picks = inSlot('pick')
-  const popular = inSlot('popular')
-  const briefs = inSlot('brief')
-  const watch = inSlot('watch')
-  const remaining = fullOrder.filter((item) => !isDone(item))
+  const missed = inSlot('missed')
+  const shelf = inSlot('shelf')
+  const quotes = edition?.quotes ?? []
+  const week = edition?.week
+  const now = new Date()
+  const next = state ? nextIssueAt(now, state) : undefined
+  const nextLabel = next
+    ? `${next.toLocaleDateString(undefined, {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      })} at ${hourLabel(next.getHours())}`
+    : undefined
 
   const making =
     stateQuery.isPending || (ids.length > 0 && itemsQuery.isPending)
@@ -618,13 +526,19 @@ export function StashEdition(): JSX.Element {
                   <ShortDate>{shortDate(edition.date)}</ShortDate>
                   <br />
                   No. {edition.number}
-                  <LongDate> · made at {hourLabel(state.hour)}</LongDate>
+                  <LongDate>
+                    {' · Week of '}
+                    {weekStart(edition.date).toLocaleDateString(undefined, {
+                      day: 'numeric',
+                      month: 'long',
+                    })}
+                  </LongDate>
                 </span>
                 {state.editions.length > 1 && (
                   <Arrows>
                     <button
                       type="button"
-                      aria-label="Earlier edition"
+                      aria-label="Earlier issue"
                       disabled={index >= state.editions.length - 1}
                       onClick={() => {
                         setIndex(index + 1)
@@ -635,7 +549,7 @@ export function StashEdition(): JSX.Element {
                     </button>
                     <button
                       type="button"
-                      aria-label="Later edition"
+                      aria-label="Later issue"
                       disabled={index === 0}
                       onClick={() => {
                         setIndex(index - 1)
@@ -648,36 +562,18 @@ export function StashEdition(): JSX.Element {
                 )}
               </MastDate>
             )}
-            <AddButton
-              type="button"
-              aria-label="Save a link or search"
-              aria-expanded={captureOpen}
-              // Keep the field focused so this tap can close it.
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => {
-                if (captureOpen) {
-                  setCaptureOpen(false)
-                  captureRef.current?.blur()
-                  return
-                }
-                // Show and focus in the same tap so iOS raises the keyboard.
-                flushSync(() => setCaptureOpen(true))
-                captureRef.current?.focus()
-              }}
-            >
-              <Plus size={18} weight="bold" />
-            </AddButton>
           </MastTop>
           {edition && stories.length > 0 && (
             <MastSub>
               <span>
-                {index === 0 ? '' : 'An earlier edition. '}
-                {edition.considered} new from {edition.sources}{' '}
-                {edition.sources === 1 ? 'source' : 'sources'}, picked down to{' '}
-                {stories.length} {stories.length === 1 ? 'story' : 'stories'}
-                {recommended ? ', plus one recommended for you' : ''}.
+                {latest ? '' : 'An earlier issue. '}
+                Picked from {edition.considered}{' '}
+                {edition.considered === 1 ? 'story' : 'stories'} you didn&apos;t
+                get to, and your shelf. {stories.length}{' '}
+                {stories.length === 1 ? 'story' : 'stories'}
                 {totalMinutes > 0 &&
-                  ` About ${formatMinutes(totalMinutes)} of reading.`}
+                  `, about ${formatMinutes(totalMinutes)} of reading`}
+                .
               </span>
               <Ticks aria-label={`${doneCount} of ${stories.length} done`}>
                 <span>
@@ -689,86 +585,11 @@ export function StashEdition(): JSX.Element {
               </Ticks>
             </MastSub>
           )}
-          {index === 0 && edition && stories.length > 0 && (
-            <TimeRow>
-              <Chips role="group" aria-label="Time you have">
-                <span>I have</span>
-                {BUDGETS.map((minutes) => (
-                  <Chip
-                    key={minutes}
-                    type="button"
-                    aria-pressed={budget === minutes}
-                    onClick={() => {
-                      setBudget(budget === minutes ? null : minutes)
-                      setSelectedId(undefined)
-                    }}
-                  >
-                    {minutes} min
-                  </Chip>
-                ))}
-                <Chip
-                  type="button"
-                  aria-pressed={budget === null}
-                  onClick={() => setBudget(null)}
-                >
-                  All of it
-                </Chip>
-              </Chips>
-              {fitted && (
-                <Fit aria-live="polite">
-                  {fitted.chosen.length === 0
-                    ? 'NOTHING LEFT FITS'
-                    : `${fitted.chosen.length} ${
-                        fitted.chosen.length === 1 ? 'STORY' : 'STORIES'
-                      } · ${fitted.used} OF ${budget} MIN`}
-                  <i aria-hidden="true">
-                    <b
-                      style={{
-                        width: `${Math.min(
-                          100,
-                          Math.round((fitted.used / (budget ?? 1)) * 100)
-                        )}%`,
-                      }}
-                    />
-                  </i>
-                </Fit>
-              )}
-            </TimeRow>
-          )}
         </Mast>
 
-        <CaptureForm
-          onSubmit={submitCapture}
-          role="search"
-          data-open={captureOpen}
-        >
-          <Plus size={15} aria-hidden="true" />
-          <input
-            ref={captureRef}
-            type="text"
-            inputMode="url"
-            autoComplete="off"
-            enterKeyHint="go"
-            aria-label="Paste a link to save it, or search your library"
-            placeholder="Paste a link to save it, or search your library"
-            value={capture}
-            onChange={(event) => setCapture(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                setCapture('')
-                event.currentTarget.blur()
-              }
-            }}
-            onBlur={() => {
-              if (!capture.trim()) setCaptureOpen(false)
-            }}
-          />
-          <Kbd>/</Kbd>
-        </CaptureForm>
-
         {making && (
-          <Making aria-label="Making today's edition">
-            <Meta>Making today&apos;s edition…</Meta>
+          <Making aria-label="Making this week's issue">
+            <Meta>Making this week&apos;s issue…</Meta>
             <i style={{ height: '240px' }} />
             <i style={{ width: '70%' }} />
             <i style={{ width: '45%' }} />
@@ -777,7 +598,7 @@ export function StashEdition(): JSX.Element {
 
         {stateQuery.isError && (
           <Notice>
-            Stash couldn&apos;t make today&apos;s edition.
+            Stash couldn&apos;t make this week&apos;s issue.
             <Btn type="button" onClick={() => stateQuery.refetch()}>
               Try again
             </Btn>
@@ -786,17 +607,24 @@ export function StashEdition(): JSX.Element {
 
         {itemsQuery.isError && (
           <Notice>
-            Stash couldn&apos;t load this edition&apos;s stories.
+            Stash couldn&apos;t load this issue&apos;s stories.
             <Btn type="button" onClick={() => itemsQuery.refetch()}>
               Try again
             </Btn>
           </Notice>
         )}
 
-        {!making && edition && stories.length === 0 && (
+        {!making && state && !edition && (
           <Notice>
-            Nothing new since the last edition. Follow a few feeds or save some
-            articles, and the next edition will have them.
+            The first weekly Edition comes out {nextLabel}. It brings the
+            week&apos;s best stories you missed, old saves worth another look,
+            your highlights and your week in reading.
+          </Notice>
+        )}
+
+        {!making && edition && shown.length === 0 && quotes.length === 0 && (
+          <Notice>
+            A quiet week: nothing you missed and nothing waiting on your shelf.
           </Notice>
         )}
 
@@ -813,7 +641,11 @@ export function StashEdition(): JSX.Element {
                 onClick={() => open(lead.item)}
               />
               <LeadCopy>
-                {sourceLine(lead, lead.why ?? 'Lead story')}
+                <Kicker>The week&apos;s best you missed</Kicker>
+                {sourceLine(
+                  lead.item,
+                  weekday(lead.item.publishedAt || lead.item.savedAt)
+                )}
                 <LeadTitle
                   type="button"
                   data-morph-title={lead.item.id}
@@ -823,13 +655,7 @@ export function StashEdition(): JSX.Element {
                 </LeadTitle>
                 {lead.item.description && <Dek>{lead.item.description}</Dek>}
                 <Meta>
-                  {[
-                    timeOf(lead.item),
-                    isFeedItem(lead.item) ? 'From your feeds' : 'Saved by you',
-                    shortTimeAgo(lead.item.publishedAt || lead.item.savedAt),
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
+                  {[timeOf(lead.item), lead.why].filter(Boolean).join(' · ')}
                 </Meta>
                 <Actions>
                   <Btn primary type="button" onClick={() => open(lead.item)}>
@@ -849,14 +675,14 @@ export function StashEdition(): JSX.Element {
           </ContextMenu>
         )}
 
-        {!making && picks.length > 0 && (
-          <section aria-label="Picked for you">
+        {!making && missed.length > 0 && (
+          <section aria-label="Also missed this week">
             <SectionHead>
-              <h2>Picked for you</h2>
-              <span>CLOSEST TO WHAT YOU READ</span>
+              <h2>Also missed this week</h2>
+              <span>FROM YOUR FEEDS, UNOPENED</span>
             </SectionHead>
             <Picks>
-              {picks.map((entry) => (
+              {missed.map((entry) => (
                 <ContextMenu key={entry.id} entries={menuFor(entry.item)}>
                   <Story
                     data-story={entry.id}
@@ -868,7 +694,7 @@ export function StashEdition(): JSX.Element {
                       fallback={fallbackFor(entry.item)}
                       onClick={() => open(entry.item)}
                     />
-                    {sourceLine(entry)}
+                    {sourceLine(entry.item, entry.why)}
                     <StoryTitle
                       type="button"
                       data-morph-title={entry.item.id}
@@ -881,7 +707,13 @@ export function StashEdition(): JSX.Element {
                     )}
                     <StoryFoot>
                       <Meta>
-                        {doneMark(entry.item)} {timeOf(entry.item)}
+                        {doneMark(entry.item)}{' '}
+                        {[
+                          timeOf(entry.item),
+                          weekday(entry.item.publishedAt || entry.item.savedAt),
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </Meta>
                       {quietActions(entry.item)}
                     </StoryFoot>
@@ -892,221 +724,193 @@ export function StashEdition(): JSX.Element {
           </section>
         )}
 
-        {!making &&
-          (briefs.length > 0 ||
-            popular.length > 0 ||
-            verdicts.length > 0 ||
-            inProgress.length > 0 ||
-            watch.length > 0) && (
-            <Lower>
+        {!making && (shelf.length > 0 || quotes.length > 0) && (
+          <Lower>
+            {shelf.length > 0 && (
               <Stack>
-                {popular.length > 0 && (
-                  <section aria-label="Popular">
-                    <SectionHead>
-                      <h2>Popular</h2>
-                      <span>MOST TALKED ABOUT</span>
-                    </SectionHead>
-                    <Brief>{popular.map((entry) => briefRow(entry))}</Brief>
-                  </section>
-                )}
-                {briefs.length > 0 && (
-                  <section aria-label="Also today">
-                    <SectionHead>
-                      <h2>Also today</h2>
-                      <span>
-                        {briefs.length} MORE{' '}
-                        {briefs.length === 1 ? 'STORY' : 'STORIES'}
-                      </span>
-                    </SectionHead>
-                    <Brief>{briefs.map((entry) => briefRow(entry))}</Brief>
-                  </section>
-                )}
-              </Stack>
-              <Stack>
-                {verdicts.length > 0 && (
-                  <section aria-label="Trials">
-                    <SectionHead>
-                      <h2>
-                        {verdicts.length > 1 ? 'Your trials' : 'Your trial'}
-                      </h2>
-                      <span>A WEEK IN YOUR FEEDS</span>
-                    </SectionHead>
-                    <Verdicts>
-                      {verdicts.map((s) => (
-                        <TrialVerdict key={s.id} s={s} />
-                      ))}
-                    </Verdicts>
-                  </section>
-                )}
-                {inProgress.length > 0 && (
-                  <section aria-label="Pick up again">
-                    <SectionHead>
-                      <h2>Pick up again</h2>
-                      <span>IN PROGRESS</span>
-                    </SectionHead>
-                    {inProgress.map((item) => {
-                      const left = minutesLeft(
-                        item.wordsCount,
-                        item.readingProgressPercent
-                      )
-                      return (
-                        <Resume
-                          key={item.id}
-                          href={
-                            viewer
-                              ? `/${viewer.profile.username}/${item.slug}`
-                              : undefined
-                          }
-                          onClick={(event) => {
-                            if (event.metaKey || event.ctrlKey) return
-                            event.preventDefault()
-                            open(item)
-                          }}
+                <section aria-label="From the back of the shelf">
+                  <SectionHead>
+                    <h2>From the back of the shelf</h2>
+                    <span>SAVED, NEVER OPENED</span>
+                  </SectionHead>
+                  <Shelf>
+                    {shelf.map((entry) => (
+                      <ContextMenu key={entry.id} entries={menuFor(entry.item)}>
+                        <ShelfRow
+                          data-story={entry.id}
+                          data-selected={selectedId === entry.id}
+                          data-done={isDone(entry.item)}
                         >
-                          <Thumb
-                            src={item.headerImage ?? item.image}
-                            fallback={fallbackFor(item, 22)}
+                          <ShelfThumb
+                            src={entry.item.headerImage ?? entry.item.image}
+                            fallback={fallbackFor(entry.item, 22)}
+                            onClick={() => open(entry.item)}
                           />
-                          <span>
-                            <strong data-morph-title={item.id}>
-                              {item.title}
-                            </strong>
-                            <ProgressLine
-                              percent={item.readingProgressPercent}
-                            />
-                            <ResumeMeta>
-                              <span>{sourceOf(item)}</span>
-                              <span>
-                                {left !== undefined
-                                  ? `${formatMinutes(left)} left`
-                                  : `${Math.round(
-                                      item.readingProgressPercent
-                                    )}%`}
-                              </span>
-                            </ResumeMeta>
-                          </span>
-                        </Resume>
-                      )
-                    })}
-                  </section>
-                )}
-                {watch.length > 0 && (
-                  <section aria-label="Watch">
-                    <SectionHead>
-                      <h2>Watch</h2>
-                      <span>
-                        {watch.length} NEW{' '}
-                        {watch.length === 1 ? 'VIDEO' : 'VIDEOS'}
-                      </span>
-                    </SectionHead>
-                    <Videos>
-                      {watch.map((entry) => (
-                        <Video
-                          key={entry.id}
-                          type="button"
-                          onClick={() => open(entry.item)}
-                        >
-                          <CoverImage
-                            src={entry.item.image}
-                            fallback={fallbackFor(entry.item)}
-                          />
-                          <strong data-morph-title={entry.item.id}>
-                            {entry.item.title}
-                          </strong>
-                          <Meta>{sourceOf(entry.item)}</Meta>
-                        </Video>
-                      ))}
-                    </Videos>
-                  </section>
-                )}
+                          <ShelfCopy>
+                            <Kicker>
+                              {savedAgo(
+                                entry.item.savedAt || entry.item.createdAt,
+                                now
+                              )}
+                            </Kicker>
+                            <ShelfTitle
+                              type="button"
+                              data-morph-title={entry.item.id}
+                              onClick={() => open(entry.item)}
+                            >
+                              {entry.item.title}
+                            </ShelfTitle>
+                            <ShelfFoot>
+                              <Meta>
+                                {doneMark(entry.item)}{' '}
+                                {[sourceOf(entry.item), timeOf(entry.item)]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </Meta>
+                              {quietActions(entry.item)}
+                            </ShelfFoot>
+                          </ShelfCopy>
+                        </ShelfRow>
+                      </ContextMenu>
+                    ))}
+                  </Shelf>
+                </section>
               </Stack>
-            </Lower>
-          )}
-
-        {!making && recommended && <RecommendedBand suggestion={recommended} />}
-
-        {!making && edition && state && (
-          <Colophon>
-            <p>
-              {stories.length > 0 &&
-              itemsQuery.isSuccess &&
-              remaining.length === 0
-                ? "You're up to date. "
-                : index === 0
-                ? "That's today's edition. "
-                : ''}
-              {issue
-                ? 'The Discovery Edition follows.'
-                : `The next one is made at ${hourLabel(state.hour)}.`}
-            </p>
-            <label>
-              New edition each day at
-              <select
-                id="edition-hour"
-                value={state.hour}
-                onChange={(event) => setHour(Number(event.target.value))}
-              >
-                {[4, 5, 6, 7, 8, 9, 10].map((hour) => (
-                  <option key={hour} value={hour}>
-                    {hourLabel(hour)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {remaining.length > 0 && (
-              <Btn
-                type="button"
-                onClick={() => saveSkips(remaining.map((item) => item.id))}
-              >
-                Mark the rest as seen
-              </Btn>
             )}
-          </Colophon>
+            {quotes.length > 0 && (
+              <Stack>
+                <section aria-label="Your highlights">
+                  <SectionHead>
+                    <h2>Your highlights</h2>
+                    <span>BROUGHT BACK</span>
+                  </SectionHead>
+                  <Quotes>
+                    {quotes.map((quote) => (
+                      <Quote key={quote.id}>
+                        <blockquote>{quote.quote}</blockquote>
+                        <figcaption>
+                          <a
+                            href={
+                              viewer
+                                ? `/${viewer.profile.username}/${quote.slug}`
+                                : undefined
+                            }
+                            onClick={(event) => {
+                              if (event.metaKey || event.ctrlKey) return
+                              event.preventDefault()
+                              openSlug(quote.slug)
+                            }}
+                          >
+                            {[
+                              quote.source,
+                              quote.title,
+                              dayOf(quote.createdAt.slice(0, 10), {
+                                month: 'long',
+                              }),
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </a>
+                        </figcaption>
+                      </Quote>
+                    ))}
+                  </Quotes>
+                </section>
+              </Stack>
+            )}
+          </Lower>
         )}
 
-        {!making && issue && edition && state && (
-          <DiscoveryEdition
-            date={edition.date}
-            hour={state.hour}
-            issue={issue}
-            articles={discover?.articlesConsidered ?? 0}
-            feeds={suggestions.filter((s) => s.status === 'NEW').length}
-            following={
-              suggestions.filter((s) => s.status === 'FOLLOWING').length
-            }
-            trying={suggestions.filter((s) => s.status === 'TRIAL')}
-          />
+        {!making && newcomers.length > 0 && (
+          <section aria-label="Someone new">
+            <SectionHead>
+              <h2>Someone new</h2>
+              <span>NOT IN YOUR FEEDS YET</span>
+            </SectionHead>
+            <SomeoneNew suggestions={newcomers} />
+          </section>
+        )}
+
+        {!making && verdicts.length > 0 && (
+          <section aria-label="Trials">
+            <SectionHead>
+              <h2>{verdicts.length > 1 ? 'Your trials' : 'Your trial'}</h2>
+              <span>A WEEK IN YOUR FEEDS</span>
+            </SectionHead>
+            <Verdicts>
+              {verdicts.map((s) => (
+                <TrialVerdict key={s.id} s={s} />
+              ))}
+            </Verdicts>
+          </section>
+        )}
+
+        {!making && edition && week && (
+          <section aria-label="Your week in reading">
+            <SectionHead css={{ borderTop: 'none', paddingTop: 0 }}>
+              <h2>Your week in reading</h2>
+              <span>
+                {weekStart(edition.date).toLocaleDateString(undefined, {
+                  day: 'numeric',
+                  month: 'short',
+                })}
+                {' – '}
+                {dayOf(edition.date, { day: 'numeric', month: 'short' })}
+              </span>
+            </SectionHead>
+            <Stats>
+              <div>
+                <dt>
+                  {week.finished === 1
+                    ? 'Article finished'
+                    : 'Articles finished'}
+                </dt>
+                <dd>{week.finished}</dd>
+              </div>
+              <div>
+                <dt>Time reading</dt>
+                <dd>{formatMinutes(week.minutes) ?? '0 min'}</dd>
+              </div>
+              <div>
+                <dt>Highlights</dt>
+                <dd>{week.highlights}</dd>
+              </div>
+              {week.topSource && (
+                <div>
+                  <dt>Most read</dt>
+                  <dd title={week.topSource}>{week.topSource}</dd>
+                </div>
+              )}
+              {week.longest && (
+                <div>
+                  <dt>Longest read</dt>
+                  <dd title={week.longest.title}>
+                    {formatMinutes(week.longest.minutes)}
+                  </dd>
+                </div>
+              )}
+            </Stats>
+          </section>
+        )}
+
+        {!making && edition && (
+          <Colophon>
+            <p>
+              {latest ? "That's this week's Edition. " : ''}
+              {nextLabel && `The next one comes out ${nextLabel}.`}
+            </p>
+            {latest &&
+              (isRead ? (
+                <Meta>Marked read</Meta>
+              ) : (
+                <Btn primary type="button" onClick={markRead}>
+                  <Check size={14} weight="bold" />
+                  Mark as read
+                </Btn>
+              ))}
+          </Colophon>
         )}
       </Column>
     </Page>
   )
-
-  function briefRow(entry: Shown) {
-    return (
-      <ContextMenu key={entry.id} entries={menuFor(entry.item)}>
-        <BriefRow
-          data-story={entry.id}
-          data-selected={selectedId === entry.id}
-          data-done={isDone(entry.item)}
-        >
-          <div style={{ minWidth: 0 }}>
-            {sourceLine(entry)}
-            <BriefTitle
-              type="button"
-              data-morph-title={entry.item.id}
-              onClick={() => open(entry.item)}
-            >
-              {entry.item.title}
-            </BriefTitle>
-          </div>
-          <BriefEnd>
-            <Meta>
-              {doneMark(entry.item)} {timeOf(entry.item)}
-            </Meta>
-            {quietActions(entry.item)}
-          </BriefEnd>
-        </BriefRow>
-      </ContextMenu>
-    )
-  }
 }

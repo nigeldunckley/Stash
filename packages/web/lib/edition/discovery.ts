@@ -4,24 +4,19 @@ import {
   isStarter,
 } from '../networking/feedSuggestions'
 
-// What The Edition borrows from Discover: one story a day from a feed you
-// don't follow yet, a whole Discovery Edition on Saturdays, and a verdict
-// when a week's trial is up.
+// What The Edition borrows from Discover: writers and sites you don't follow
+// yet, and a verdict when a week's trial is up.
 
-// A suggestion has to be at least this good to be recommended on its own.
-const RECOMMEND_FLOOR = 0.45
-// How many days after a trial ends its verdict is still asked for. A trial
-// you never answer is kept.
-const VERDICT_DAYS = 3
+// A suggestion has to be at least this good to be shown on its own.
+const SOMEONE_NEW_FLOOR = 0.45
+// How many days after a trial ends its verdict is still asked for. An issue
+// comes out once a week, so a whole week. A trial you never answer is kept.
+const VERDICT_DAYS = 7
 
 const DAY = 86_400_000
 
 const dayNumber = (date: string) =>
   Math.floor(new Date(`${date}T12:00:00`).getTime() / DAY)
-
-// Saturday, for an edition's local yyyy-mm-dd date.
-export const isSaturday = (date: string): boolean =>
-  new Date(`${date}T12:00:00`).getDay() == 6
 
 // The Edition is for reading, and for what your own reading led to, so
 // channels and starting points stay on Discover.
@@ -32,43 +27,24 @@ const withStory = (s: FeedSuggestion) =>
   !isChannel(s) &&
   !isStarter(s)
 
-// The day's "Recommended for you": one of the few strongest suggestions with
-// a story to show, turning daily so the same one doesn't sit there all week.
-export const recommendedFor = (
-  date: string,
-  suggestions: FeedSuggestion[]
-): FeedSuggestion | undefined => {
-  const strong = suggestions
-    .filter((s) => withStory(s) && s.score >= RECOMMEND_FLOOR)
+// "Someone new": the strongest suggestions with a story to show, one of
+// them a writer you keep finishing when there is one.
+export const someoneNew = (
+  suggestions: FeedSuggestion[],
+  count = 2
+): FeedSuggestion[] => {
+  const ranked = suggestions
+    .filter((s) => withStory(s) && s.score >= SOMEONE_NEW_FLOOR)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 3)
-  if (!strong.length) return undefined
-  return strong[dayNumber(date) % strong.length]
-}
-
-// The Discovery Edition's stories: a lead, the feeds your reading led to,
-// and the writers you keep finishing.
-export type DiscoveryIssue = {
-  lead: FeedSuggestion
-  picks: FeedSuggestion[]
-  writers: FeedSuggestion[]
-}
-
-export const discoveryIssue = (
-  suggestions: FeedSuggestion[]
-): DiscoveryIssue | undefined => {
-  const ranked = suggestions.filter(withStory).sort((a, b) => b.score - a.score)
-  const [lead, ...rest] = ranked
-  if (!lead) return undefined
-  const byWriter = (s: FeedSuggestion) => s.reasons[0]?.kind == 'writer'
-  return {
-    lead,
-    picks: rest.filter((s) => !byWriter(s)).slice(0, 3),
-    writers: rest.filter(byWriter).slice(0, 3),
+  const writer = ranked.find((s) => s.reasons[0]?.kind == 'writer')
+  const picks = ranked.slice(0, count)
+  if (writer && !picks.includes(writer) && picks.length == count) {
+    picks[count - 1] = writer
   }
+  return picks
 }
 
-// Week numbers count Saturdays from the first Discovery Edition.
+// Issue numbers count weeks from the first weekly Edition.
 const FIRST_ISSUE = '2026-10-17'
 export const issueNumber = (date: string): number =>
   Math.max(1, Math.floor((dayNumber(date) - dayNumber(FIRST_ISSUE)) / 7) + 1)
