@@ -17,6 +17,7 @@
 import { State } from '../networking/fragments/articleFragment'
 import type { LibraryItemNode } from '../networking/library_items/useLibraryItems'
 import { readingMinutes } from '../readingTime'
+import { weekStart } from './weekly'
 
 export type EditionSlot = 'lead' | 'missed' | 'shelf'
 
@@ -407,10 +408,13 @@ export const weekStats = (
   read: LibraryItemNode[],
   highlights: HighlightInput[],
   since: Date,
+  until: Date,
   sourceName: (item: LibraryItemNode) => string
 ): WeekStats => {
   const inWeek = (date?: string) =>
-    !!date && Date.parse(date) >= since.getTime()
+    !!date &&
+    Date.parse(date) >= since.getTime() &&
+    Date.parse(date) < until.getTime()
   const opened = read.filter((item) => inWeek(item.readAt))
   const finished = opened.filter(
     (item) => (item.readingProgressPercent ?? 0) >= 90
@@ -451,6 +455,9 @@ export const buildEdition = (input: BuildInput): Edition => {
   const { now, skipped, featured } = input
   const profile = learnProfile(input.history, skipped)
   const dayAgo = now.getTime() - DAY_MS
+  // The week the issue covers: the seven days up to the start of its date.
+  const since = weekStart(input.date)
+  const until = new Date(since.getTime() + 7 * DAY_MS)
 
   const untouched = (item: LibraryItemNode) =>
     !featured.has(item.id) &&
@@ -466,6 +473,7 @@ export const buildEdition = (input: BuildInput): Edition => {
       untouched(item) &&
       item.folder === 'following' &&
       item.pageType !== 'VIDEO' &&
+      Date.parse(item.savedAt || item.createdAt) >= since.getTime() &&
       Date.parse(item.publishedAt || item.savedAt || item.createdAt) < dayAgo
   )
   const scored = scoreItems(missedPool, profile, input)
@@ -570,7 +578,8 @@ export const buildEdition = (input: BuildInput): Edition => {
     week: weekStats(
       input.read,
       input.highlights,
-      new Date(now.getTime() - 7 * DAY_MS),
+      since,
+      until,
       input.sourceName
     ),
     considered: missedPool.length,
