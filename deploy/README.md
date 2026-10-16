@@ -100,6 +100,17 @@ docker exec -i reader-postgres pg_restore -U postgres -d omnivore --clean --if-e
 docker compose up -d
 ```
 
+## Forgotten password
+
+Stash doesn't send email, so reset a password on the server instead:
+
+```bash
+cd /opt/stash/deploy && sudo ./install.sh reset-password
+```
+
+It lists the accounts, asks which email to reset, then asks for the new
+password twice (nothing shows as you type).
+
 ## Useful commands
 
 ```bash

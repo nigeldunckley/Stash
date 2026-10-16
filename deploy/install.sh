@@ -6,6 +6,7 @@
 #   sudo ./install.sh proxy [port]         run behind an existing web server
 #   sudo ./install.sh autoupdate [off]     update by itself after each merge
 #   sudo ./install.sh backup [now|off]     back up every night (on by default)
+#   sudo ./install.sh reset-password       choose a new password for an account
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -171,7 +172,50 @@ ensure_backup() {
   fi
 }
 
+reset_password() {
+  local email pw pw2 hash found
+  sql() { compose exec -T postgres psql -U postgres -d omnivore -qtA "$@"; }
+
+  echo "Accounts on this server:"
+  sql -c "select email from omnivore.user where status <> 'DELETED' order by created_at" | sed 's/^/  /'
+  read -rp "Email of the account to reset: " email
+  found=$(printf "select count(*) from omnivore.user where lower(email) = lower(:'e');" | sql -v e="$email")
+  if [ "$found" != "1" ]; then
+    echo "No account with that email." >&2
+    exit 1
+  fi
+
+  read -rsp "New password (nothing shows as you type): " pw; echo
+  read -rsp "Same password again: " pw2; echo
+  if [ "$pw" != "$pw2" ]; then
+    echo "The two passwords didn't match. Nothing was changed." >&2
+    exit 1
+  fi
+  if [ "${#pw}" -lt 8 ]; then
+    echo "Use at least 8 characters. Nothing was changed." >&2
+    exit 1
+  fi
+
+  # Hash with the same bcrypt library the API uses. The password goes in on
+  # stdin so it never shows up in the process list or shell history.
+  hash=$(printf '%s' "$pw" | compose exec -T -w /app/packages/api api node -e \
+    "let p='';process.stdin.on('data',d=>p+=d).on('end',()=>require('bcryptjs').hash(p,10).then(h=>console.log(h)))")
+  unset pw pw2
+  case "$hash" in
+    '$2'*) ;;
+    *) echo "Couldn't set the password. Is Stash running?" >&2; exit 1 ;;
+  esac
+
+  # Same change the app's own reset-password flow makes.
+  printf "update omnivore.user set password = :'h', source = 'EMAIL' where lower(email) = lower(:'e');" |
+    sql -v h="$hash" -v e="$email" >/dev/null
+  echo "Done. Sign in at https://$(grep '^DOMAIN=' .env | cut -d= -f2) with your new password."
+}
+
 case "${1:-}" in
+  reset-password)
+    reset_password
+    ;;
   backup)
     case "${2:-}" in
       now) ./backup.sh ;;
