@@ -85,6 +85,7 @@ import {
   useWatchCollections,
 } from '../../../lib/watch/collections'
 import { markVideoWatched } from '../../../lib/networking/subscriptions/youtube'
+import { useOpenVideo } from '../../../lib/watch/player'
 import { WatchAddBox } from '../watch/WatchAddBox'
 import { AddFeedPanel } from './AddFeedPanel'
 import { VideoCard, VideoGrid, VideoGroup, VideoGroups } from './VideoCard'
@@ -1107,8 +1108,15 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     return () => watcher.disconnect()
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
+  // In Watch, opening a video goes to the player page; Space still peeks.
+  const openVideo = useOpenVideo()
   const open = useCallback(
     (item: LibraryItemNode) => {
+      if (watching) {
+        markSeen([item.id], true)
+        openVideo(item)
+        return
+      }
       const username = viewer?.profile.username
       if (!username) {
         return
@@ -1117,7 +1125,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
       window.localStorage.setItem('nav-return', router.asPath)
       navigateWithMorph(router, `/${username}/${item.slug}`, item.id)
     },
-    [router, viewer, markSeen]
+    [router, viewer, markSeen, watching, openVideo]
   )
 
   // The Library, Home and the source counts need to hear about saves; the
@@ -1520,9 +1528,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
             saved={saved.has(item.id)}
             queued={later}
             selected={peekItem ? item.id == peekItem.id : item.id == focusId}
-            onOpen={() =>
-              item.id == peekItem?.id ? closePeek() : openPeek(item)
-            }
+            onOpen={() => open(item)}
             onFocus={() => setFocusId(item.id)}
             onSave={() => save(item)}
             onArchive={() => archive(item)}
@@ -1633,7 +1639,12 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     const watched = (item.readingProgressPercent ?? 0) > 98
     return [
       {
-        label: item.id == peekItem?.id ? 'Close peek' : 'Play',
+        label: 'Play',
+        shortcut: '↵',
+        onSelect: () => open(item),
+      },
+      {
+        label: item.id == peekItem?.id ? 'Close peek' : 'Peek',
         shortcut: 'Space',
         onSelect: () =>
           item.id == peekItem?.id ? closePeek() : openPeek(item),
@@ -1757,7 +1768,11 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
               muted={itemSeen}
               selected={peekItem ? item.id == peekItem.id : item.id == focusId}
               onOpen={() =>
-                item.id == peekItem?.id ? closePeek() : openPeek(item)
+                watching
+                  ? open(item)
+                  : item.id == peekItem?.id
+                  ? closePeek()
+                  : openPeek(item)
               }
               onFocus={() => setFocusId(item.id)}
               actions={
@@ -2018,7 +2033,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
               now={now}
               sourceName={sourceName}
               sourceIcon={sourceIcon}
-              onOpen={openPeek}
+              onOpen={open}
               onSave={save}
               onArchive={archive}
               onOpenOriginal={openOriginal}

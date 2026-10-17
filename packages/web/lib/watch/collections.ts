@@ -77,19 +77,30 @@ const readFields = async (): Promise<Fields> => {
   return fields && typeof fields === 'object' ? fields : {}
 }
 
-const idsOf = (fields: Fields): string[] => {
-  const ids = fields.watch?.collections
+type ListKey = 'collections' | 'order'
+
+const listOf = (fields: Fields, key: ListKey): string[] => {
+  const ids = (fields.watch as Record<string, unknown> | undefined)?.[key]
   return Array.isArray(ids) ? ids.filter((id) => typeof id === 'string') : []
 }
+const idsOf = (fields: Fields) => listOf(fields, 'collections')
 
-// Changes the saved list of collection ids. Reads the latest copy first so
-// other settings kept in the same place are left as they are.
-const updateIds = async (change: (ids: string[]) => string[]) => {
+// Reads one of Watch's saved lists of ids: the collections, or the order of
+// Watch later.
+export const readWatchList = async (key: ListKey) =>
+  listOf(await readFields(), key)
+
+// Changes one of Watch's saved lists. Reads the latest copy first so other
+// settings kept in the same place are left as they are.
+export const updateWatchList = async (
+  key: ListKey,
+  change: (ids: string[]) => string[]
+) => {
   const fields = await readFields()
-  const ids = change(idsOf(fields))
+  const ids = change(listOf(fields, key))
   const data = (await gqlFetcher(GQL_SET_FIELDS, {
     input: {
-      fields: { ...fields, watch: { ...fields.watch, collections: ids } },
+      fields: { ...fields, watch: { ...fields.watch, [key]: ids } },
     },
   })) as { setUserPersonalization?: { errorCodes?: string[] } }
   if (data.setUserPersonalization?.errorCodes?.length) {
@@ -97,6 +108,9 @@ const updateIds = async (change: (ids: string[]) => string[]) => {
   }
   return ids
 }
+
+const updateIds = (change: (ids: string[]) => string[]) =>
+  updateWatchList('collections', change)
 
 const IDS_KEY = ['watch-collections']
 

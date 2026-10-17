@@ -7,6 +7,8 @@ import { IdProvider } from '@radix-ui/react-id'
 import { ReactNode, useEffect, useState } from 'react'
 import { HydrationBoundary } from '@tanstack/react-query'
 import TopBarProgress from 'react-topbar-progress-indicator'
+import { WatchPlayerProvider } from '../lib/watch/player'
+import { MiniPlayer } from '../components/templates/watch/MiniPlayer'
 import { KBarProvider } from 'kbar'
 import { CommandBar } from '../components/elements/CommandBar'
 import { GoogleReCaptchaProvider } from '@google-recaptcha/react'
@@ -104,7 +106,12 @@ export function OmnivoreApp({ Component, pageProps }: AppProps): JSX.Element {
         <KBarProvider>
           <CommandBar />
           <IdProvider>
-            <Component {...pageProps} />
+            {/* One video player for the app, so a video keeps playing
+                from page to page. */}
+            <WatchPlayerProvider>
+              <Component {...pageProps} />
+              <MiniPlayer />
+            </WatchPlayerProvider>
           </IdProvider>
         </KBarProvider>
       </PersistQueryClientProvider>

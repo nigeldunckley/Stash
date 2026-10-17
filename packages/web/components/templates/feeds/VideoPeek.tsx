@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { LibraryItemNode } from '../../../lib/networking/library_items/useLibraryItems'
 import { saveVideoPosition } from '../../../lib/networking/subscriptions/youtube'
 import { shortTimeAgo } from '../../../lib/textFormatting'
@@ -11,6 +18,7 @@ import {
 } from '../../../lib/youtube'
 import { reducedMotion } from '../../elements/stash'
 import { SubscribeChannel } from '../watch/SubscribeChannel'
+import { useWatchPlayer } from '../../../lib/watch/player'
 import { motion } from '../../elements/stash/motion'
 import { keyframes, styled } from '../../tokens/stitches.config'
 
@@ -316,6 +324,9 @@ export function PeekVideo(props: {
   }, [videoId, start])
 
   const [player, seek] = usePlayer(frame, videoId, start)
+  // Only one video plays at a time: peeking pauses the main player.
+  const { pause } = useWatchPlayer()
+  useEffect(() => pause(), [pause, videoId])
   const duration = player.duration || knownSeconds || 0
 
   // Ask the player to report its time once it has loaded.
@@ -347,21 +358,6 @@ export function PeekVideo(props: {
     [item.id]
   )
 
-  const chapters = useMemo(
-    () => chaptersFromDescription(item.description),
-    [item.description]
-  )
-  const about = useMemo(
-    () => descriptionWithoutChapters(item.description),
-    [item.description]
-  )
-  const [tab, setTab] = useState<'chapters' | 'about'>(
-    chapters.length ? 'chapters' : 'about'
-  )
-  const current = chapters.reduce(
-    (found, chapter, index) => (player.time >= chapter.start ? index : found),
-    -1
-  )
   const published = item.publishedAt || item.savedAt
 
   return (
@@ -386,59 +382,107 @@ export function PeekVideo(props: {
           {duration > 0 && <span>{formatTimecode(duration)}</span>}
           {published && <span>{shortTimeAgo(published)}</span>}
         </Meta>
-        {chapters.length > 0 && (
-          <Tabs role="tablist" aria-label="Video details">
-            <button
-              role="tab"
-              aria-selected={tab == 'chapters'}
-              onClick={() => setTab('chapters')}
-            >
-              Chapters
-            </button>
-            <button
-              role="tab"
-              aria-selected={tab == 'about'}
-              onClick={() => setTab('about')}
-            >
-              About
-            </button>
-          </Tabs>
-        )}
-        {tab == 'chapters' && chapters.length > 0 ? (
-          <Chapters>
-            {chapters.map((chapter, index) => (
-              <li key={chapter.start}>
-                <Chapter
-                  aria-current={index == current}
-                  onClick={() => seek(chapter.start)}
-                >
-                  <span>{formatTimecode(chapter.start)}</span>
-                  <span>{chapter.title}</span>
-                  {index == current ? (
-                    <Playing paused={!player.playing} aria-hidden="true">
-                      <i />
-                      <i />
-                      <i />
-                    </Playing>
-                  ) : (
-                    <span />
-                  )}
-                </Chapter>
-              </li>
-            ))}
-          </Chapters>
-        ) : (
-          <About css={{ marginTop: chapters.length ? 0 : '14px' }}>
-            {about ? (
-              <DescriptionText text={about} onSeek={seek} />
-            ) : (
-              <span style={{ color: 'inherit', opacity: 0.7 }}>
-                No description.
-              </span>
-            )}
-          </About>
-        )}
+        <VideoTabs
+          item={item}
+          time={player.time}
+          playing={player.playing}
+          onSeek={seek}
+        />
       </Body>
+    </>
+  )
+}
+
+export type ExtraTab = { id: string; label: string; content: ReactNode }
+
+// Chapters and the description under a video, with any extra tabs (such as
+// Up next on a phone) in front. Chapters follow the video as it plays.
+export function VideoTabs(props: {
+  item: LibraryItemNode
+  time: number
+  playing: boolean
+  onSeek: (seconds: number) => void
+  extra?: ExtraTab[]
+  // Tabs that come after Chapters, such as the transcript.
+  after?: ExtraTab[]
+}): JSX.Element {
+  const { item } = props
+  const chapters = useMemo(
+    () => chaptersFromDescription(item.description),
+    [item.description]
+  )
+  const about = useMemo(
+    () => descriptionWithoutChapters(item.description),
+    [item.description]
+  )
+  const tabs = [
+    ...(props.extra ?? []).map((tab) => ({ id: tab.id, label: tab.label })),
+    ...(chapters.length ? [{ id: 'chapters', label: 'Chapters' }] : []),
+    ...(props.after ?? []).map((tab) => ({ id: tab.id, label: tab.label })),
+    { id: 'about', label: 'About' },
+  ]
+  const [chosen, setTab] = useState<string>(tabs[0].id)
+  const tab = tabs.some((t) => t.id == chosen) ? chosen : tabs[0].id
+  const current = chapters.reduce(
+    (found, chapter, index) => (props.time >= chapter.start ? index : found),
+    -1
+  )
+  const extra = [...(props.extra ?? []), ...(props.after ?? [])].find(
+    (t) => t.id == tab
+  )
+
+  return (
+    <>
+      {tabs.length > 1 && (
+        <Tabs role="tablist" aria-label="Video details">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={tab == t.id}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </Tabs>
+      )}
+      {extra ? (
+        extra.content
+      ) : tab == 'chapters' ? (
+        <Chapters>
+          {chapters.map((chapter, index) => (
+            <li key={chapter.start}>
+              <Chapter
+                aria-current={index == current}
+                onClick={() => props.onSeek(chapter.start)}
+              >
+                <span>{formatTimecode(chapter.start)}</span>
+                <span>{chapter.title}</span>
+                {index == current ? (
+                  <Playing paused={!props.playing} aria-hidden="true">
+                    <i />
+                    <i />
+                    <i />
+                  </Playing>
+                ) : (
+                  <span />
+                )}
+              </Chapter>
+            </li>
+          ))}
+        </Chapters>
+      ) : (
+        <About css={{ marginTop: tabs.length > 1 ? 0 : '14px' }}>
+          {about ? (
+            <DescriptionText text={about} onSeek={props.onSeek} />
+          ) : (
+            <span style={{ color: 'inherit', opacity: 0.7 }}>
+              No description.
+            </span>
+          )}
+        </About>
+      )}
     </>
   )
 }

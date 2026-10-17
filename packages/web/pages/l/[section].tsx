@@ -7,6 +7,7 @@ import {
 import { StashEdition } from '../../components/templates/home/StashEdition'
 import { StashHome } from '../../components/templates/home/StashHome'
 import { StashFeeds } from '../../components/templates/feeds/StashFeeds'
+import { WatchPlayerPage } from '../../components/templates/watch/WatchPlayerPage'
 import { LibraryContainer } from '../../components/templates/library/LibraryContainer'
 import { useMemo } from 'react'
 import { HighlightsContainer } from '../../components/nav-containers/HighlightsContainer'
@@ -70,7 +71,12 @@ export default function Home(): JSX.Element {
       case 'subscriptions':
         return <StashFeeds key={name} mode="read" />
       case 'watch':
-        return <StashFeeds key={name} mode="watch" />
+        // ?v= opens a video on the player page.
+        return typeof router.query.v == 'string' ? (
+          <WatchPlayerPage key="player" id={router.query.v} />
+        ) : (
+          <StashFeeds key={name} mode="watch" />
+        )
       case 'search':
         return (
           <LibraryContainer
