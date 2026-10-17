@@ -43,6 +43,10 @@ const moduleExports = {
       destination: '/l/subscriptions',
     })
     rewrites.push({
+      source: '/watch',
+      destination: '/l/watch',
+    })
+    rewrites.push({
       source: '/search',
       destination: '/l/search',
     })
