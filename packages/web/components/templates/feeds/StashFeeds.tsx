@@ -5,6 +5,7 @@ import {
   Bookmark,
   CaretDown,
   Checks,
+  Clock,
   GearSix,
   Play,
   Plus,
@@ -67,6 +68,25 @@ import {
   isYouTubeFeedUrl,
 } from '../../../lib/youtube'
 import { AddChannelPanel } from './AddChannelPanel'
+import { ContinueWatching } from '../watch/ContinueWatching'
+import {
+  CHANNEL_DRAG,
+  CollectionChips,
+  CollectionDot,
+  filterQuery,
+  useWatchFilters,
+  WatchFilterMenu,
+} from '../watch/Collections'
+import {
+  Collection,
+  collectionOfItem,
+  useSetChannelCollection,
+  useSetVideoCollection,
+  useWatchCollections,
+} from '../../../lib/watch/collections'
+import { markVideoWatched } from '../../../lib/networking/subscriptions/youtube'
+import { useOpenVideo } from '../../../lib/watch/player'
+import { WatchAddBox } from '../watch/WatchAddBox'
 import { AddFeedPanel } from './AddFeedPanel'
 import { VideoCard, VideoGrid, VideoGroup, VideoGroups } from './VideoCard'
 import {
@@ -161,6 +181,7 @@ const rail = {
     fontSize: 0,
   },
   '& > button > span:nth-child(3):not(:empty)': { background: '$stAccent' },
+  '& > [data-group]': { display: 'none' },
 }
 
 // Rows saved from the list fold away before they leave it.
@@ -218,6 +239,27 @@ const Source = styled('button', {
   },
 })
 
+// A collection's name above its channels in Watch's channel list. Channels
+// can be dragged onto it.
+const GroupHeading = styled('div', {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  margin: '10px 0 2px',
+  padding: '4px 8px',
+  borderRadius: '$sm',
+  fontFamily: '$mono',
+  fontSize: '$micro',
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+  color: '$stMuted',
+  '&[data-drop="true"]': {
+    background: '$stAccentTint',
+    color: '$stAccentText',
+    boxShadow: 'inset 0 0 0 1px $colors$stAccent',
+  },
+})
+
 const Count = styled('span', {
   fontFamily: '$mono',
   fontSize: '$micro',
@@ -243,6 +285,8 @@ const AllIcon = styled('span', {
 
 const LayoutToggle = styled('div', {
   display: 'flex',
+  // A phone shows one video per row either way.
+  '@smDown': { display: 'none' },
   gap: '2px',
   padding: '2px',
   border: '1px solid $stLine',
@@ -355,7 +399,9 @@ const MobileSources = styled('div', {
   overflowY: 'auto',
 })
 
-type View = 'unseen' | 'all'
+// Watch adds a third view: videos saved to watch later, from the channels
+// or from Save to Stash.
+type View = 'unseen' | 'all' | 'later'
 
 const PEEK_WIDTH_KEY = 'feeds-peek-width'
 const LAYOUT_KEY = 'feeds-watch-layout'
@@ -410,39 +456,31 @@ function SourceCount(props: {
   return <Count unseen>{count > 999 ? '999+' : count}</Count>
 }
 
-// Read and Watch, as the page's title. Each shows its unseen count.
+// The page's title (Feeds or Watch) with its unseen count.
 const Tabs = styled('div', {
   display: 'flex',
   alignItems: 'baseline',
   gap: '22px',
+  flexWrap: 'wrap',
   maxWidth: '1180px',
   margin: '0 auto 18px',
-  '@mdDown': { gap: '18px', marginBottom: '12px' },
+  '@mdDown': { gap: '12px 18px', marginBottom: '12px' },
   variants: {
     wide: { true: { maxWidth: '1680px' } },
   },
 })
 
-const TabButton = styled('button', {
+const TabButton = styled('h1', {
   all: 'unset',
   display: 'inline-flex',
   alignItems: 'baseline',
   gap: '5px',
-  cursor: 'pointer',
   fontFamily: '$inter',
   fontSize: '26px',
   fontWeight: 600,
   lineHeight: 1.15,
   letterSpacing: '-0.028em',
-  color: '$stMuted',
-  transition: `color ${motion.fast}`,
-  '&:hover': { color: '$stInk2' },
-  '&[aria-selected="true"]': { color: '$stInk' },
-  '&:focus-visible': {
-    outline: '2px solid $stAccent',
-    outlineOffset: '3px',
-    borderRadius: '4px',
-  },
+  color: '$stInk',
   '& > sup': {
     position: 'relative',
     top: '-0.55em',
@@ -457,19 +495,10 @@ const TabButton = styled('button', {
   '@mdDown': { fontSize: '30px' },
 })
 
-function TabLabel(props: {
-  tab: Tab
-  label: string
-  current: Tab
-  onSelect: (tab: Tab) => void
-}): JSX.Element {
+function TabLabel(props: { tab: Tab; label: string }): JSX.Element {
   const count = useUnseenCount(props.tab)
   return (
-    <TabButton
-      role="tab"
-      aria-selected={props.current == props.tab}
-      onClick={() => props.onSelect(props.tab)}
-    >
+    <TabButton>
       {props.label}
       {count ? (
         <sup data-unseen="true">{count > 999 ? '999+' : count}</sup>
@@ -492,13 +521,135 @@ const ListTitle = styled('h1', {
   minWidth: 0,
 })
 
+function SourceButton(props: {
+  tab: Tab
+  subscription: Subscription
+  selected: boolean
+  collections?: Collection[]
+  onSelect: () => void
+  onMove?: (collectionId: string | null) => void
+}): JSX.Element {
+  const { subscription, collections } = props
+  const button = (
+    <Source
+      aria-current={props.selected}
+      onClick={props.onSelect}
+      title={subscription.name}
+      draggable={!!props.onMove}
+      onDragStart={(event) => {
+        event.dataTransfer.setData(CHANNEL_DRAG, subscription.id)
+        event.dataTransfer.effectAllowed = 'move'
+      }}
+    >
+      <SiteIcon
+        src={subscription.icon}
+        fallbackSrc={
+          props.tab == 'watch' ? undefined : faviconFor(subscription.url)
+        }
+        name={subscription.name}
+        size={18}
+        round={props.tab == 'watch'}
+      />
+      <span>{subscription.name}</span>
+      <SourceCount tab={props.tab} subscription={subscription} />
+    </Source>
+  )
+  if (!collections || !props.onMove) {
+    return button
+  }
+  const move = props.onMove
+  return (
+    <ContextMenu
+      entries={[
+        {
+          label: 'Move to collection',
+          detail: collections.find((c) => c.id == subscription.collectionId)
+            ?.name,
+          onSelect: () => undefined,
+          submenu: [
+            ...collections.map((collection) => ({
+              label: collection.name,
+              icon: <CollectionDot css={{ background: collection.color }} />,
+              checked: subscription.collectionId == collection.id,
+              onSelect: () => move(collection.id),
+            })),
+            {
+              label: 'No collection',
+              separated: collections.length > 0,
+              checked: !subscription.collectionId,
+              onSelect: () => move(null),
+            },
+          ],
+        },
+      ]}
+    >
+      {button}
+    </ContextMenu>
+  )
+}
+
+function DropGroup(props: {
+  collection?: Collection
+  count: number
+  onDrop: (subscriptionId: string) => void
+}): JSX.Element {
+  const [over, setOver] = useState(false)
+  return (
+    <GroupHeading
+      data-group=""
+      data-drop={over}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes(CHANNEL_DRAG)) return
+        event.preventDefault()
+        setOver(true)
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(event) => {
+        setOver(false)
+        const id = event.dataTransfer.getData(CHANNEL_DRAG)
+        if (id) props.onDrop(id)
+      }}
+    >
+      {props.collection && (
+        <CollectionDot css={{ background: props.collection.color }} />
+      )}
+      <span style={{ flex: 1 }}>{props.collection?.name ?? 'Not sorted'}</span>
+      <span>{props.count}</span>
+    </GroupHeading>
+  )
+}
+
 function SourceList(props: {
   tab: Tab
   subscriptions: Subscription[]
   selected?: Subscription
   onSelect: (subscription?: Subscription) => void
+  // Watch groups its channels by collection.
+  collections?: Collection[]
+  onMove?: (subscription: Subscription, collectionId: string | null) => void
 }): JSX.Element {
   const all = props.tab == 'watch' ? 'All channels' : 'All feeds'
+  const { collections, onMove } = props
+  const sourceButton = (subscription: Subscription) => (
+    <SourceButton
+      key={subscription.id}
+      tab={props.tab}
+      subscription={subscription}
+      selected={props.selected?.id == subscription.id}
+      collections={collections}
+      onSelect={() => props.onSelect(subscription)}
+      onMove={onMove && ((id) => onMove(subscription, id))}
+    />
+  )
+  const grouped = !!collections?.length && !!onMove
+  const known = new Set(collections?.map((c) => c.id))
+  const unsorted = props.subscriptions.filter(
+    (s) => !s.collectionId || !known.has(s.collectionId)
+  )
+  const dropOn = (collectionId: string | null) => (subscriptionId: string) => {
+    const subscription = props.subscriptions.find((s) => s.id == subscriptionId)
+    if (subscription && onMove) onMove(subscription, collectionId)
+  }
   return (
     <>
       <Source
@@ -516,34 +667,41 @@ function SourceList(props: {
         <span>{all}</span>
         <SourceCount tab={props.tab} />
       </Source>
-      {props.subscriptions.map((subscription) => (
-        <Source
-          key={subscription.id}
-          aria-current={props.selected?.id == subscription.id}
-          onClick={() => props.onSelect(subscription)}
-          title={subscription.name}
-        >
-          <SiteIcon
-            src={subscription.icon}
-            fallbackSrc={
-              props.tab == 'watch' ? undefined : faviconFor(subscription.url)
-            }
-            name={subscription.name}
-            size={18}
-            round={props.tab == 'watch'}
-          />
-          <span>{subscription.name}</span>
-          <SourceCount tab={props.tab} subscription={subscription} />
-        </Source>
-      ))}
+      {grouped && collections ? (
+        <>
+          {collections.map((collection) => {
+            const channels = props.subscriptions.filter(
+              (s) => s.collectionId == collection.id
+            )
+            return (
+              <Fragment key={collection.id}>
+                <DropGroup
+                  collection={collection}
+                  count={channels.length}
+                  onDrop={dropOn(collection.id)}
+                />
+                {channels.map(sourceButton)}
+              </Fragment>
+            )
+          })}
+          {unsorted.length > 0 && (
+            <>
+              <DropGroup count={unsorted.length} onDrop={dropOn(null)} />
+              {unsorted.map(sourceButton)}
+            </>
+          )}
+        </>
+      ) : (
+        props.subscriptions.map(sourceButton)
+      )}
     </>
   )
 }
 
-// Feeds as two panes: sources on the left with unseen counts, items on the
-// right. Items count as seen when opened or scrolled past, and only enter the
-// Library when saved.
-export function StashFeeds(): JSX.Element {
+// Feeds and Watch as two panes: sources on the left with unseen counts, items
+// on the right. Items count as seen when opened or scrolled past, and only
+// enter the Library (or, for videos, Watch later) when saved.
+export function StashFeeds(props: { mode: Tab }): JSX.Element {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { data: viewer } = useGetViewer()
@@ -551,7 +709,19 @@ export function StashFeeds(): JSX.Element {
   const { data: allSubscriptions, isPending: subscriptionsPending } =
     useGetSubscriptions({})
 
-  const tab: Tab = router.query.tab == 'watch' ? 'watch' : 'read'
+  const tab: Tab = props.mode
+  const watching = tab == 'watch'
+
+  // Watch used to be a tab in Feeds; old links go to its own page.
+  useEffect(() => {
+    if (tab == 'read' && router.query.tab == 'watch') {
+      const query: Record<string, string> = {}
+      if (typeof router.query.source == 'string') {
+        query.source = router.query.source
+      }
+      router.replace({ pathname: '/l/watch', query })
+    }
+  }, [tab, router])
 
   // The tab's sources: YouTube channels in Watch, every other feed in Read.
   const subscriptions = useMemo(
@@ -568,6 +738,35 @@ export function StashFeeds(): JSX.Element {
   const selectedId =
     typeof router.query.source == 'string' ? router.query.source : undefined
   const selected = subscriptions.find((s) => s.id == selectedId)
+
+  // Watch's collections, and the one chosen with the chips (kept in the
+  // address so it survives a reload and the sidebar can link to it).
+  const {
+    collections,
+    create: createCollection,
+    update: updateCollection,
+    remove: removeCollection,
+  } = useWatchCollections()
+  const setChannelCollection = useSetChannelCollection()
+  const setVideoCollection = useSetVideoCollection()
+  const collectionId =
+    watching && !selected && typeof router.query.collection == 'string'
+      ? router.query.collection
+      : undefined
+  const collection = collections.find((c) => c.id == collectionId)
+  const [filters, setFilters] = useWatchFilters()
+  // What narrows every list on the page: the channel or collection, and in
+  // Watch the length and watched filters.
+  const scope = [
+    sourceQuery(tab, selected),
+    collectionId ? `collection:${collectionId}` : '',
+    watching ? filterQuery(filters) : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const scopeKey = `${selected?.id ?? `all-${tab}`}${
+    collectionId ? `-c${collectionId}` : ''
+  }${watching ? `-${filterQuery(filters).replace(/\s+/g, '')}` : ''}`
 
   const [view, setView] = useState<View>('unseen')
   const [sourcesOpen, setSourcesOpen] = useState(false)
@@ -637,6 +836,7 @@ export function StashFeeds(): JSX.Element {
   const select = useCallback(
     (subscription?: Subscription) => {
       const query = { ...router.query }
+      delete query.collection
       if (subscription) {
         query.source = subscription.id
       } else {
@@ -652,37 +852,54 @@ export function StashFeeds(): JSX.Element {
     [router]
   )
 
-  const setTab = useCallback(
-    (next: Tab) => {
-      if (next == tab) return
+  const selectCollection = useCallback(
+    (next?: Collection) => {
       const query = { ...router.query }
       delete query.source
-      if (next == 'watch') {
-        query.tab = 'watch'
+      if (next) {
+        query.collection = next.id
       } else {
-        delete query.tab
+        delete query.collection
       }
       router.replace({ pathname: router.pathname, query }, undefined, {
         shallow: true,
       })
-      setSourcesOpen(false)
       setPeekItem(undefined)
-      setSeen(new Set())
-      window.scrollTo({ top: 0 })
     },
-    [router, tab]
+    [router]
   )
 
+  const moveChannel = useCallback(
+    (subscription: Subscription, id: string | null) => {
+      if ((subscription.collectionId ?? null) == id) return
+      setChannelCollection(subscription, id)
+      const target = collections.find((c) => c.id == id)
+      showUndoToast(
+        target
+          ? `Moved ${subscription.name} to ${target.name}`
+          : `Took ${subscription.name} out of ${
+              collections.find((c) => c.id == subscription.collectionId)
+                ?.name ?? 'its collection'
+            }`,
+        () =>
+          setChannelCollection(subscription, subscription.collectionId ?? null)
+      )
+    },
+    [collections, setChannelCollection]
+  )
+
+  // Watch later is a queue: the oldest save comes first.
+  const later = view == 'later'
   const searchQuery = [
-    sourceQuery(tab, selected),
+    scope,
     view == 'unseen' ? '-is:seen' : '',
-    'sort:published-desc',
+    later ? 'sort:saved-asc' : 'sort:published-desc',
   ]
     .filter(Boolean)
     .join(' ')
   const itemsQuery = useGetLibraryItems(
-    `feeds-${selected?.id ?? `all-${tab}`}-${view}`,
-    'following',
+    `feeds-${scopeKey}-${view}`,
+    later ? 'inbox' : 'following',
     { limit: 20, sortDescending: true, searchQuery, includeCount: true }
   )
   const items = useMemo(
@@ -710,14 +927,14 @@ export function StashFeeds(): JSX.Element {
   // at the most recently changed unseen item rather than the newest by
   // publish date, so items that arrive with an older date are noticed too.
   const latestQuery = useGetLibraryItems(
-    `feeds-latest-${selected?.id ?? `all-${tab}`}`,
+    `feeds-latest-${scopeKey}`,
     'following',
     {
       limit: 1,
       sortDescending: true,
-      searchQuery: `${sourceQuery(tab, selected)} -is:seen sort:updated-desc`,
+      searchQuery: `${scope} -is:seen sort:updated-desc`,
     },
-    true,
+    !later,
     LIVE_CHECK
   )
   const latestId = latestQuery.data?.pages[0]?.edges[0]?.node.id
@@ -744,6 +961,7 @@ export function StashFeeds(): JSX.Element {
     }
   }, [latestId])
   const hasNewItems =
+    !later &&
     !!latestId &&
     latestId != baselineId &&
     !itemsQuery.isFetching &&
@@ -890,8 +1108,15 @@ export function StashFeeds(): JSX.Element {
     return () => watcher.disconnect()
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
+  // In Watch, opening a video goes to the player page; Space still peeks.
+  const openVideo = useOpenVideo()
   const open = useCallback(
     (item: LibraryItemNode) => {
+      if (watching) {
+        markSeen([item.id], true)
+        openVideo(item)
+        return
+      }
       const username = viewer?.profile.username
       if (!username) {
         return
@@ -900,7 +1125,7 @@ export function StashFeeds(): JSX.Element {
       window.localStorage.setItem('nav-return', router.asPath)
       navigateWithMorph(router, `/${username}/${item.slug}`, item.id)
     },
-    [router, viewer, markSeen]
+    [router, viewer, markSeen, watching, openVideo]
   )
 
   // The Library, Home and the source counts need to hear about saves; the
@@ -933,7 +1158,7 @@ export function StashFeeds(): JSX.Element {
 
   const save = useCallback(
     async (item: LibraryItemNode) => {
-      if (saved.has(item.id)) {
+      if (later || saved.has(item.id)) {
         return
       }
       markSeen([item.id])
@@ -946,26 +1171,32 @@ export function StashFeeds(): JSX.Element {
       try {
         await moveItemToFolder(item.id, 'inbox')
         refreshElsewhere()
-        showUndoToast('Saved to Library', async () => {
-          try {
-            await moveItemToFolder(item.id, 'following')
-            setSaved((current) => toggle(current, item.id, false))
-            refreshElsewhere()
-          } catch {
-            showErrorToast('Could not move it back to Feeds', {
-              position: 'bottom-center',
-            })
+        showUndoToast(
+          watching ? 'Added to Watch later' : 'Saved to Library',
+          async () => {
+            try {
+              await moveItemToFolder(item.id, 'following')
+              setSaved((current) => toggle(current, item.id, false))
+              refreshElsewhere()
+            } catch {
+              showErrorToast('Could not move it back to Feeds', {
+                position: 'bottom-center',
+              })
+            }
           }
-        })
+        )
       } catch {
         setSaved((current) => toggle(current, item.id, false))
         setLeaving((current) => toggle(current, item.id, false))
-        showErrorToast('Could not save to Library', {
-          position: 'bottom-center',
-        })
+        showErrorToast(
+          watching
+            ? 'Could not add to Watch later'
+            : 'Could not save to Library',
+          { position: 'bottom-center' }
+        )
       }
     },
-    [saved, peekItem, markSeen, refreshElsewhere]
+    [saved, later, peekItem, markSeen, refreshElsewhere, watching]
   )
 
   const openPeek = useCallback(
@@ -1074,10 +1305,7 @@ export function StashFeeds(): JSX.Element {
 
   const unseenOnScreen = listed.filter((item) => !isSeen(item))
   const markAllSeen = useCallback(async () => {
-    const query = `in:following use:folders ${sourceQuery(
-      tab,
-      selected
-    )} -is:seen`
+    const query = `in:following use:folders ${scope} -is:seen`
     try {
       await bulkAction.mutateAsync({
         action: BulkAction.MARK_AS_SEEN,
@@ -1088,6 +1316,8 @@ export function StashFeeds(): JSX.Element {
       showSuccessToast(
         selected
           ? `Marked ${selected.name} as seen`
+          : collection
+          ? `Marked ${collection.name} as seen`
           : tab == 'watch'
           ? 'Marked all videos as seen'
           : 'Marked all feeds as seen',
@@ -1098,7 +1328,7 @@ export function StashFeeds(): JSX.Element {
         position: 'bottom-right',
       })
     }
-  }, [bulkAction, selected, view, total, items, tab])
+  }, [bulkAction, selected, collection, scope, view, total, items, tab])
 
   // Keyboard: j and k move, space peeks, o opens in the Reader, s saves to
   // the Library, Backspace (or Delete) archives, m marks seen, v opens the
@@ -1195,7 +1425,7 @@ export function StashFeeds(): JSX.Element {
     sourceIconFallback: sourceIconFallback(item),
     position: Math.min(peekAnchor + 1, listed.length),
     count: listed.length,
-    saved: saved.has(item.id),
+    saved: later || saved.has(item.id),
     onSave: () => save(item),
     onArchive: () => archive(item),
     onNext: () => step(1),
@@ -1207,7 +1437,9 @@ export function StashFeeds(): JSX.Element {
   })
 
   const title =
-    selected?.name ?? (tab == 'watch' ? 'All channels' : 'All feeds')
+    selected?.name ??
+    collection?.name ??
+    (tab == 'watch' ? 'All channels' : 'All feeds')
   const meta =
     total === undefined
       ? undefined
@@ -1215,18 +1447,19 @@ export function StashFeeds(): JSX.Element {
       ? `${total} unseen`
       : `${total} items`
 
-  const watching = tab == 'watch'
-
   const sourceList = (
     <SourceList
       tab={tab}
       subscriptions={subscriptions}
       selected={selected}
       onSelect={select}
+      collections={watching ? collections : undefined}
+      onMove={watching ? moveChannel : undefined}
     />
   )
 
   const noFeeds = !subscriptionsPending && subscriptions.length == 0
+  const allUnseen = useUnseenCount(tab)
 
   // Watch's grid runs in day groups: Today, Yesterday, This week, then months.
   const videoGroups = useMemo(() => {
@@ -1252,47 +1485,193 @@ export function StashFeeds(): JSX.Element {
     )
   const addLabel = watching ? 'Add a channel' : 'Add a feed'
 
-  // One video as a card, for Watch's grid.
-  const cardFor = (item: LibraryItemNode) => (
-    <Leaving key={item.id} leaving={leaving.has(item.id)}>
-      <SwipeAction
-        label="Save"
-        icon={<Bookmark size={16} />}
-        onAction={() => save(item)}
-        start={{
+  // Swipe left to save (or, for videos, to watch later) and right to
+  // archive. In Watch later, swiping left archives.
+  const swipeFor = (item: LibraryItemNode) =>
+    later
+      ? {
           label: 'Archive',
           icon: <Archive size={16} />,
           onAction: () => archive(item),
-        }}
-      >
-        <VideoCard
-          ref={rowRef(item.id)}
-          item={item}
-          channelName={sourceName(item)}
-          channelIcon={sourceIcon(item)}
-          showChannel={!selected}
-          age={
-            <time
-              dateTime={item.publishedAt || item.savedAt}
-              title={publishedLabel(item)}
-            >
-              {shortTimeAgo(item.publishedAt || item.savedAt, now)}
-            </time>
-          }
-          seen={isSeen(item)}
-          saved={saved.has(item.id)}
-          selected={peekItem ? item.id == peekItem.id : item.id == focusId}
-          onOpen={() =>
-            item.id == peekItem?.id ? closePeek() : openPeek(item)
-          }
-          onFocus={() => setFocusId(item.id)}
-          onSave={() => save(item)}
-          onArchive={() => archive(item)}
-          onOpenOriginal={() => openOriginal(item)}
-        />
+        }
+      : {
+          label: watching ? 'Watch later' : 'Save',
+          icon: watching ? <Clock size={16} /> : <Bookmark size={16} />,
+          onAction: () => save(item),
+          start: {
+            label: 'Archive',
+            icon: <Archive size={16} />,
+            onAction: () => archive(item),
+          },
+        }
+
+  // One video as a card, for Watch's grid.
+  const cardFor = (item: LibraryItemNode) => (
+    <Leaving key={item.id} leaving={leaving.has(item.id)}>
+      <SwipeAction {...swipeFor(item)}>
+        <ContextMenu entries={videoMenuFor(item)}>
+          <VideoCard
+            ref={rowRef(item.id)}
+            item={item}
+            channelName={sourceName(item)}
+            channelIcon={sourceIcon(item)}
+            showChannel={!selected}
+            age={
+              <time
+                dateTime={item.publishedAt || item.savedAt}
+                title={publishedLabel(item)}
+              >
+                {shortTimeAgo(item.publishedAt || item.savedAt, now)}
+              </time>
+            }
+            seen={isSeen(item)}
+            saved={saved.has(item.id)}
+            queued={later}
+            selected={peekItem ? item.id == peekItem.id : item.id == focusId}
+            onOpen={() => open(item)}
+            onFocus={() => setFocusId(item.id)}
+            onSave={() => save(item)}
+            onArchive={() => archive(item)}
+            onOpenOriginal={() => openOriginal(item)}
+          />
+        </ContextMenu>
       </SwipeAction>
     </Leaving>
   )
+
+  // Watching a video to the end, or marking it so, takes it out of Continue
+  // watching and of New when Hide watched is on.
+  const setWatched = async (item: LibraryItemNode, watched: boolean) => {
+    markSeen([item.id])
+    try {
+      await markVideoWatched(item.id, watched)
+      queryClient.invalidateQueries({ queryKey: ['libraryItems'] })
+      showUndoToast(watched ? 'Marked as watched' : 'Marked as not watched')
+    } catch {
+      showErrorToast('Could not change it', { position: 'bottom-center' })
+    }
+  }
+
+  const newCollection = async () => {
+    const name = window.prompt('Name the new collection')
+    return name ? await createCollection(name) : undefined
+  }
+
+  // Collections for one video: put it in one by hand, or move its channel
+  // (and so every video from it).
+  const collectionEntries = (item: LibraryItemNode): MenuEntry[] => {
+    const current = collectionOfItem(item, collections, allSubscriptions)
+    const labelled = collections.find((c) =>
+      item.labels?.some((label) => label.id == c.id)
+    )
+    const channel = subscriptions.find((s) => s.url == item.subscription)
+    const put = (target: Collection | null) =>
+      setVideoCollection(item, target, collections).then(() =>
+        showUndoToast(
+          target ? `Put in ${target.name}` : 'Taken out of its collection'
+        )
+      )
+    const entries: MenuEntry[] = [
+      {
+        label: 'Put in a collection',
+        detail: current?.name,
+        separated: true,
+        onSelect: () => undefined,
+        submenu: [
+          ...collections.map((c) => ({
+            label: c.name,
+            icon: <CollectionDot css={{ background: c.color }} />,
+            checked: labelled?.id == c.id,
+            onSelect: () => put(c),
+          })),
+          ...(labelled
+            ? [
+                {
+                  label: 'No collection',
+                  separated: true,
+                  onSelect: () => put(null),
+                },
+              ]
+            : []),
+          {
+            label: 'New collection…',
+            separated: !labelled && collections.length > 0,
+            onSelect: () => newCollection().then((c) => c && put(c)),
+          },
+        ],
+      },
+    ]
+    if (channel) {
+      entries.push({
+        label: `Move ${channel.name} to`,
+        detail: collections.find((c) => c.id == channel.collectionId)?.name,
+        onSelect: () => undefined,
+        submenu: [
+          ...collections.map((c) => ({
+            label: c.name,
+            icon: <CollectionDot css={{ background: c.color }} />,
+            checked: channel.collectionId == c.id,
+            onSelect: () => moveChannel(channel, c.id),
+          })),
+          ...(channel.collectionId
+            ? [
+                {
+                  label: 'No collection',
+                  separated: true,
+                  onSelect: () => moveChannel(channel, null),
+                },
+              ]
+            : []),
+          {
+            label: 'New collection…',
+            separated: !channel.collectionId && collections.length > 0,
+            onSelect: () =>
+              newCollection().then((c) => c && moveChannel(channel, c.id)),
+          },
+        ],
+      })
+    }
+    return entries
+  }
+
+  // Right-click on a Mac, or press and hold on iPhone.
+  const videoMenuFor = (item: LibraryItemNode): MenuEntry[] => {
+    const watched = (item.readingProgressPercent ?? 0) > 98
+    return [
+      {
+        label: 'Play',
+        shortcut: '↵',
+        onSelect: () => open(item),
+      },
+      {
+        label: item.id == peekItem?.id ? 'Close peek' : 'Peek',
+        shortcut: 'Space',
+        onSelect: () =>
+          item.id == peekItem?.id ? closePeek() : openPeek(item),
+      },
+      ...(later || item.folder == 'inbox'
+        ? []
+        : [
+            {
+              label: saved.has(item.id)
+                ? 'In Watch later'
+                : 'Add to Watch later',
+              shortcut: 'S',
+              onSelect: () => save(item),
+            },
+          ]),
+      ...collectionEntries(item),
+      {
+        label: watched ? 'Mark as not watched' : 'Mark as watched',
+        separated: true,
+        onSelect: () => setWatched(item, !watched),
+      },
+      { label: 'Archive', shortcut: '⌫', onSelect: () => archive(item) },
+      ...linkEntries(item.originalArticleUrl || item.url, () =>
+        openOriginal(item)
+      ),
+    ]
+  }
 
   const menuFor = (item: LibraryItemNode): MenuEntry[] => [
     { label: 'Read in Stash', shortcut: '↵', onSelect: () => open(item) },
@@ -1301,13 +1680,28 @@ export function StashFeeds(): JSX.Element {
       shortcut: 'Space',
       onSelect: () => (item.id == peekItem?.id ? closePeek() : openPeek(item)),
     },
+    ...(later
+      ? []
+      : [
+          {
+            label: watching
+              ? saved.has(item.id)
+                ? 'In Watch later'
+                : 'Watch later'
+              : saved.has(item.id)
+              ? 'Saved to Library'
+              : 'Save to Library',
+            shortcut: 'S',
+            separated: true,
+            onSelect: () => save(item),
+          },
+        ]),
     {
-      label: saved.has(item.id) ? 'Saved to Library' : 'Save to Library',
-      shortcut: 'S',
-      separated: true,
-      onSelect: () => save(item),
+      label: 'Archive',
+      shortcut: '⌫',
+      separated: later,
+      onSelect: () => archive(item),
     },
-    { label: 'Archive', shortcut: '⌫', onSelect: () => archive(item) },
     ...linkEntries(item.originalArticleUrl || item.url, () =>
       openOriginal(item)
     ),
@@ -1318,17 +1712,8 @@ export function StashFeeds(): JSX.Element {
     const itemSeen = isSeen(item)
     return (
       <Leaving key={item.id} leaving={leaving.has(item.id)}>
-        <SwipeAction
-          label="Save"
-          icon={<Bookmark size={16} />}
-          onAction={() => save(item)}
-          start={{
-            label: 'Archive',
-            icon: <Archive size={16} />,
-            onAction: () => archive(item),
-          }}
-        >
-          <ContextMenu entries={menuFor(item)}>
+        <SwipeAction {...swipeFor(item)}>
+          <ContextMenu entries={watching ? videoMenuFor(item) : menuFor(item)}>
             <ItemRow
               ref={rowRef(item.id)}
               leading={<UnseenDot hidden={itemSeen} />}
@@ -1353,7 +1738,11 @@ export function StashFeeds(): JSX.Element {
                       subscriptionName(item.subscription, allSubscriptions)
                       ? item.author
                       : undefined,
-                    saved.has(item.id) ? 'Saved' : undefined,
+                    saved.has(item.id)
+                      ? watching
+                        ? 'In Watch later'
+                        : 'Saved'
+                      : undefined,
                   ]
                     .filter(Boolean)
                     .map((part, index) => (
@@ -1379,27 +1768,44 @@ export function StashFeeds(): JSX.Element {
               muted={itemSeen}
               selected={peekItem ? item.id == peekItem.id : item.id == focusId}
               onOpen={() =>
-                item.id == peekItem?.id ? closePeek() : openPeek(item)
+                watching
+                  ? open(item)
+                  : item.id == peekItem?.id
+                  ? closePeek()
+                  : openPeek(item)
               }
               onFocus={() => setFocusId(item.id)}
               actions={
                 <>
-                  <IconButton
-                    label={
-                      saved.has(item.id)
-                        ? 'Saved to Library'
-                        : 'Save to Library'
-                    }
-                    shortcut="s"
-                    size="sm"
-                    active={saved.has(item.id)}
-                    onClick={() => save(item)}
-                  >
-                    <Bookmark
-                      size={15}
-                      weight={saved.has(item.id) ? 'fill' : 'regular'}
-                    />
-                  </IconButton>
+                  {!later && (
+                    <IconButton
+                      label={
+                        watching
+                          ? saved.has(item.id)
+                            ? 'In Watch later'
+                            : 'Watch later'
+                          : saved.has(item.id)
+                          ? 'Saved to Library'
+                          : 'Save to Library'
+                      }
+                      shortcut="s"
+                      size="sm"
+                      active={saved.has(item.id)}
+                      onClick={() => save(item)}
+                    >
+                      {watching ? (
+                        <Clock
+                          size={15}
+                          weight={saved.has(item.id) ? 'fill' : 'regular'}
+                        />
+                      ) : (
+                        <Bookmark
+                          size={15}
+                          weight={saved.has(item.id) ? 'fill' : 'regular'}
+                        />
+                      )}
+                    </IconButton>
+                  )}
                   <IconButton
                     label="Archive"
                     shortcut="⌫"
@@ -1438,10 +1844,13 @@ export function StashFeeds(): JSX.Element {
 
   return (
     <Page>
-      <Tabs role="tablist" aria-label="Feeds" wide={!!peekItem && peekInline}>
-        <TabLabel tab="read" label="Read" current={tab} onSelect={setTab} />
-        <TabLabel tab="watch" label="Watch" current={tab} onSelect={setTab} />
-        <DiscoverPill />
+      <Tabs wide={!!peekItem && peekInline}>
+        <TabLabel tab={tab} label={watching ? 'Watch' : 'Feeds'} />
+        {watching ? (
+          <WatchAddBox collectionId={collectionId} />
+        ) : (
+          <DiscoverPill />
+        )}
       </Tabs>
       <Panes
         peeking={!!peekItem}
@@ -1473,6 +1882,27 @@ export function StashFeeds(): JSX.Element {
         </Sources>
 
         <section aria-label={title}>
+          {watching && (
+            <CollectionChips
+              collections={collections}
+              selected={collection}
+              allCount={allUnseen}
+              onSelect={selectCollection}
+              onCreate={(name, color) => createCollection(name, color)}
+              onUpdate={(c, name, color) =>
+                updateCollection(c, { name, color })
+              }
+              onRemove={async (c) => {
+                if (collection?.id == c.id) selectCollection(undefined)
+                await removeCollection(c)
+                showUndoToast(`Deleted ${c.name}`)
+              }}
+              onDropChannel={(id, c) => {
+                const channel = subscriptions.find((s) => s.id == id)
+                if (channel) moveChannel(channel, c.id)
+              }}
+            />
+          )}
           <Toolbar>
             <ListTitle css={{ '@mdDown': { display: 'none' } }}>
               {title}
@@ -1487,7 +1917,9 @@ export function StashFeeds(): JSX.Element {
                   aria-label={watching ? 'Choose a channel' : 'Choose a source'}
                 >
                   <ListTitle>
-                    {selected?.name ?? (watching ? 'Channels' : 'Sources')}
+                    {selected?.name ??
+                      collection?.name ??
+                      (watching ? 'Channels' : 'Sources')}
                   </ListTitle>
                   <CaretDown size={14} />
                 </TitleButton>
@@ -1501,6 +1933,9 @@ export function StashFeeds(): JSX.Element {
               </PageMeta>
             )}
             <span style={{ flex: 1 }} />
+            {watching && (
+              <WatchFilterMenu filters={filters} onChange={setFilters} />
+            )}
             {watching && (
               <LayoutToggle role="group" aria-label="Layout">
                 <IconButton
@@ -1529,22 +1964,32 @@ export function StashFeeds(): JSX.Element {
                 setSeen(new Set())
                 setPeekItem(undefined)
               }}
-              options={[
-                { value: 'unseen', label: 'Unseen' },
-                { value: 'all', label: 'All' },
-              ]}
+              options={
+                watching
+                  ? [
+                      { value: 'unseen', label: 'New' },
+                      { value: 'all', label: 'All' },
+                      { value: 'later', label: 'Watch later' },
+                    ]
+                  : [
+                      { value: 'unseen', label: 'Unseen' },
+                      { value: 'all', label: 'All' },
+                    ]
+              }
             />
-            <TextButton
-              aria-label="Mark all seen"
-              title="Mark all seen"
-              onClick={markAllSeen}
-              disabled={!unseenOnScreen.length || bulkAction.isPending}
-            >
-              <Checks size={14} />
-              <Wide css={peekItem ? { display: 'none' } : undefined}>
-                Mark all seen
-              </Wide>
-            </TextButton>
+            {!later && (
+              <TextButton
+                aria-label="Mark all seen"
+                title="Mark all seen"
+                onClick={markAllSeen}
+                disabled={!unseenOnScreen.length || bulkAction.isPending}
+              >
+                <Checks size={14} />
+                <Wide css={peekItem ? { display: 'none' } : undefined}>
+                  Mark all seen
+                </Wide>
+              </TextButton>
+            )}
             {selected ? (
               <Popover
                 label={`${selected.name} settings`}
@@ -1575,7 +2020,26 @@ export function StashFeeds(): JSX.Element {
             )}
           </Toolbar>
 
-          {noFeeds ? (
+          {/* Shown even when nothing new is waiting below. */}
+          {watching && !later && !selected && (
+            <ContinueWatching
+              scope={[
+                collectionId ? `collection:${collectionId}` : '',
+                filterQuery({ ...filters, hideWatched: false }),
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              menuFor={videoMenuFor}
+              now={now}
+              sourceName={sourceName}
+              sourceIcon={sourceIcon}
+              onOpen={open}
+              onSave={save}
+              onArchive={archive}
+              onOpenOriginal={openOriginal}
+            />
+          )}
+          {noFeeds && !later ? (
             <Empty>
               {watching
                 ? 'No channels yet. Follow a YouTube channel and its new videos land here.'
@@ -1595,8 +2059,16 @@ export function StashFeeds(): JSX.Element {
             <ListSkeleton />
           ) : listed.length == 0 ? (
             <Empty>
-              {view == 'unseen'
-                ? 'You are all caught up.'
+              {later
+                ? 'Nothing to watch later. Press Watch later on a video, or share a YouTube link to Stash.'
+                : watching && filterQuery(filters)
+                ? 'No videos match these filters.'
+                : view == 'unseen'
+                ? collection
+                  ? `Nothing new in ${collection.name}.`
+                  : 'You are all caught up.'
+                : collection
+                ? `No videos in ${collection.name} yet. Right-click a channel (or press and hold on iPhone) to move it here.`
                 : watching
                 ? 'No videos from this channel yet.'
                 : 'Nothing from this source yet.'}
@@ -1611,7 +2083,9 @@ export function StashFeeds(): JSX.Element {
                   </button>
                 </NewItemsBar>
               )}
-              {tab == 'watch' && layout == 'grid' ? (
+              {watching && layout == 'grid' && later ? (
+                <VideoGrid>{listed.map(cardFor)}</VideoGrid>
+              ) : watching && layout == 'grid' ? (
                 <VideoGroups>
                   {videoGroups.map((group) => (
                     <section key={group.label} aria-label={group.label}>

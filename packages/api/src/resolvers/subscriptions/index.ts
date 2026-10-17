@@ -45,10 +45,18 @@ import {
   YouTubeChannelError,
   YouTubeChannelErrorCode,
   YouTubeChannelSuccess,
+  YouTubeChannelSearchError,
+  YouTubeChannelSearchSuccess,
+  QueryYoutubeChannelSearchArgs,
+  QueryYoutubeTranscriptArgs,
+  YouTubeTranscriptError,
+  YouTubeTranscriptSuccess,
 } from '../../generated/graphql'
+import { redisDataSource } from '../../redis_data_source'
 import { getRepository } from '../../repository'
 import { feedRepository } from '../../repository/feed'
 import { validateUrl } from '../../services/create_page_save_request'
+import { findLabelById } from '../../services/labels'
 import { findSubscriptionById, unsubscribe } from '../../services/subscriptions'
 import { updateSubscription } from '../../services/update_subscription'
 import { Merge } from '../../util'
@@ -61,6 +69,8 @@ import {
   channelIdFromFeedUrl,
   isYouTubeUrl,
   resolveYouTubeChannel,
+  searchYouTubeChannels,
+  getYouTubeTranscript,
   YouTubeUnavailableError,
 } from '../../utils/youtubeChannel'
 import { isArray } from 'lodash'
@@ -206,6 +216,19 @@ export type SubscribeSuccessPartial = Merge<
   SubscribeSuccess,
   { subscriptions: PartialSubscription[] }
 >
+// A Watch collection is one of the user's labels. Anything else is ignored;
+// an empty string (take the channel out of its collection) passes through.
+const ownCollectionId = async (
+  uid: string,
+  collectionId: string | null | undefined
+) => {
+  if (!collectionId) {
+    return collectionId
+  }
+  const label = await findLabelById(collectionId, uid)
+  return label ? label.id : undefined
+}
+
 export const subscribeResolver = authorized<
   SubscribeSuccessPartial,
   SubscribeError,
@@ -275,6 +298,9 @@ export const subscribeResolver = authorized<
         isPrivate: input.isPrivate,
         includeShorts:
           input.includeShorts ?? existingSubscription.includeShorts,
+        collectionId:
+          (await ownCollectionId(uid, input.collectionId)) ||
+          existingSubscription.collectionId,
         status: SubscriptionStatus.Active,
       })
 
@@ -301,8 +327,8 @@ export const subscribeResolver = authorized<
 
     // limit number of rss subscriptions to max
     const results = (await getRepository(Subscription).query(
-      `insert into omnivore.subscriptions (name, url, description, type, user_id, icon, is_private, fetch_content_type, folder, include_shorts) 
-          select $1, $2, $3, $4, $5, $6, $7, $8, $9, $11 from omnivore.subscriptions 
+      `insert into omnivore.subscriptions (name, url, description, type, user_id, icon, is_private, fetch_content_type, folder, include_shorts, collection_id) 
+          select $1, $2, $3, $4, $5, $6, $7, $8, $9, $11, $12 from omnivore.subscriptions 
           where user_id = $5 and type = 'RSS' and status = 'ACTIVE' 
           having count(*) < $10
           returning *;`,
@@ -318,6 +344,7 @@ export const subscribeResolver = authorized<
         input.folder ?? 'following',
         MAX_RSS_SUBSCRIPTIONS,
         input.includeShorts ?? false,
+        (await ownCollectionId(uid, input.collectionId)) || null,
       ]
     )) as any[]
 
@@ -378,7 +405,10 @@ export const updateSubscriptionResolver = authorized<
       },
     })
 
-    const updatedSubscription = await updateSubscription(uid, input.id, input)
+    const updatedSubscription = await updateSubscription(uid, input.id, {
+      ...input,
+      collectionId: await ownCollectionId(uid, input.collectionId),
+    })
     return {
       subscription: updatedSubscription,
     }
@@ -573,6 +603,49 @@ export const youtubeChannelResolver = authorized<
       return { errorCodes: [YouTubeChannelErrorCode.NotFound] }
     }
     return { channel }
+  } catch (error) {
+    if (error instanceof YouTubeUnavailableError) {
+      return { errorCodes: [YouTubeChannelErrorCode.Unavailable] }
+    }
+    throw error
+  }
+})
+
+// Finds YouTube channels by name, for subscribing without a link.
+export const youtubeChannelSearchResolver = authorized<
+  YouTubeChannelSearchSuccess,
+  YouTubeChannelSearchError,
+  QueryYoutubeChannelSearchArgs
+>(async (_, { query }) => {
+  const trimmed = query.trim()
+  if (trimmed.length < 2 || trimmed.length > 100) {
+    return { errorCodes: [YouTubeChannelErrorCode.BadRequest] }
+  }
+  try {
+    return { channels: await searchYouTubeChannels(trimmed) }
+  } catch (error) {
+    if (error instanceof YouTubeUnavailableError) {
+      return { errorCodes: [YouTubeChannelErrorCode.Unavailable] }
+    }
+    throw error
+  }
+})
+
+export const youtubeTranscriptResolver = authorized<
+  YouTubeTranscriptSuccess,
+  YouTubeTranscriptError,
+  QueryYoutubeTranscriptArgs
+>(async (_, { videoId }) => {
+  if (!/^[\w-]{11}$/.test(videoId)) {
+    return { errorCodes: [YouTubeChannelErrorCode.BadRequest] }
+  }
+  try {
+    return {
+      lines: await getYouTubeTranscript(
+        videoId,
+        redisDataSource.redisClient ?? undefined
+      ),
+    }
   } catch (error) {
     if (error instanceof YouTubeUnavailableError) {
       return { errorCodes: [YouTubeChannelErrorCode.Unavailable] }

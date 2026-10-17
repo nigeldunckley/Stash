@@ -1745,6 +1745,7 @@ const schema = gql`
     refreshedAt: Date
     failedAt: Date
     includeShorts: Boolean!
+    collectionId: ID
   }
 
   enum SubscriptionStatus {
@@ -2665,6 +2666,7 @@ const schema = gql`
     fetchContentType: FetchContentType
     folder: String
     includeShorts: Boolean
+    collectionId: ID
   }
 
   input UpdateSubscriptionInput {
@@ -2683,6 +2685,7 @@ const schema = gql`
     mostRecentItemDate: Date
     failedAt: Date
     includeShorts: Boolean
+    collectionId: ID
   }
 
   union UpdateSubscriptionResult =
@@ -2943,6 +2946,46 @@ const schema = gql`
   }
 
   type YouTubeChannelError {
+    errorCodes: [YouTubeChannelErrorCode!]!
+  }
+
+  # A channel found by searching YouTube for its name.
+  type YouTubeChannelMatch {
+    channelId: ID!
+    feedUrl: String!
+    title: String!
+    handle: String
+    avatar: String
+    subscribers: String
+  }
+
+  union YouTubeChannelSearchResult =
+      YouTubeChannelSearchSuccess
+    | YouTubeChannelSearchError
+
+  type YouTubeChannelSearchSuccess {
+    channels: [YouTubeChannelMatch!]!
+  }
+
+  type YouTubeChannelSearchError {
+    errorCodes: [YouTubeChannelErrorCode!]!
+  }
+
+  type YouTubeTranscriptLine {
+    start: Float!
+    duration: Float!
+    text: String!
+  }
+
+  union YouTubeTranscriptResult =
+      YouTubeTranscriptSuccess
+    | YouTubeTranscriptError
+
+  type YouTubeTranscriptSuccess {
+    lines: [YouTubeTranscriptLine!]!
+  }
+
+  type YouTubeTranscriptError {
     errorCodes: [YouTubeChannelErrorCode!]!
   }
 
@@ -3847,6 +3890,8 @@ const schema = gql`
     discoverFeeds: DiscoverFeedResult!
     scanFeeds(input: ScanFeedsInput!): ScanFeedsResult!
     youtubeChannel(url: String!): YouTubeChannelResult!
+    youtubeChannelSearch(query: String!): YouTubeChannelSearchResult!
+    youtubeTranscript(videoId: String!): YouTubeTranscriptResult!
     feedSuggestions(
       statuses: [FeedSuggestionStatus!]
       first: Int

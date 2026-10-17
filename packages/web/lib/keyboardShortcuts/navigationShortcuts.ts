@@ -45,6 +45,16 @@ export function navigationCommands(router: NextRouter | undefined): Action[] {
       },
     },
     {
+      id: 'nav-watch',
+      section: { name: 'Go to', priority: 0 },
+      name: 'Watch',
+      shortcut: ['g', 'w'],
+      keywords: 'go watch videos youtube channels subscriptions watch later',
+      perform: () => {
+        router?.push(`/watch`)
+      },
+    },
+    {
       id: 'nav-highlights',
       section: { name: 'Go to', priority: 0 },
       name: 'Highlights',

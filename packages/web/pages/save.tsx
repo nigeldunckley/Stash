@@ -5,6 +5,13 @@ import { PageMetaData } from '../components/patterns/PageMetaData'
 import { keyframes, styled } from '../components/tokens/stitches.config'
 import { applyStoredTheme } from '../lib/themeUpdater'
 import type { SaveApiResponse } from './api/save'
+import { videoIdFromUrl } from '../lib/youtube'
+import {
+  lookupYouTubeChannel,
+  YouTubeChannel,
+} from '../lib/networking/subscriptions/youtube'
+import { useFollowChannel, useFollowedChannels } from '../lib/watch/channels'
+import { SiteIcon } from '../components/elements/stash'
 
 // Opened by the "Save to Stash" button on the Safari Favourites bar, usually
 // as a small popup window. It saves the page with the browser's own sign-in,
@@ -84,12 +91,104 @@ const Spinner = styled('span', {
   })} 700ms linear infinite`,
 })
 
+const Offer = styled('div', {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+  paddingTop: '12px',
+  borderTop: '1px solid $stLine',
+  fontFamily: '$inter',
+  fontSize: '$small',
+  color: '$stInk2',
+  '& > span:nth-child(2)': { flex: 1, minWidth: 0 },
+  '& b': { color: '$stInk', fontWeight: 500 },
+  '& button': {
+    all: 'unset',
+    flex: 'none',
+    height: '28px',
+    padding: '0 12px',
+    borderRadius: '$sm',
+    background: '$stAccent',
+    color: '$stOnAccent',
+    fontWeight: 500,
+    fontSize: '$caption',
+    cursor: 'pointer',
+    '&:disabled': {
+      background: '$stSunken',
+      color: '$stMuted',
+      cursor: 'default',
+    },
+    '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '2px' },
+  },
+})
+
+// After saving a video, offers to follow its channel when it isn't already.
+function FollowOffer(props: {
+  url: string
+  onOffer: (offering: boolean) => void
+}): JSX.Element | null {
+  const followed = useFollowedChannels()
+  const follow = useFollowChannel()
+  const [channel, setChannel] = useState<YouTubeChannel>()
+  const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle')
+  const { onOffer } = props
+
+  useEffect(() => {
+    let live = true
+    lookupYouTubeChannel(props.url)
+      .then((found) => live && setChannel(found))
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [props.url])
+
+  const offering =
+    !!channel && followed.ready && !followed.hasFeed(channel.feedUrl)
+  useEffect(() => {
+    if (state == 'idle') onOffer(offering)
+  }, [offering, state, onOffer])
+
+  if (!channel || (!offering && state == 'idle')) return null
+  return (
+    <Offer>
+      <SiteIcon src={channel.avatar} name={channel.title} size={28} round />
+      <span>
+        {state == 'done' ? (
+          <>
+            Following <b>{channel.title}</b>
+          </>
+        ) : (
+          <>
+            Subscribe to <b>{channel.title}</b> too?
+          </>
+        )}
+      </span>
+      {state != 'done' && (
+        <button
+          disabled={state == 'busy'}
+          onClick={async () => {
+            setState('busy')
+            const result = await follow(channel, { quiet: true })
+            setState(result == 'failed' ? 'idle' : 'done')
+          }}
+        >
+          Subscribe
+        </button>
+      )}
+    </Offer>
+  )
+}
+
 export default function SavePage(): JSX.Element {
   const router = useRouter()
   const [status, setStatus] = useState<Status>({ kind: 'saving' })
   const [inPopup, setInPopup] = useState(false)
   const started = useRef(false)
   const target = typeof router.query.url === 'string' ? router.query.url : ''
+  // YouTube videos go to Watch later, and the window offers the channel.
+  const video = !!videoIdFromUrl(target)
+  const [offering, setOffering] = useState(false)
 
   useEffect(() => {
     applyStoredTheme()
@@ -134,10 +233,11 @@ export default function SavePage(): JSX.Element {
   // blocked the popup and this page replaced the article, stay put so the
   // reader can go back to it.
   useEffect(() => {
-    if (status.kind !== 'saved' || !inPopup) return
-    const timer = setTimeout(() => window.close(), 1400)
+    if (status.kind !== 'saved' || !inPopup || offering) return
+    // A video waits a moment longer, while its channel is looked up.
+    const timer = setTimeout(() => window.close(), video ? 3000 : 1400)
     return () => clearTimeout(timer)
-  }, [status, inPopup])
+  }, [status, inPopup, offering, video])
 
   let host = ''
   try {
@@ -164,7 +264,13 @@ export default function SavePage(): JSX.Element {
                 weight="fill"
                 color="var(--colors-stAccent)"
               />
-              {status.alreadySaved ? 'Already in Stash' : 'Saved to Stash'}
+              {video
+                ? status.alreadySaved
+                  ? 'Already in Watch later'
+                  : 'Saved to Watch later'
+                : status.alreadySaved
+                ? 'Already in Stash'
+                : 'Saved to Stash'}
             </Head>
           )}
           {status.kind === 'signed-out' && (
@@ -198,6 +304,9 @@ export default function SavePage(): JSX.Element {
             </Body>
           )}
           {status.kind === 'failed' && <Body>{status.message}</Body>}
+          {status.kind === 'saved' && video && (
+            <FollowOffer url={target} onOffer={setOffering} />
+          )}
           {status.kind === 'saved' && !inPopup && target && (
             <Body>
               <a href={target}>Back to the page</a>

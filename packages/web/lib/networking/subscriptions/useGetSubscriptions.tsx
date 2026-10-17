@@ -60,6 +60,7 @@ const GQL_GET_SUBSCRIPTIONS = gql`
           lastFetchedAt
           fetchContentType
           includeShorts
+          collectionId
           mostRecentItemDate
           failedAt
         }

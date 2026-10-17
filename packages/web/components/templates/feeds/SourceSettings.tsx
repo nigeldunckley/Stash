@@ -11,6 +11,11 @@ import { showErrorToast, showSuccessToast } from '../../../lib/toastHelpers'
 import { channelPageUrl, isYouTubeFeedUrl } from '../../../lib/youtube'
 import { PanelLabel, SegmentedControl, Switch } from '../../elements/stash'
 import { motion } from '../../elements/stash/motion'
+import {
+  useSetChannelCollection,
+  useWatchCollections,
+} from '../../../lib/watch/collections'
+import { CollectionSelect } from '../watch/Collections'
 import { styled } from '../../tokens/stitches.config'
 
 const Row = styled('div', {
@@ -76,6 +81,12 @@ export function SourceSettings(props: {
   const channel = isYouTubeFeedUrl(subscription.url)
   const [includeShorts, setIncludeShorts] = useState(
     !!subscription.includeShorts
+  )
+
+  const { collections, create: createCollection } = useWatchCollections()
+  const setChannelCollection = useSetChannelCollection()
+  const [collectionId, setCollectionId] = useState(
+    subscription.collectionId ?? null
   )
 
   const changeShorts = async (value: boolean) => {
@@ -157,6 +168,24 @@ export function SourceSettings(props: {
           )}
         </Detail>
       </Row>
+      {channel && (
+        <Row>
+          <PanelLabel>Collection</PanelLabel>
+          <CollectionSelect
+            label="Collection"
+            collections={collections}
+            value={collectionId}
+            onCreate={(name) => createCollection(name)}
+            onChange={(id) => {
+              setCollectionId(id)
+              setChannelCollection(subscription, id)
+            }}
+          />
+          <Detail>
+            Every video from this channel, past and future, goes there.
+          </Detail>
+        </Row>
+      )}
       {channel ? (
         <Row>
           <Toggle>

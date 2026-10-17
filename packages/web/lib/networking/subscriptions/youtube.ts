@@ -97,3 +97,96 @@ export async function saveVideoPosition(
     },
   })
 }
+
+export type YouTubeChannelMatch = {
+  channelId: string
+  feedUrl: string
+  title: string
+  handle?: string
+  avatar?: string
+  subscribers?: string
+}
+
+const GQL_YOUTUBE_CHANNEL_SEARCH = gql`
+  query YouTubeChannelSearch($query: String!) {
+    youtubeChannelSearch(query: $query) {
+      ... on YouTubeChannelSearchSuccess {
+        channels {
+          channelId
+          feedUrl
+          title
+          handle
+          avatar
+          subscribers
+        }
+      }
+      ... on YouTubeChannelSearchError {
+        errorCodes
+      }
+    }
+  }
+`
+
+// Channels on YouTube whose name matches what was typed.
+export async function searchYouTubeChannels(
+  query: string
+): Promise<YouTubeChannelMatch[]> {
+  const data = (await gqlFetcher(GQL_YOUTUBE_CHANNEL_SEARCH, { query })) as {
+    youtubeChannelSearch: {
+      channels?: YouTubeChannelMatch[]
+      errorCodes?: string[]
+    }
+  }
+  const errors = data.youtubeChannelSearch.errorCodes
+  if (errors?.length) {
+    if (errors[0] == 'BAD_REQUEST') return []
+    throw new Error(errors[0])
+  }
+  return data.youtubeChannelSearch.channels ?? []
+}
+
+// Marks a video watched (or, with false, not watched) without a position.
+export async function markVideoWatched(
+  id: string,
+  watched = true
+): Promise<void> {
+  await gqlFetcher(GQL_SAVE_POSITION, {
+    input: {
+      id,
+      force: true,
+      readingProgressPercent: watched ? 100 : 0,
+      readingProgressAnchorIndex: 0,
+    },
+  })
+}
+
+export type TranscriptLine = { start: number; duration: number; text: string }
+
+const GQL_YOUTUBE_TRANSCRIPT = gql`
+  query YouTubeTranscript($videoId: String!) {
+    youtubeTranscript(videoId: $videoId) {
+      ... on YouTubeTranscriptSuccess {
+        lines {
+          start
+          duration
+          text
+        }
+      }
+      ... on YouTubeTranscriptError {
+        errorCodes
+      }
+    }
+  }
+`
+
+// A video's captions, line by line. Empty when YouTube has none.
+export async function fetchTranscript(
+  videoId: string
+): Promise<TranscriptLine[]> {
+  const data = (await gqlFetcher(GQL_YOUTUBE_TRANSCRIPT, { videoId })) as {
+    youtubeTranscript: { lines?: TranscriptLine[]; errorCodes?: string[] }
+  }
+  const errors = data.youtubeTranscript.errorCodes
+  if (errors?.length) throw new Error(errors[0])
+  return data.youtubeTranscript.lines ?? []
+}

@@ -2046,6 +2046,8 @@ type Query {
   webhook(id: ID!): WebhookResult!
   webhooks: WebhooksResult!
   youtubeChannel(url: String!): YouTubeChannelResult!
+  youtubeChannelSearch(query: String!): YouTubeChannelSearchResult!
+  youtubeTranscript(videoId: String!): YouTubeTranscriptResult!
 }
 
 type Reaction {
@@ -2938,6 +2940,7 @@ enum SubscribeErrorCode {
 
 input SubscribeInput {
   autoAddToLibrary: Boolean
+  collectionId: ID
   fetchContent: Boolean
   fetchContentType: FetchContentType
   folder: String
@@ -2955,6 +2958,7 @@ type SubscribeSuccess {
 
 type Subscription {
   autoAddToLibrary: Boolean
+  collectionId: ID
   count: Int!
   createdAt: Date!
   description: String
@@ -3406,6 +3410,7 @@ enum UpdateSubscriptionErrorCode {
 
 input UpdateSubscriptionInput {
   autoAddToLibrary: Boolean
+  collectionId: ID
   description: String
   failedAt: Date
   fetchContent: Boolean
@@ -3686,7 +3691,26 @@ enum YouTubeChannelErrorCode {
   UNAVAILABLE
 }
 
+type YouTubeChannelMatch {
+  avatar: String
+  channelId: ID!
+  feedUrl: String!
+  handle: String
+  subscribers: String
+  title: String!
+}
+
 union YouTubeChannelResult = YouTubeChannelError | YouTubeChannelSuccess
+
+type YouTubeChannelSearchError {
+  errorCodes: [YouTubeChannelErrorCode!]!
+}
+
+union YouTubeChannelSearchResult = YouTubeChannelSearchError | YouTubeChannelSearchSuccess
+
+type YouTubeChannelSearchSuccess {
+  channels: [YouTubeChannelMatch!]!
+}
 
 type YouTubeChannelSuccess {
   channel: YouTubeChannel!
@@ -3698,4 +3722,20 @@ type YouTubeChannelVideo {
   thumbnail: String!
   title: String!
   url: String!
+}
+
+type YouTubeTranscriptError {
+  errorCodes: [YouTubeChannelErrorCode!]!
+}
+
+type YouTubeTranscriptLine {
+  duration: Float!
+  start: Float!
+  text: String!
+}
+
+union YouTubeTranscriptResult = YouTubeTranscriptError | YouTubeTranscriptSuccess
+
+type YouTubeTranscriptSuccess {
+  lines: [YouTubeTranscriptLine!]!
 }

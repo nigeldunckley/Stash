@@ -88,6 +88,35 @@ const Item = styled(RadixContextMenu.Item, {
 
 const Separator = styled(RadixContextMenu.Separator, menuSeparatorStyles)
 
+const SubTrigger = styled(RadixContextMenu.SubTrigger, {
+  ...menuItemStyles,
+  '&[data-state="open"]': { background: '$stSunken' },
+})
+
+const SubContent = styled(RadixContextMenu.SubContent, {
+  ...menuContentStyles,
+  transformOrigin: 'var(--radix-context-menu-content-transform-origin)',
+})
+
+// Shown on touch screens too, unlike shortcuts.
+const Detail = styled('span', {
+  marginLeft: 'auto',
+  paddingLeft: '18px',
+  fontSize: '12.5px',
+  color: '$stMuted',
+  whiteSpace: 'nowrap',
+})
+
+// A tick for the chosen entry in a list of choices.
+const Check = styled('span', {
+  width: '12px',
+  marginLeft: 'auto',
+  paddingLeft: '18px',
+  color: '$stAccentText',
+  fontSize: '12px',
+  textAlign: 'right',
+})
+
 export type MenuEntry = {
   label: string
   icon?: ReactNode
@@ -95,7 +124,46 @@ export type MenuEntry = {
   destructive?: boolean
   // Draw a line above this entry.
   separated?: boolean
+  // Shown at the end in grey, such as the current choice of a submenu.
+  detail?: string
+  // Marks the chosen entry in a submenu.
+  checked?: boolean
+  // Opens a further menu instead of acting.
+  submenu?: MenuEntry[]
   onSelect: () => void
+}
+
+function MenuEntries(props: { entries: MenuEntry[] }): JSX.Element {
+  return (
+    <>
+      {props.entries.map((entry) => (
+        <Fragment key={entry.label}>
+          {entry.separated && <Separator />}
+          {entry.submenu ? (
+            <RadixContextMenu.Sub>
+              <SubTrigger>
+                {entry.icon}
+                {entry.label}
+                <Detail>{entry.detail ? `${entry.detail} ›` : '›'}</Detail>
+              </SubTrigger>
+              <RadixContextMenu.Portal>
+                <SubContent collisionPadding={12} sideOffset={4}>
+                  <MenuEntries entries={entry.submenu} />
+                </SubContent>
+              </RadixContextMenu.Portal>
+            </RadixContextMenu.Sub>
+          ) : (
+            <Item destructive={entry.destructive} onSelect={entry.onSelect}>
+              {entry.icon}
+              {entry.label}
+              {entry.checked && <Check aria-label="Chosen">✓</Check>}
+              {entry.shortcut && <MenuShortcut>{entry.shortcut}</MenuShortcut>}
+            </Item>
+          )}
+        </Fragment>
+      ))}
+    </>
+  )
 }
 
 // Right-click on a Mac, or press and hold on iPhone, to get the item's
@@ -115,18 +183,7 @@ export function ContextMenu(props: {
       </RadixContextMenu.Trigger>
       <RadixContextMenu.Portal>
         <Content collisionPadding={12}>
-          {props.entries.map((entry) => (
-            <Fragment key={entry.label}>
-              {entry.separated && <Separator />}
-              <Item destructive={entry.destructive} onSelect={entry.onSelect}>
-                {entry.icon}
-                {entry.label}
-                {entry.shortcut && (
-                  <MenuShortcut>{entry.shortcut}</MenuShortcut>
-                )}
-              </Item>
-            </Fragment>
-          ))}
+          <MenuEntries entries={props.entries} />
         </Content>
       </RadixContextMenu.Portal>
     </RadixContextMenu.Root>

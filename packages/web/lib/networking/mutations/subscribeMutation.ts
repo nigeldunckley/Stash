@@ -25,6 +25,7 @@ export type SubscribeMutationInput = {
   url: string
   subscriptionType?: SubscriptionType
   includeShorts?: boolean
+  collectionId?: string
 }
 
 export async function subscribeMutation(
