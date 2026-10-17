@@ -542,3 +542,48 @@ export const videoDocument = (args: {
   </body>
 </html>`
 }
+
+export type YouTubeChannelMatch = {
+  channelId: string
+  feedUrl: string
+  title: string
+  handle?: string
+  avatar?: string
+  // As YouTube words it, such as "1.6M subscribers".
+  subscribers?: string
+}
+
+// Channels whose name matches what was typed, best match first, from
+// YouTube's own search.
+export const searchYouTubeChannels = async (
+  query: string,
+  limit = 6
+): Promise<YouTubeChannelMatch[]> => {
+  let result
+  try {
+    result = await innertube.search(query, { type: 'channel' })
+  } catch (error) {
+    logger.info('youtube: channel search failed', {
+      query,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    throw new YouTubeUnavailableError('YouTube did not answer')
+  }
+  return result.items
+    .filter((channel) => CHANNEL_ID.test(channel.id))
+    .slice(0, limit)
+    .map((channel) => {
+      const avatar = channel.thumbnails?.length
+        ? channel.thumbnails.best
+        : undefined
+      return {
+        channelId: channel.id,
+        feedUrl: channelFeedUrl(channel.id),
+        title: channel.name || channel.id,
+        handle: channel.handle || undefined,
+        // Search gives protocol-relative picture links.
+        avatar: avatar?.startsWith('//') ? `https:${avatar}` : avatar,
+        subscribers: channel.subscriberCount || undefined,
+      }
+    })
+}

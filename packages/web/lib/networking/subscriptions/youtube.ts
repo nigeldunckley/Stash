@@ -97,3 +97,50 @@ export async function saveVideoPosition(
     },
   })
 }
+
+export type YouTubeChannelMatch = {
+  channelId: string
+  feedUrl: string
+  title: string
+  handle?: string
+  avatar?: string
+  subscribers?: string
+}
+
+const GQL_YOUTUBE_CHANNEL_SEARCH = gql`
+  query YouTubeChannelSearch($query: String!) {
+    youtubeChannelSearch(query: $query) {
+      ... on YouTubeChannelSearchSuccess {
+        channels {
+          channelId
+          feedUrl
+          title
+          handle
+          avatar
+          subscribers
+        }
+      }
+      ... on YouTubeChannelSearchError {
+        errorCodes
+      }
+    }
+  }
+`
+
+// Channels on YouTube whose name matches what was typed.
+export async function searchYouTubeChannels(
+  query: string
+): Promise<YouTubeChannelMatch[]> {
+  const data = (await gqlFetcher(GQL_YOUTUBE_CHANNEL_SEARCH, { query })) as {
+    youtubeChannelSearch: {
+      channels?: YouTubeChannelMatch[]
+      errorCodes?: string[]
+    }
+  }
+  const errors = data.youtubeChannelSearch.errorCodes
+  if (errors?.length) {
+    if (errors[0] == 'BAD_REQUEST') return []
+    throw new Error(errors[0])
+  }
+  return data.youtubeChannelSearch.channels ?? []
+}

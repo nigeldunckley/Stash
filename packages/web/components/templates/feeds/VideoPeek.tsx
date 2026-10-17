@@ -10,6 +10,7 @@ import {
   videoSeconds,
 } from '../../../lib/youtube'
 import { reducedMotion } from '../../elements/stash'
+import { SubscribeChannel } from '../watch/SubscribeChannel'
 import { motion } from '../../elements/stash/motion'
 import { keyframes, styled } from '../../tokens/stitches.config'
 
@@ -379,6 +380,7 @@ export function PeekVideo(props: {
       </Frame>
       <Body>
         <Title>{item.title}</Title>
+        <SubscribeChannel item={item} channelName={props.channelName} />
         <Meta>
           <span>{props.channelName}</span>
           {duration > 0 && <span>{formatTimecode(duration)}</span>}

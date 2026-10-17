@@ -36,6 +36,7 @@ export function ContinueWatching(props: {
   sourceName: (item: LibraryItemNode) => string
   sourceIcon: (item: LibraryItemNode) => string | undefined
   onOpen: (item: LibraryItemNode) => void
+  onSave: (item: LibraryItemNode) => void
   onArchive: (item: LibraryItemNode) => void
   onOpenOriginal: (item: LibraryItemNode) => void
 }): JSX.Element | null {
@@ -64,11 +65,12 @@ export function ContinueWatching(props: {
             age={shortTimeAgo(item.publishedAt || item.savedAt, props.now)}
             seen
             saved={false}
-            queued
+            // Started channel videos can still be added to Watch later.
+            queued={item.folder == 'inbox'}
             selected={false}
             onOpen={() => props.onOpen(item)}
             onFocus={() => undefined}
-            onSave={() => undefined}
+            onSave={() => props.onSave(item)}
             onArchive={() => props.onArchive(item)}
             onOpenOriginal={() => props.onOpenOriginal(item)}
           />

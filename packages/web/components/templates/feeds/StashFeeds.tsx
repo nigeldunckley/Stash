@@ -69,6 +69,7 @@ import {
 } from '../../../lib/youtube'
 import { AddChannelPanel } from './AddChannelPanel'
 import { ContinueWatching } from '../watch/ContinueWatching'
+import { WatchAddBox } from '../watch/WatchAddBox'
 import { AddFeedPanel } from './AddFeedPanel'
 import { VideoCard, VideoGrid, VideoGroup, VideoGroups } from './VideoCard'
 import {
@@ -421,9 +422,10 @@ const Tabs = styled('div', {
   display: 'flex',
   alignItems: 'baseline',
   gap: '22px',
+  flexWrap: 'wrap',
   maxWidth: '1180px',
   margin: '0 auto 18px',
-  '@mdDown': { gap: '18px', marginBottom: '12px' },
+  '@mdDown': { gap: '12px 18px', marginBottom: '12px' },
   variants: {
     wide: { true: { maxWidth: '1680px' } },
   },
@@ -1461,7 +1463,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     <Page>
       <Tabs wide={!!peekItem && peekInline}>
         <TabLabel tab={tab} label={watching ? 'Watch' : 'Feeds'} />
-        {!watching && <DiscoverPill />}
+        {watching ? <WatchAddBox /> : <DiscoverPill />}
       </Tabs>
       <Panes
         peeking={!!peekItem}
@@ -1605,7 +1607,19 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
             )}
           </Toolbar>
 
-          {noFeeds ? (
+          {/* Shown even when nothing new is waiting below. */}
+          {watching && !later && !selected && (
+            <ContinueWatching
+              now={now}
+              sourceName={sourceName}
+              sourceIcon={sourceIcon}
+              onOpen={openPeek}
+              onSave={save}
+              onArchive={archive}
+              onOpenOriginal={openOriginal}
+            />
+          )}
+          {noFeeds && !later ? (
             <Empty>
               {watching
                 ? 'No channels yet. Follow a YouTube channel and its new videos land here.'
@@ -1635,16 +1649,6 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
             </Empty>
           ) : (
             <>
-              {watching && view != 'later' && !selected && (
-                <ContinueWatching
-                  now={now}
-                  sourceName={sourceName}
-                  sourceIcon={sourceIcon}
-                  onOpen={openPeek}
-                  onArchive={archive}
-                  onOpenOriginal={openOriginal}
-                />
-              )}
               {hasNewItems && (
                 <NewItemsBar>
                   <button onClick={showNewItems}>

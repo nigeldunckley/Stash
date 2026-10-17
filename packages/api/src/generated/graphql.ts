@@ -2641,6 +2641,7 @@ export type Query = {
   webhook: WebhookResult;
   webhooks: WebhooksResult;
   youtubeChannel: YouTubeChannelResult;
+  youtubeChannelSearch: YouTubeChannelSearchResult;
 };
 
 
@@ -2770,6 +2771,11 @@ export type QueryWebhookArgs = {
 
 export type QueryYoutubeChannelArgs = {
   url: Scalars['String'];
+};
+
+
+export type QueryYoutubeChannelSearchArgs = {
+  query: Scalars['String'];
 };
 
 export type Reaction = {
@@ -4551,7 +4557,29 @@ export enum YouTubeChannelErrorCode {
   Unavailable = 'UNAVAILABLE'
 }
 
+export type YouTubeChannelMatch = {
+  __typename?: 'YouTubeChannelMatch';
+  avatar?: Maybe<Scalars['String']>;
+  channelId: Scalars['ID'];
+  feedUrl: Scalars['String'];
+  handle?: Maybe<Scalars['String']>;
+  subscribers?: Maybe<Scalars['String']>;
+  title: Scalars['String'];
+};
+
 export type YouTubeChannelResult = YouTubeChannelError | YouTubeChannelSuccess;
+
+export type YouTubeChannelSearchError = {
+  __typename?: 'YouTubeChannelSearchError';
+  errorCodes: Array<YouTubeChannelErrorCode>;
+};
+
+export type YouTubeChannelSearchResult = YouTubeChannelSearchError | YouTubeChannelSearchSuccess;
+
+export type YouTubeChannelSearchSuccess = {
+  __typename?: 'YouTubeChannelSearchSuccess';
+  channels: Array<YouTubeChannelMatch>;
+};
 
 export type YouTubeChannelSuccess = {
   __typename?: 'YouTubeChannelSuccess';
@@ -5334,7 +5362,11 @@ export type ResolversTypes = {
   YouTubeChannel: ResolverTypeWrapper<YouTubeChannel>;
   YouTubeChannelError: ResolverTypeWrapper<YouTubeChannelError>;
   YouTubeChannelErrorCode: YouTubeChannelErrorCode;
+  YouTubeChannelMatch: ResolverTypeWrapper<YouTubeChannelMatch>;
   YouTubeChannelResult: ResolversTypes['YouTubeChannelError'] | ResolversTypes['YouTubeChannelSuccess'];
+  YouTubeChannelSearchError: ResolverTypeWrapper<YouTubeChannelSearchError>;
+  YouTubeChannelSearchResult: ResolversTypes['YouTubeChannelSearchError'] | ResolversTypes['YouTubeChannelSearchSuccess'];
+  YouTubeChannelSearchSuccess: ResolverTypeWrapper<YouTubeChannelSearchSuccess>;
   YouTubeChannelSuccess: ResolverTypeWrapper<YouTubeChannelSuccess>;
   YouTubeChannelVideo: ResolverTypeWrapper<YouTubeChannelVideo>;
 };
@@ -5878,7 +5910,11 @@ export type ResolversParentTypes = {
   WebhooksSuccess: WebhooksSuccess;
   YouTubeChannel: YouTubeChannel;
   YouTubeChannelError: YouTubeChannelError;
+  YouTubeChannelMatch: YouTubeChannelMatch;
   YouTubeChannelResult: ResolversParentTypes['YouTubeChannelError'] | ResolversParentTypes['YouTubeChannelSuccess'];
+  YouTubeChannelSearchError: YouTubeChannelSearchError;
+  YouTubeChannelSearchResult: ResolversParentTypes['YouTubeChannelSearchError'] | ResolversParentTypes['YouTubeChannelSearchSuccess'];
+  YouTubeChannelSearchSuccess: YouTubeChannelSearchSuccess;
   YouTubeChannelSuccess: YouTubeChannelSuccess;
   YouTubeChannelVideo: YouTubeChannelVideo;
 };
@@ -7531,6 +7567,7 @@ export type QueryResolvers<ContextType = ResolverContext, ParentType extends Res
   webhook?: Resolver<ResolversTypes['WebhookResult'], ParentType, ContextType, RequireFields<QueryWebhookArgs, 'id'>>;
   webhooks?: Resolver<ResolversTypes['WebhooksResult'], ParentType, ContextType>;
   youtubeChannel?: Resolver<ResolversTypes['YouTubeChannelResult'], ParentType, ContextType, RequireFields<QueryYoutubeChannelArgs, 'url'>>;
+  youtubeChannelSearch?: Resolver<ResolversTypes['YouTubeChannelSearchResult'], ParentType, ContextType, RequireFields<QueryYoutubeChannelSearchArgs, 'query'>>;
 };
 
 export type ReactionResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['Reaction'] = ResolversParentTypes['Reaction']> = {
@@ -8654,8 +8691,32 @@ export type YouTubeChannelErrorResolvers<ContextType = ResolverContext, ParentTy
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 };
 
+export type YouTubeChannelMatchResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['YouTubeChannelMatch'] = ResolversParentTypes['YouTubeChannelMatch']> = {
+  avatar?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  channelId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  feedUrl?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  handle?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  subscribers?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  title?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
 export type YouTubeChannelResultResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['YouTubeChannelResult'] = ResolversParentTypes['YouTubeChannelResult']> = {
   __resolveType: TypeResolveFn<'YouTubeChannelError' | 'YouTubeChannelSuccess', ParentType, ContextType>;
+};
+
+export type YouTubeChannelSearchErrorResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['YouTubeChannelSearchError'] = ResolversParentTypes['YouTubeChannelSearchError']> = {
+  errorCodes?: Resolver<Array<ResolversTypes['YouTubeChannelErrorCode']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type YouTubeChannelSearchResultResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['YouTubeChannelSearchResult'] = ResolversParentTypes['YouTubeChannelSearchResult']> = {
+  __resolveType: TypeResolveFn<'YouTubeChannelSearchError' | 'YouTubeChannelSearchSuccess', ParentType, ContextType>;
+};
+
+export type YouTubeChannelSearchSuccessResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['YouTubeChannelSearchSuccess'] = ResolversParentTypes['YouTubeChannelSearchSuccess']> = {
+  channels?: Resolver<Array<ResolversTypes['YouTubeChannelMatch']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 };
 
 export type YouTubeChannelSuccessResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['YouTubeChannelSuccess'] = ResolversParentTypes['YouTubeChannelSuccess']> = {
@@ -9134,7 +9195,11 @@ export type Resolvers<ContextType = ResolverContext> = {
   WebhooksSuccess?: WebhooksSuccessResolvers<ContextType>;
   YouTubeChannel?: YouTubeChannelResolvers<ContextType>;
   YouTubeChannelError?: YouTubeChannelErrorResolvers<ContextType>;
+  YouTubeChannelMatch?: YouTubeChannelMatchResolvers<ContextType>;
   YouTubeChannelResult?: YouTubeChannelResultResolvers<ContextType>;
+  YouTubeChannelSearchError?: YouTubeChannelSearchErrorResolvers<ContextType>;
+  YouTubeChannelSearchResult?: YouTubeChannelSearchResultResolvers<ContextType>;
+  YouTubeChannelSearchSuccess?: YouTubeChannelSearchSuccessResolvers<ContextType>;
   YouTubeChannelSuccess?: YouTubeChannelSuccessResolvers<ContextType>;
   YouTubeChannelVideo?: YouTubeChannelVideoResolvers<ContextType>;
 };

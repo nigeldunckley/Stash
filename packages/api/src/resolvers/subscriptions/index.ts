@@ -45,6 +45,9 @@ import {
   YouTubeChannelError,
   YouTubeChannelErrorCode,
   YouTubeChannelSuccess,
+  YouTubeChannelSearchError,
+  YouTubeChannelSearchSuccess,
+  QueryYoutubeChannelSearchArgs,
 } from '../../generated/graphql'
 import { getRepository } from '../../repository'
 import { feedRepository } from '../../repository/feed'
@@ -61,6 +64,7 @@ import {
   channelIdFromFeedUrl,
   isYouTubeUrl,
   resolveYouTubeChannel,
+  searchYouTubeChannels,
   YouTubeUnavailableError,
 } from '../../utils/youtubeChannel'
 import { isArray } from 'lodash'
@@ -573,6 +577,26 @@ export const youtubeChannelResolver = authorized<
       return { errorCodes: [YouTubeChannelErrorCode.NotFound] }
     }
     return { channel }
+  } catch (error) {
+    if (error instanceof YouTubeUnavailableError) {
+      return { errorCodes: [YouTubeChannelErrorCode.Unavailable] }
+    }
+    throw error
+  }
+})
+
+// Finds YouTube channels by name, for subscribing without a link.
+export const youtubeChannelSearchResolver = authorized<
+  YouTubeChannelSearchSuccess,
+  YouTubeChannelSearchError,
+  QueryYoutubeChannelSearchArgs
+>(async (_, { query }) => {
+  const trimmed = query.trim()
+  if (trimmed.length < 2 || trimmed.length > 100) {
+    return { errorCodes: [YouTubeChannelErrorCode.BadRequest] }
+  }
+  try {
+    return { channels: await searchYouTubeChannels(trimmed) }
   } catch (error) {
     if (error instanceof YouTubeUnavailableError) {
       return { errorCodes: [YouTubeChannelErrorCode.Unavailable] }

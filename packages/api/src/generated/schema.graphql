@@ -2046,6 +2046,7 @@ type Query {
   webhook(id: ID!): WebhookResult!
   webhooks: WebhooksResult!
   youtubeChannel(url: String!): YouTubeChannelResult!
+  youtubeChannelSearch(query: String!): YouTubeChannelSearchResult!
 }
 
 type Reaction {
@@ -3686,7 +3687,26 @@ enum YouTubeChannelErrorCode {
   UNAVAILABLE
 }
 
+type YouTubeChannelMatch {
+  avatar: String
+  channelId: ID!
+  feedUrl: String!
+  handle: String
+  subscribers: String
+  title: String!
+}
+
 union YouTubeChannelResult = YouTubeChannelError | YouTubeChannelSuccess
+
+type YouTubeChannelSearchError {
+  errorCodes: [YouTubeChannelErrorCode!]!
+}
+
+union YouTubeChannelSearchResult = YouTubeChannelSearchError | YouTubeChannelSearchSuccess
+
+type YouTubeChannelSearchSuccess {
+  channels: [YouTubeChannelMatch!]!
+}
 
 type YouTubeChannelSuccess {
   channel: YouTubeChannel!

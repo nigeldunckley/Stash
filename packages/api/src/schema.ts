@@ -2946,6 +2946,28 @@ const schema = gql`
     errorCodes: [YouTubeChannelErrorCode!]!
   }
 
+  # A channel found by searching YouTube for its name.
+  type YouTubeChannelMatch {
+    channelId: ID!
+    feedUrl: String!
+    title: String!
+    handle: String
+    avatar: String
+    subscribers: String
+  }
+
+  union YouTubeChannelSearchResult =
+      YouTubeChannelSearchSuccess
+    | YouTubeChannelSearchError
+
+  type YouTubeChannelSearchSuccess {
+    channels: [YouTubeChannelMatch!]!
+  }
+
+  type YouTubeChannelSearchError {
+    errorCodes: [YouTubeChannelErrorCode!]!
+  }
+
   # A feed Stash suggests because your reading keeps leading to it.
   type FeedSuggestion {
     id: ID!
@@ -3847,6 +3869,7 @@ const schema = gql`
     discoverFeeds: DiscoverFeedResult!
     scanFeeds(input: ScanFeedsInput!): ScanFeedsResult!
     youtubeChannel(url: String!): YouTubeChannelResult!
+    youtubeChannelSearch(query: String!): YouTubeChannelSearchResult!
     feedSuggestions(
       statuses: [FeedSuggestionStatus!]
       first: Int
