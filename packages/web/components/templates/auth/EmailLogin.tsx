@@ -24,6 +24,10 @@ const LoginForm = (): JSX.Element => {
           key="email"
           type="email"
           name="email"
+          autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           value={email}
           placeholder="Email"
           css={{
@@ -44,6 +48,7 @@ const LoginForm = (): JSX.Element => {
           key="password"
           type="password"
           name="password"
+          autoComplete="current-password"
           value={password}
           placeholder="Password"
           css={{

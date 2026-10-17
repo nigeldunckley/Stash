@@ -18,7 +18,10 @@ import { AddLinkModal } from './AddLinkModal'
 import { MobileTopBar } from './navMenu/MobileTopBar'
 import useWindowDimensions from '../../lib/hooks/useGetWindowDimensions'
 import { useHandleAddUrl } from '../../lib/hooks/useHandleAddUrl'
-import { useGetViewer } from '../../lib/networking/viewer/useGetViewer'
+import {
+  isSignedOutError,
+  useGetViewer,
+} from '../../lib/networking/viewer/useGetViewer'
 import { useQueryClient } from '@tanstack/react-query'
 
 export type NavigationSection =
@@ -51,13 +54,7 @@ export function NavigationLayout(props: NavigationLayoutProps): JSX.Element {
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false)
   const [showKeyboardCommandsModal, setShowKeyboardCommandsModal] =
     useState(false)
-  const {
-    data: viewerData,
-    isFetching,
-    isPending,
-    isError,
-    status,
-  } = useGetViewer()
+  const { data: viewerData, error: viewerError } = useGetViewer()
 
   useKeyboardShortcuts(
     primaryCommands((action) => {
@@ -74,13 +71,13 @@ export function NavigationLayout(props: NavigationLayoutProps): JSX.Element {
     if (viewerData) {
       setupAnalytics(viewerData)
     }
-    if (!viewerData && !isPending) {
-      console.log('viewerData: ', viewerData, isFetching, isPending, status)
-      // there was an error loading, so lets log out
+    // Only sign out when the API says the session is gone. Other errors are
+    // retried by useGetViewer until the server is back.
+    if (!viewerData && isSignedOutError(viewerError)) {
       queryClient.clear()
       router.push(`/login`)
     }
-  }, [viewerData])
+  }, [viewerData, viewerError])
 
   const showLogout = useCallback(() => {
     setShowLogoutConfirmation(true)

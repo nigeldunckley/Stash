@@ -4,9 +4,11 @@ import { LoginLayout } from './../components/templates/LoginLayout'
 import { parseErrorCodes } from '../lib/queryParamParser'
 import { PageMetaData } from '../components/patterns/PageMetaData'
 import { formatMessage } from '../locales/en/messages'
+import { useRedirectIfSignedIn } from '../lib/hooks/useRedirectIfSignedIn'
 
 export default function Login(): JSX.Element {
   const router = useRouter()
+  useRedirectIfSignedIn()
   const [errorMessage, setErrorMessage] = useState<string | undefined>(
     undefined
   )
