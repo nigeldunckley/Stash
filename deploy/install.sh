@@ -82,6 +82,9 @@ add_new_images() {
 # kept, so the database migration image doesn't rebuild from scratch.
 prune_images() {
   docker image prune -af >/dev/null
+  # Keep the last few days of build cache so rebuilds stay quick, drop the rest.
+  docker builder prune -af --filter until=72h >/dev/null
+  journalctl --vacuum-size=200M >/dev/null 2>&1 || true
 }
 
 # Runs auto-update.sh every five minutes, so merges reach the server

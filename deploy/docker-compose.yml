@@ -2,8 +2,15 @@
 # Only Caddy publishes ports; every other service is reachable on the
 # internal network only.
 
+# Long-running services restart on failure and keep at most 30 MB of logs
+# each; without a cap Docker's logs grow until the disk is full.
 x-restart: &restart
   restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 services:
   caddy:
