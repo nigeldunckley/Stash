@@ -44,6 +44,7 @@ import { sendAccountChangeEmail } from '../../services/send_emails'
 import { cacheUser, getCachedUser, softDeleteUser } from '../../services/user'
 import { Merge } from '../../util'
 import { authorized } from '../../utils/gql-utils'
+import { logger } from '../../utils/logger'
 import { validateUsername } from '../../utils/usernamePolicy'
 import { ResolverContext } from '../types'
 
@@ -273,7 +274,10 @@ export const getMeUserResolver: ResolverFn<
 
     return user
   } catch (error) {
-    return undefined
+    // Let the error through rather than answering "nobody is signed in":
+    // the web app signs you out on that answer, but retries an error.
+    logger.error('me resolver failed', error)
+    throw error
   }
 }
 
