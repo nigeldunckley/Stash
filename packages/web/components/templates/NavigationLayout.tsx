@@ -45,6 +45,7 @@ type NavigationLayoutProps = {
 
   showNavigationMenu: boolean
   setShowNavigationMenu: (show: boolean) => void
+  hideNavigation?: boolean
 }
 
 export function NavigationLayout(props: NavigationLayoutProps): JSX.Element {
@@ -109,14 +110,16 @@ export function NavigationLayout(props: NavigationLayoutProps): JSX.Element {
   return (
     <HStack css={{}} distribution="start" alignment="start">
       <PageMetaData path={props.section} title={props.title} />
-      <Header
-        section={props.section}
-        menuOpen={props.showNavigationMenu}
-        toggleMenu={() => {
-          props.setShowNavigationMenu(!props.showNavigationMenu)
-        }}
-      />
-      {props.showNavigationMenu && (
+      {!props.hideNavigation && (
+        <Header
+          section={props.section}
+          menuOpen={props.showNavigationMenu}
+          toggleMenu={() => {
+            props.setShowNavigationMenu(!props.showNavigationMenu)
+          }}
+        />
+      )}
+      {props.showNavigationMenu && !props.hideNavigation && (
         <>
           <NavigationMenu
             section={props.section}
@@ -156,10 +159,12 @@ export function NavigationLayout(props: NavigationLayoutProps): JSX.Element {
         </>
       )}
       {props.children}
-      <MobileTopBar
-        section={props.section}
-        onMore={() => props.setShowNavigationMenu(!props.showNavigationMenu)}
-      />
+      {!props.hideNavigation && (
+        <MobileTopBar
+          section={props.section}
+          onMore={() => props.setShowNavigationMenu(!props.showNavigationMenu)}
+        />
+      )}
       {showLogoutConfirmation && (
         <ConfirmationModal
           message={'Are you sure you want to log out?'}

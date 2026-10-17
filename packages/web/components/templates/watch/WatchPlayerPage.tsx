@@ -47,6 +47,7 @@ import { ExtraTab, VideoTabs } from '../feeds/VideoPeek'
 import { CollectionDot } from './Collections'
 import { SubscribeChannel } from './SubscribeChannel'
 import { Transcript } from './Transcript'
+import { WatchViewingControls } from './WatchViewingControls'
 
 const Page = styled('main', {
   display: 'grid',
@@ -56,6 +57,12 @@ const Page = styled('main', {
   maxWidth: '1320px',
   margin: '0 auto',
   padding: '20px 32px 80px',
+  '&[data-theatre="true"]': {
+    gridTemplateColumns: 'minmax(0, 1fr)',
+    width: '100%',
+    maxWidth: 'none',
+    padding: '16px',
+  },
   '@mdDown': {
     gridTemplateColumns: 'minmax(0, 1fr)',
     gap: 0,
@@ -84,6 +91,10 @@ const Slot = styled('div', {
   width: '100%',
   borderRadius: '12px',
   background: '#000',
+  '&[data-theatre="true"]': {
+    width: 'min(100%, calc((100svh - 144px) * 16 / 9))',
+    margin: '0 auto',
+  },
   '@mdDown': { borderRadius: 0 },
 })
 
@@ -319,11 +330,20 @@ const UP_NEXT_LATER = 'type:video -is:read sort:saved-asc'
 // A full page for watching: the video, its channel and actions, chapters and
 // description, and Up next (Watch later first, then new videos from the same
 // collection) which plays on by itself.
-export function WatchPlayerPage(props: { id: string }): JSX.Element {
+export function WatchPlayerPage(props: {
+  id: string
+  theatre: boolean
+  onTheatreChange: (theatre: boolean) => void
+}): JSX.Element {
   const router = useRouter()
   const queryClient = useQueryClient()
   const player = useWatchPlayer()
   const isPhone = useMediaQuery('(max-width: 768px)')
+  const { theatre, onTheatreChange } = props
+  const toggleTheatre = useCallback(() => {
+    onTheatreChange(!theatre)
+    window.scrollTo({ top: 0 })
+  }, [theatre, onTheatreChange])
   const { data: subscriptions } = useGetSubscriptions({})
   const { collections } = useWatchCollections()
 
@@ -453,11 +473,12 @@ export function WatchPlayerPage(props: { id: string }): JSX.Element {
   }
 
   // Space or K plays and pauses, J and L skip 10 seconds (as on YouTube),
-  // Shift+N plays the next video, < and > change speed, Escape goes back.
+  // Shift+N plays the next video, < and > change speed; T toggles theatre.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement
       if (
+        event.defaultPrevented ||
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
@@ -499,13 +520,19 @@ export function WatchPlayerPage(props: { id: string }): JSX.Element {
           speed(1)
           break
         case 'Escape':
-          goBack()
+          if (theatre) onTheatreChange(false)
+          else goBack()
+          break
+        case 't':
+          if (target.closest('button, a')) return
+          event.preventDefault()
+          toggleTheatre()
           break
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [player, goBack])
+  }, [player, goBack, theatre, onTheatreChange, toggleTheatre])
 
   // Dragging in Watch later reorders it (on a Mac).
   const [dragging, setDragging] = useState<string>()
@@ -641,8 +668,14 @@ export function WatchPlayerPage(props: { id: string }): JSX.Element {
 
   if (!item) {
     return (
-      <Page>
+      <Page data-theatre={theatre}>
         <div>
+          {theatre && (
+            <WatchViewingControls
+              theatre={theatre}
+              onToggleTheatre={toggleTheatre}
+            />
+          )}
           <Back onClick={goBack}>
             <ArrowLeft size={14} /> Watch
           </Back>
@@ -662,13 +695,17 @@ export function WatchPlayerPage(props: { id: string }): JSX.Element {
   const duration = player.state.duration || videoSeconds(item.wordsCount) || 0
 
   return (
-    <Page>
+    <Page data-theatre={theatre}>
       <div>
-        <Back onClick={goBack}>
+        <Back onClick={goBack} css={theatre ? { display: 'none' } : undefined}>
           <ArrowLeft size={14} /> Watch
         </Back>
-        <Slot ref={slotRef} />
-        <Body>
+        <Slot ref={slotRef} data-theatre={theatre} />
+        <WatchViewingControls
+          theatre={theatre}
+          onToggleTheatre={toggleTheatre}
+        />
+        <Body css={theatre ? { display: 'none' } : undefined}>
           <Title>{item.title}</Title>
           <Channel>
             <Who>
@@ -755,13 +792,18 @@ export function WatchPlayerPage(props: { id: string }): JSX.Element {
           />
         </Body>
       </div>
-      <Aside aria-label="Up next">
+      <Aside
+        aria-label="Up next"
+        css={theatre ? { display: 'none' } : undefined}
+      >
         <AsideHead>
           Up next
           {autoplaySwitch}
         </AsideHead>
         {queueList}
-        <Keys>Space play · J/L 10s · ⇧N next · &lt; &gt; speed</Keys>
+        <Keys>
+          Space play · J/L 10s · ⇧N next · &lt; &gt; speed · T theatre
+        </Keys>
       </Aside>
     </Page>
   )
