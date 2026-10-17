@@ -6,6 +6,7 @@ import { motion, reducedMotion } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
 import type { NavigationSection } from '../NavigationLayout'
 import { useEditionStatus } from '../../../lib/edition/useEdition'
+import { useGetLibraryItems } from '../../../lib/networking/library_items/useLibraryItems'
 
 export const MOBILE_TOP_BAR_HEIGHT = 48
 
@@ -97,6 +98,34 @@ const Fresh = styled('span', {
   background: '$stAccent',
 })
 
+const Count = styled('sup', {
+  marginLeft: '3px',
+  fontFamily: '$mono',
+  fontSize: '10px',
+  fontWeight: 500,
+  color: '$stAccentText',
+  fontVariantNumeric: 'tabular-nums',
+})
+
+// How many new videos wait in Watch.
+function NewVideos(): JSX.Element | null {
+  const { data } = useGetLibraryItems(
+    'nav-count-watch',
+    'following',
+    {
+      limit: 1,
+      sortDescending: true,
+      searchQuery: 'type:video -is:seen',
+      includeCount: true,
+    },
+    true,
+    2 * 60 * 1000
+  )
+  const count = data?.pages[0]?.pageInfo.totalCount ?? 0
+  if (!count) return null
+  return <Count aria-label={`${count} new`}>{count > 99 ? '99+' : count}</Count>
+}
+
 type TabItem = { section: NavigationSection; label: string; href: string }
 
 const HOME: TabItem = { section: 'home', label: 'Home', href: '/l/home' }
@@ -115,6 +144,11 @@ const FEEDS: TabItem = {
   label: 'Feeds',
   href: '/l/subscriptions',
 }
+const WATCH: TabItem = {
+  section: 'watch',
+  label: 'Watch',
+  href: '/l/watch',
+}
 const HIGHLIGHTS: TabItem = {
   section: 'highlights',
   label: 'Highlights',
@@ -122,10 +156,11 @@ const HIGHLIGHTS: TabItem = {
 }
 
 // While The Edition is out it takes Highlights' place, which stays in More.
+// The tabs scroll sideways when they don't all fit.
 const tabsFor = (editionOut: boolean): TabItem[] =>
   editionOut
-    ? [HOME, EDITION, LIBRARY, FEEDS]
-    : [HOME, LIBRARY, FEEDS, HIGHLIGHTS]
+    ? [HOME, EDITION, FEEDS, WATCH, LIBRARY]
+    : [HOME, FEEDS, WATCH, LIBRARY, HIGHLIGHTS]
 
 export function MobileTopBar(props: {
   section: NavigationSection
@@ -175,6 +210,7 @@ export function MobileTopBar(props: {
           >
             {item.label}
             {item.section == 'edition' && edition.fresh && <Fresh />}
+            {item.section == 'watch' && <NewVideos />}
           </Tab>
         ))}
       </Tabs>

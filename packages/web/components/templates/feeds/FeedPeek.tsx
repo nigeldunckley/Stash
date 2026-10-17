@@ -8,6 +8,7 @@ import {
   BookOpen,
   CaretDown,
   CaretUp,
+  Clock,
   X,
 } from '@phosphor-icons/react'
 import { useRef, useState } from 'react'
@@ -491,20 +492,30 @@ const Divider = styled('span', {
   background: '$stLine',
 })
 
-function SaveLabel(props: { saved: boolean; touch?: boolean }): JSX.Element {
+// Videos are saved to Watch later rather than the Library.
+function SaveLabel(props: {
+  saved: boolean
+  touch?: boolean
+  video?: boolean
+}): JSX.Element {
+  const Icon = props.video ? Clock : Bookmark
   return props.saved ? (
     <>
-      <Bookmark size={15} weight="fill" />
-      Saved
+      <Icon size={15} weight="fill" />
+      {props.video ? 'In Watch later' : 'Saved'}
     </>
   ) : (
     <>
-      <Bookmark size={15} />
+      <Icon size={15} />
       {props.touch ? (
-        'Save to Library'
+        props.video ? (
+          'Watch later'
+        ) : (
+          'Save to Library'
+        )
       ) : (
         <>
-          Save <Kbd>S</Kbd>
+          {props.video ? 'Watch later' : 'Save'} <Kbd>S</Kbd>
         </>
       )}
     </>
@@ -637,9 +648,17 @@ export function FeedPeekPane(props: FeedPeekProps): JSX.Element {
           primary={!props.saved}
           saved={props.saved}
           onClick={props.saved ? undefined : props.onSave}
-          aria-label={props.saved ? 'Saved to Library' : 'Save to Library'}
+          aria-label={
+            isVideoItem(props.item)
+              ? props.saved
+                ? 'In Watch later'
+                : 'Watch later'
+              : props.saved
+              ? 'Saved to Library'
+              : 'Save to Library'
+          }
         >
-          <SaveLabel saved={props.saved} />
+          <SaveLabel saved={props.saved} video={isVideoItem(props.item)} />
         </Button>
         <Button onClick={props.onArchive} aria-label="Archive">
           <Archive size={15} />
@@ -815,7 +834,11 @@ export function FeedPeekSheet(
               saved={props.saved}
               onClick={props.saved ? undefined : props.onSave}
             >
-              <SaveLabel saved={props.saved} touch />
+              <SaveLabel
+                saved={props.saved}
+                video={isVideoItem(props.item)}
+                touch
+              />
             </Button>
             <Button touch square aria-label="Archive" onClick={props.onArchive}>
               <Archive size={18} />

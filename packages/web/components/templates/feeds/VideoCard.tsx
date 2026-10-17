@@ -1,4 +1,4 @@
-import { Archive, ArrowSquareOut, Bookmark, Play } from '@phosphor-icons/react'
+import { Archive, ArrowSquareOut, Clock, Play } from '@phosphor-icons/react'
 import { forwardRef, ReactNode } from 'react'
 import { LibraryItemNode } from '../../../lib/networking/library_items/useLibraryItems'
 import { formatTimecode, isShortsUrl, videoSeconds } from '../../../lib/youtube'
@@ -223,6 +223,8 @@ export type VideoCardProps = {
   age: ReactNode
   seen: boolean
   saved: boolean
+  // Already in Watch later, so there is nothing to save.
+  queued?: boolean
   selected: boolean
   onOpen: () => void
   onFocus: () => void
@@ -255,7 +257,7 @@ export const VideoCard = forwardRef<HTMLDivElement, VideoCardProps>(
         tabIndex={0}
         aria-label={item.title}
         selected={props.selected}
-        muted={props.seen}
+        muted={props.seen && !props.queued}
         onClick={(event) => {
           if ((event.target as HTMLElement).closest('button, a')) return
           props.onOpen()
@@ -281,15 +283,17 @@ export const VideoCard = forwardRef<HTMLDivElement, VideoCardProps>(
             </Watched>
           )}
           <Actions>
-            <IconButton
-              label={props.saved ? 'Saved to Library' : 'Save to Library'}
-              shortcut="s"
-              size="sm"
-              active={props.saved}
-              onClick={props.onSave}
-            >
-              <Bookmark size={14} weight={props.saved ? 'fill' : 'regular'} />
-            </IconButton>
+            {!props.queued && (
+              <IconButton
+                label={props.saved ? 'In Watch later' : 'Watch later'}
+                shortcut="s"
+                size="sm"
+                active={props.saved}
+                onClick={props.onSave}
+              >
+                <Clock size={14} weight={props.saved ? 'fill' : 'regular'} />
+              </IconButton>
+            )}
             <IconButton
               label="Archive"
               shortcut="⌫"
@@ -332,10 +336,10 @@ export const VideoCard = forwardRef<HTMLDivElement, VideoCardProps>(
                   Resume {formatTimecode(item.readingProgressAnchorIndex)}
                 </Chip>
               )}
-              {props.saved && (
+              {props.saved && !props.queued && (
                 <>
                   <span>·</span>
-                  <span>Saved</span>
+                  <span>In Watch later</span>
                 </>
               )}
             </Meta>

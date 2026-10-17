@@ -76,6 +76,8 @@ const debouncedFetchSearchResults = debounce((query, cb) => {
 
 type LibraryContainerProps = {
   folder: string | undefined
+  // Searched when no search is typed.
+  defaultSearch?: string
   filterFunc: (item: LibraryItemNode) => boolean
 
   showNavigationMenu: boolean
@@ -127,7 +129,10 @@ export function LibraryContainer(props: LibraryContainerProps): JSX.Element {
     fetchNextPage,
     hasNextPage,
     error: fetchItemsError,
-  } = useGetLibraryItems(props.folder ?? 'home', props.folder, queryInputs)
+  } = useGetLibraryItems(props.folder ?? 'home', props.folder, {
+    ...queryInputs,
+    searchQuery: queryInputs.searchQuery || props.defaultSearch,
+  })
 
   useEffect(() => {
     if (queryValue.startsWith('#')) {
@@ -753,7 +758,8 @@ export function LibraryContainer(props: LibraryContainerProps): JSX.Element {
       ;(async () => {
         const query =
           multiSelectMode === 'search'
-            ? queryInputs.searchQuery || 'in:inbox'
+            ? queryInputs.searchQuery ||
+              `in:inbox ${props.defaultSearch ?? ''}`.trim()
             : `includes:${checkedItems.join(',')}`
         const expectedCount = checkedItems.length
 

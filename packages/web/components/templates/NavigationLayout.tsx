@@ -29,6 +29,7 @@ export type NavigationSection =
   | 'edition'
   | 'library'
   | 'subscriptions'
+  | 'watch'
   | 'highlights'
   | 'archive'
   | 'trash'

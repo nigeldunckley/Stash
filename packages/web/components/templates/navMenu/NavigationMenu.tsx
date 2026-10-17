@@ -9,6 +9,7 @@ import {
   DotsThree,
   Highlighter,
   House,
+  MonitorPlay,
   Newspaper,
   Plus,
   Rss,
@@ -200,7 +201,7 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         section="library"
         isSelected={props.section == 'library'}
         icon={<Books size={18} />}
-        count={<NavCount folder="inbox" query="is:unread" />}
+        count={<NavCount folder="inbox" query="is:unread -type:video" />}
       />
       <NavButton
         {...props}
@@ -208,7 +209,7 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         section="subscriptions"
         isSelected={props.section == 'subscriptions'}
         icon={<Rss size={18} />}
-        count={<NavCount folder="following" query="-is:seen" />}
+        count={<NavCount folder="following" query="-is:seen -type:video" />}
       />
       {suggesting && (
         <NavButton
@@ -221,6 +222,16 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
           child
         />
       )}
+      <NavButton
+        {...props}
+        text="Watch"
+        section="watch"
+        isSelected={props.section == 'watch'}
+        icon={<MonitorPlay size={18} />}
+        count={
+          <NavCount folder="following" query="type:video -is:seen" accent />
+        }
+      />
       <NavButton
         {...props}
         text="Highlights"
@@ -248,10 +259,12 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
 }
 
 // A Mail-style count beside a section: unread in the Library, unseen in
-// Feeds. Nothing shows at zero.
+// Feeds. Nothing shows at zero. Watch's new videos show as an orange badge,
+// so they are hard to miss.
 function NavCount(props: {
   folder: string
   query: string
+  accent?: boolean
 }): JSX.Element | null {
   const { data } = useGetLibraryItems(
     `nav-count-${props.folder}`,
@@ -276,6 +289,14 @@ function NavCount(props: {
         fontSize: '11px',
         color: '$stMuted',
         fontVariantNumeric: 'tabular-nums',
+        ...(props.accent && {
+          padding: '0 6px',
+          lineHeight: '18px',
+          borderRadius: '5px',
+          background: '$stAccent',
+          color: '$stOnAccent',
+          fontWeight: 500,
+        }),
       }}
     >
       {count > 999 ? '999+' : count}

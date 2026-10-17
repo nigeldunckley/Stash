@@ -55,6 +55,8 @@ export default function Home(): JSX.Element {
           <LibraryContainer
             key={name}
             folder="inbox"
+            // Videos saved to watch later live in Watch.
+            defaultSearch="-type:video"
             filterFunc={(item) => {
               return (
                 item.state !== State.ARCHIVED &&
@@ -66,7 +68,9 @@ export default function Home(): JSX.Element {
           />
         )
       case 'subscriptions':
-        return <StashFeeds key={name} />
+        return <StashFeeds key={name} mode="read" />
+      case 'watch':
+        return <StashFeeds key={name} mode="watch" />
       case 'search':
         return (
           <LibraryContainer
@@ -121,6 +125,8 @@ export default function Home(): JSX.Element {
         return 'Library'
       case 'subscriptions':
         return 'Feeds'
+      case 'watch':
+        return 'Watch'
       case 'highlights':
         return 'Highlights'
       case 'archive':

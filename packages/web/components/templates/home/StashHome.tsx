@@ -48,7 +48,7 @@ import {
 import { faviconFor, shortTimeAgo, siteName } from '../../../lib/textFormatting'
 import { showErrorToast, showSuccessToast } from '../../../lib/toastHelpers'
 import { navigateWithMorph } from '../../../lib/viewTransition'
-import { dayGroup } from '../../../lib/youtube'
+import { dayGroup, isVideoItem } from '../../../lib/youtube'
 import {
   ContextMenu,
   CoverImage,
@@ -885,17 +885,21 @@ export function StashHome(): JSX.Element {
       try {
         await moveItemToFolder(item.id, 'inbox')
         refreshElsewhere()
-        showUndoToast('Saved to Library', async () => {
-          try {
-            await moveItemToFolder(item.id, 'following')
-            setSaved((current) => toggle(current, item.id, false))
-            refreshElsewhere()
-          } catch {
-            showErrorToast('Could not move it back to Feeds', {
-              position: 'bottom-center',
-            })
+        const video = isVideoItem(item)
+        showUndoToast(
+          video ? 'Added to Watch later' : 'Saved to Library',
+          async () => {
+            try {
+              await moveItemToFolder(item.id, 'following')
+              setSaved((current) => toggle(current, item.id, false))
+              refreshElsewhere()
+            } catch {
+              showErrorToast('Could not move it back to Feeds', {
+                position: 'bottom-center',
+              })
+            }
           }
-        })
+        )
       } catch {
         setSaved((current) => toggle(current, item.id, false))
         showErrorToast('Could not save to Library', {
@@ -1072,7 +1076,13 @@ export function StashHome(): JSX.Element {
       onSelect: () => (item.id == peekItem?.id ? closePeek() : openPeek(item)),
     },
     {
-      label: saved.has(item.id) ? 'Saved to Library' : 'Save to Library',
+      label: isVideoItem(item)
+        ? saved.has(item.id)
+          ? 'In Watch later'
+          : 'Watch later'
+        : saved.has(item.id)
+        ? 'Saved to Library'
+        : 'Save to Library',
       shortcut: 'S',
       separated: true,
       onSelect: () => save(item),
@@ -1152,7 +1162,13 @@ export function StashHome(): JSX.Element {
               <>
                 <IconButton
                   label={
-                    saved.has(item.id) ? 'Saved to Library' : 'Save to Library'
+                    tab == 'watch'
+                      ? saved.has(item.id)
+                        ? 'In Watch later'
+                        : 'Watch later'
+                      : saved.has(item.id)
+                      ? 'Saved to Library'
+                      : 'Save to Library'
                   }
                   shortcut="s"
                   size="sm"
@@ -1225,12 +1241,12 @@ export function StashHome(): JSX.Element {
   const readingQuery = useGetLibraryItems('home-upnext-reading', 'inbox', {
     limit: 5,
     sortDescending: true,
-    searchQuery: 'is:reading sort:read-desc',
+    searchQuery: 'is:reading -type:video sort:read-desc',
   })
   const unreadQuery = useGetLibraryItems('home-upnext', 'inbox', {
     limit: 8,
     sortDescending: true,
-    searchQuery: 'is:unread sort:saved-desc',
+    searchQuery: 'is:unread -type:video sort:saved-desc',
     includeCount: true,
   })
   const unreadTotal = unreadQuery.data?.pages[0]?.pageInfo.totalCount
@@ -1550,13 +1566,7 @@ export function StashHome(): JSX.Element {
             ) : listed.length == 0 ? (
               <Empty>
                 You&apos;re all caught up.{' '}
-                <Link
-                  href={
-                    tab == 'watch'
-                      ? '/l/subscriptions?tab=watch'
-                      : '/l/subscriptions'
-                  }
-                >
+                <Link href={tab == 'watch' ? '/l/watch' : '/l/subscriptions'}>
                   Open Feeds
                 </Link>
               </Empty>
@@ -1568,13 +1578,7 @@ export function StashHome(): JSX.Element {
                     {group.items.map(rowFor)}
                   </Fragment>
                 ))}
-                <More
-                  href={
-                    tab == 'watch'
-                      ? '/l/subscriptions?tab=watch'
-                      : '/l/subscriptions'
-                  }
-                >
+                <More href={tab == 'watch' ? '/l/watch' : '/l/subscriptions'}>
                   <span>
                     {more > 0
                       ? `${more} more ${tab == 'watch' ? 'new' : 'unseen'}`
