@@ -3743,6 +3743,7 @@ export enum SubscribeErrorCode {
 
 export type SubscribeInput = {
   autoAddToLibrary?: InputMaybe<Scalars['Boolean']>;
+  collectionId?: InputMaybe<Scalars['ID']>;
   fetchContent?: InputMaybe<Scalars['Boolean']>;
   fetchContentType?: InputMaybe<FetchContentType>;
   folder?: InputMaybe<Scalars['String']>;
@@ -3762,6 +3763,7 @@ export type SubscribeSuccess = {
 export type Subscription = {
   __typename?: 'Subscription';
   autoAddToLibrary?: Maybe<Scalars['Boolean']>;
+  collectionId?: Maybe<Scalars['ID']>;
   count: Scalars['Int'];
   createdAt: Scalars['Date'];
   description?: Maybe<Scalars['String']>;
@@ -4252,6 +4254,7 @@ export enum UpdateSubscriptionErrorCode {
 
 export type UpdateSubscriptionInput = {
   autoAddToLibrary?: InputMaybe<Scalars['Boolean']>;
+  collectionId?: InputMaybe<Scalars['ID']>;
   description?: InputMaybe<Scalars['String']>;
   failedAt?: InputMaybe<Scalars['Date']>;
   fetchContent?: InputMaybe<Scalars['Boolean']>;
@@ -8181,6 +8184,7 @@ export type SubscribeSuccessResolvers<ContextType = ResolverContext, ParentType 
 
 export type SubscriptionResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = {
   autoAddToLibrary?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
+  collectionId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
   count?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['Date'], ParentType, ContextType>;
   description?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;

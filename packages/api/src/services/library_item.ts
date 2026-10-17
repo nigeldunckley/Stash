@@ -523,6 +523,22 @@ export const buildQueryString = (
             [param]: ids,
           })
         }
+        // A Watch collection: videos from the channels in it, and single
+        // videos given its label.
+        case 'collection': {
+          if (!/^[0-9a-f-]{36}$/i.test(value)) {
+            return 'FALSE'
+          }
+          const param = `collection_${parameters.length}`
+
+          return escapeQueryWithParameters(
+            `(EXISTS (SELECT 1 FROM omnivore.entity_labels el WHERE el.library_item_id = library_item.id AND el.label_id = :${param})
+              OR library_item.subscription IN (SELECT s.url FROM omnivore.subscriptions s WHERE s.user_id = library_item.user_id AND s.collection_id = :${param}))`,
+            {
+              [param]: value.toLowerCase(),
+            }
+          )
+        }
         case 'recommendedby': {
           const param = `recommendedBy_${parameters.length}`
           if (value === '*') {

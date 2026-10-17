@@ -31,6 +31,8 @@ type UpdateSubscriptionData = {
   refreshedAt?: Date | null
   failedAt?: Date | null
   includeShorts?: boolean | null
+  // An empty string takes the channel out of its collection.
+  collectionId?: string | null
 }
 
 export const updateSubscription = async (
@@ -56,6 +58,8 @@ export const updateSubscription = async (
     fetchContentType: newData.fetchContentType || undefined,
     folder: newData.folder ?? undefined,
     includeShorts: newData.includeShorts ?? undefined,
+    collectionId:
+      newData.collectionId === '' ? null : newData.collectionId ?? undefined,
   })
 
   return await repo.findOneByOrFail({

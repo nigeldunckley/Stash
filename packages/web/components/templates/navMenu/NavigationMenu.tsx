@@ -31,6 +31,7 @@ import { Dropdown, DropdownOption } from '../../elements/DropdownElements'
 import { useRouter } from 'next/router'
 import { NavigationSection } from '../NavigationLayout'
 import { useEditionStatus } from '../../../lib/edition/useEdition'
+import { useWatchCollections } from '../../../lib/watch/collections'
 import { TreeApi } from 'react-arborist'
 import React from 'react'
 import { NavMoreButtonDownIcon } from '../../elements/icons/NavMoreButtonDown'
@@ -164,6 +165,13 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
   const suggesting = useFeedSuggestionsEnabled()
   // The Edition appears only while this week's issue is out and unread.
   const edition = useEditionStatus()
+  // Watch's collections sit under it, as Discover does under Feeds.
+  const { collections } = useWatchCollections()
+  const router = useRouter()
+  const collectionId =
+    typeof router.query.collection == 'string'
+      ? router.query.collection
+      : undefined
   return (
     <VStack
       css={{
@@ -226,12 +234,34 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         {...props}
         text="Watch"
         section="watch"
-        isSelected={props.section == 'watch'}
+        isSelected={props.section == 'watch' && !collectionId}
         icon={<MonitorPlay size={18} />}
         count={
           <NavCount folder="following" query="type:video -is:seen" accent />
         }
       />
+      {collections.map((collection) => (
+        <NavButton
+          {...props}
+          key={collection.id}
+          text={collection.name}
+          section="watch"
+          href={`/l/watch?collection=${collection.id}`}
+          isSelected={props.section == 'watch' && collectionId == collection.id}
+          icon={
+            <SpanBox
+              css={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                flex: 'none',
+              }}
+              style={{ background: collection.color }}
+            />
+          }
+          child
+        />
+      ))}
       <NavButton
         {...props}
         text="Highlights"
@@ -446,6 +476,8 @@ type NavButtonProps = {
   text: string
   icon: ReactNode
   count?: ReactNode
+  // Where to go, when not the section's own page.
+  href?: string
 
   isSelected: boolean
   section: NavigationSection
@@ -500,7 +532,7 @@ function NavButton(props: NavButtonProps): JSX.Element {
       title={props.text}
       data-nav={props.section}
       onClick={(e) => {
-        router.push(`/` + props.section)
+        router.push(props.href ?? `/` + props.section)
       }}
     >
       {props.icon}

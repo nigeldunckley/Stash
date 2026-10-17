@@ -16,7 +16,9 @@ import {
   useFollowChannel,
   useFollowedChannels,
 } from '../../../lib/watch/channels'
+import { useWatchCollections } from '../../../lib/watch/collections'
 import { looksLikeYouTube, videoIdFromUrl } from '../../../lib/youtube'
+import { CollectionSelect } from './Collections'
 import { Kbd, SiteIcon } from '../../elements/stash'
 import { motion } from '../../elements/stash/motion'
 import { keyframes, styled } from '../../tokens/stitches.config'
@@ -121,6 +123,19 @@ const Row = styled('div', {
   },
 })
 
+const Footer = styled('div', {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '10px',
+  margin: '4px 0 0',
+  padding: '8px 8px 4px',
+  borderTop: '1px solid $stLine',
+  fontFamily: '$inter',
+  fontSize: '$caption',
+  color: '$stMuted',
+})
+
 const Hint = styled(Row, {
   color: '$stMuted',
   '& svg': { flex: 'none' },
@@ -180,7 +195,10 @@ const isLink = (value: string) =>
 // One box for everything Watch takes in: paste a video link to watch it
 // later, paste a channel link or @handle to follow it, or type a name to find
 // the channel on YouTube. Press / to jump to it.
-export function WatchAddBox(): JSX.Element {
+export function WatchAddBox(props: {
+  // New channels go into this collection unless another is picked.
+  collectionId?: string
+}): JSX.Element {
   const [value, setValue] = useState('')
   const [open, setOpen] = useState(false)
   const [state, setState] = useState<State>({ kind: 'idle' })
@@ -194,6 +212,14 @@ export function WatchAddBox(): JSX.Element {
   const follow = useFollowChannel()
   const followed = useFollowedChannels()
   const [justFollowed, setJustFollowed] = useState<Set<string>>(new Set())
+  const { collections, create: createCollection } = useWatchCollections()
+  const [collectionId, setCollectionId] = useState<string | null>(
+    props.collectionId ?? null
+  )
+  useEffect(
+    () => setCollectionId(props.collectionId ?? null),
+    [props.collectionId]
+  )
 
   const isFollowing = (channel: YouTubeChannelMatch) =>
     justFollowed.has(channel.feedUrl) || followed.hasFeed(channel.feedUrl)
@@ -294,13 +320,15 @@ export function WatchAddBox(): JSX.Element {
     async (channel: YouTubeChannelMatch) => {
       if (busy) return
       setBusy(channel.feedUrl)
-      const result = await follow(channel)
+      const result = await follow(channel, {
+        collectionId: collectionId ?? undefined,
+      })
       setBusy(undefined)
       if (result != 'failed') {
         setJustFollowed((current) => new Set(current).add(channel.feedUrl))
       }
     },
-    [busy, follow]
+    [busy, follow, collectionId]
   )
 
   const addVideo = useCallback(
@@ -458,6 +486,19 @@ export function WatchAddBox(): JSX.Element {
               <Label>Channels on YouTube</Label>
               {state.channels.map(channelRow)}
             </>
+          )}
+          {(state.kind == 'channels' ||
+            (state.kind == 'video' && state.channel)) && (
+            <Footer>
+              Subscribe into
+              <CollectionSelect
+                label="Collection for new channels"
+                collections={collections}
+                value={collectionId}
+                onCreate={(name) => createCollection(name)}
+                onChange={setCollectionId}
+              />
+            </Footer>
           )}
         </Panel>
       )}

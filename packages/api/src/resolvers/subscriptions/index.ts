@@ -52,6 +52,7 @@ import {
 import { getRepository } from '../../repository'
 import { feedRepository } from '../../repository/feed'
 import { validateUrl } from '../../services/create_page_save_request'
+import { findLabelById } from '../../services/labels'
 import { findSubscriptionById, unsubscribe } from '../../services/subscriptions'
 import { updateSubscription } from '../../services/update_subscription'
 import { Merge } from '../../util'
@@ -210,6 +211,19 @@ export type SubscribeSuccessPartial = Merge<
   SubscribeSuccess,
   { subscriptions: PartialSubscription[] }
 >
+// A Watch collection is one of the user's labels. Anything else is ignored;
+// an empty string (take the channel out of its collection) passes through.
+const ownCollectionId = async (
+  uid: string,
+  collectionId: string | null | undefined
+) => {
+  if (!collectionId) {
+    return collectionId
+  }
+  const label = await findLabelById(collectionId, uid)
+  return label ? label.id : undefined
+}
+
 export const subscribeResolver = authorized<
   SubscribeSuccessPartial,
   SubscribeError,
@@ -279,6 +293,9 @@ export const subscribeResolver = authorized<
         isPrivate: input.isPrivate,
         includeShorts:
           input.includeShorts ?? existingSubscription.includeShorts,
+        collectionId:
+          (await ownCollectionId(uid, input.collectionId)) ||
+          existingSubscription.collectionId,
         status: SubscriptionStatus.Active,
       })
 
@@ -305,8 +322,8 @@ export const subscribeResolver = authorized<
 
     // limit number of rss subscriptions to max
     const results = (await getRepository(Subscription).query(
-      `insert into omnivore.subscriptions (name, url, description, type, user_id, icon, is_private, fetch_content_type, folder, include_shorts) 
-          select $1, $2, $3, $4, $5, $6, $7, $8, $9, $11 from omnivore.subscriptions 
+      `insert into omnivore.subscriptions (name, url, description, type, user_id, icon, is_private, fetch_content_type, folder, include_shorts, collection_id) 
+          select $1, $2, $3, $4, $5, $6, $7, $8, $9, $11, $12 from omnivore.subscriptions 
           where user_id = $5 and type = 'RSS' and status = 'ACTIVE' 
           having count(*) < $10
           returning *;`,
@@ -322,6 +339,7 @@ export const subscribeResolver = authorized<
         input.folder ?? 'following',
         MAX_RSS_SUBSCRIPTIONS,
         input.includeShorts ?? false,
+        (await ownCollectionId(uid, input.collectionId)) || null,
       ]
     )) as any[]
 
@@ -382,7 +400,10 @@ export const updateSubscriptionResolver = authorized<
       },
     })
 
-    const updatedSubscription = await updateSubscription(uid, input.id, input)
+    const updatedSubscription = await updateSubscription(uid, input.id, {
+      ...input,
+      collectionId: await ownCollectionId(uid, input.collectionId),
+    })
     return {
       subscription: updatedSubscription,
     }

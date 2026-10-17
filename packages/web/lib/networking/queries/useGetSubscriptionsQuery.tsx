@@ -35,6 +35,7 @@ export type Subscription = {
   fetchContentType?: FetchContentType
   // YouTube channels: whether Shorts come in with the videos.
   includeShorts?: boolean
+  collectionId?: string | null
 } & (
   | {
       type: SubscriptionType.NEWSLETTER

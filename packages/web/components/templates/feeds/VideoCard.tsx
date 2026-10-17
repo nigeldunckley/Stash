@@ -1,5 +1,5 @@
 import { Archive, ArrowSquareOut, Clock, Play } from '@phosphor-icons/react'
-import { forwardRef, ReactNode } from 'react'
+import { forwardRef, HTMLAttributes, ReactNode } from 'react'
 import { LibraryItemNode } from '../../../lib/networking/library_items/useLibraryItems'
 import { formatTimecode, isShortsUrl, videoSeconds } from '../../../lib/youtube'
 import {
@@ -214,7 +214,7 @@ const Root = styled('div', {
   },
 })
 
-export type VideoCardProps = {
+type VideoCardOwnProps = {
   item: LibraryItemNode
   channelName: string
   channelIcon?: string
@@ -233,6 +233,10 @@ export type VideoCardProps = {
   onOpenOriginal: () => void
 }
 
+// Other attributes, such as a context menu's handlers, go on the card.
+export type VideoCardProps = VideoCardOwnProps &
+  Omit<HTMLAttributes<HTMLDivElement>, keyof VideoCardOwnProps>
+
 // The share of a video already watched, from the position the Watch pane
 // stores, if it is worth showing.
 export const watchedFraction = (item: LibraryItemNode) => {
@@ -246,12 +250,29 @@ export const watchedFraction = (item: LibraryItemNode) => {
 // and age. Hovering shows Save, Archive and Open on YouTube.
 export const VideoCard = forwardRef<HTMLDivElement, VideoCardProps>(
   function VideoCard(props, ref) {
-    const { item } = props
+    const {
+      item,
+      channelName: _channelName,
+      channelIcon: _channelIcon,
+      showChannel: _showChannel,
+      age: _age,
+      seen: _seen,
+      saved: _saved,
+      queued: _queued,
+      selected: _selected,
+      onOpen: _onOpen,
+      onFocus: _onFocus,
+      onSave: _onSave,
+      onArchive: _onArchive,
+      onOpenOriginal: _onOpenOriginal,
+      ...rest
+    } = props
     const seconds = videoSeconds(item.wordsCount)
     const watched = watchedFraction(item)
     const short = isShortsUrl(item.originalArticleUrl)
     return (
       <Root
+        {...rest}
         ref={ref}
         role="link"
         tabIndex={0}

@@ -116,4 +116,8 @@ export class Subscription {
   // For YouTube channels: whether Shorts are saved along with videos.
   @Column('boolean', { default: false })
   includeShorts!: boolean
+
+  // For YouTube channels: the Watch collection (a label) its videos sort into.
+  @Column('uuid', { nullable: true })
+  collectionId?: string | null
 }

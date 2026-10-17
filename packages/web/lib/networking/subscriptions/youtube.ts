@@ -144,3 +144,18 @@ export async function searchYouTubeChannels(
   }
   return data.youtubeChannelSearch.channels ?? []
 }
+
+// Marks a video watched (or, with false, not watched) without a position.
+export async function markVideoWatched(
+  id: string,
+  watched = true
+): Promise<void> {
+  await gqlFetcher(GQL_SAVE_POSITION, {
+    input: {
+      id,
+      force: true,
+      readingProgressPercent: watched ? 100 : 0,
+      readingProgressAnchorIndex: 0,
+    },
+  })
+}

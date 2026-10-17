@@ -31,6 +31,8 @@ export interface UpdateSubscriptionInput {
   isPrivate?: boolean
   fetchContentType?: FetchContentType
   includeShorts?: boolean
+  // An empty string takes a channel out of its collection.
+  collectionId?: string
 }
 
 export async function updateSubscriptionMutation(

@@ -18,7 +18,11 @@ export function useFollowChannel() {
   return useCallback(
     async (
       channel: { feedUrl: string; title: string },
-      options: { includeShorts?: boolean; quiet?: boolean } = {}
+      options: {
+        includeShorts?: boolean
+        quiet?: boolean
+        collectionId?: string
+      } = {}
     ): Promise<FollowResult> => {
       let result: FollowResult
       try {
@@ -26,6 +30,7 @@ export function useFollowChannel() {
           url: channel.feedUrl,
           subscriptionType: SubscriptionType.RSS,
           includeShorts: options.includeShorts ?? false,
+          collectionId: options.collectionId,
         })
         const error = response.subscribe.errorCodes?.[0]
         result =

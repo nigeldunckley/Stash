@@ -3,6 +3,7 @@ import {
   useGetLibraryItems,
 } from '../../../lib/networking/library_items/useLibraryItems'
 import { shortTimeAgo } from '../../../lib/textFormatting'
+import { ContextMenu, MenuEntry } from '../../elements/stash'
 import { styled } from '../../tokens/stitches.config'
 import { VideoCard, VideoGroup } from '../feeds/VideoCard'
 import { isVisible } from '../feeds/feedRowParts'
@@ -32,6 +33,9 @@ const Section = styled('section', {
 })
 
 export function ContinueWatching(props: {
+  // Narrows the row to a collection or length.
+  scope?: string
+  menuFor?: (item: LibraryItemNode) => MenuEntry[]
   now: number
   sourceName: (item: LibraryItemNode) => string
   sourceIcon: (item: LibraryItemNode) => string | undefined
@@ -40,11 +44,15 @@ export function ContinueWatching(props: {
   onArchive: (item: LibraryItemNode) => void
   onOpenOriginal: (item: LibraryItemNode) => void
 }): JSX.Element | null {
-  const { data } = useGetLibraryItems('watch-continue', undefined, {
-    limit: 8,
-    sortDescending: true,
-    searchQuery: CONTINUE_QUERY,
-  })
+  const { data } = useGetLibraryItems(
+    `watch-continue${props.scope ? `-${props.scope}` : ''}`,
+    undefined,
+    {
+      limit: 8,
+      sortDescending: true,
+      searchQuery: [CONTINUE_QUERY, props.scope].filter(Boolean).join(' '),
+    }
+  )
   const items = (data?.pages[0]?.edges ?? [])
     .map((edge) => edge.node)
     .filter(isVisible)
@@ -56,24 +64,26 @@ export function ContinueWatching(props: {
       <VideoGroup>Continue watching</VideoGroup>
       <Row>
         {items.map((item) => (
-          <VideoCard
-            key={item.id}
-            item={item}
-            channelName={props.sourceName(item)}
-            channelIcon={props.sourceIcon(item)}
-            showChannel
-            age={shortTimeAgo(item.publishedAt || item.savedAt, props.now)}
-            seen
-            saved={false}
-            // Started channel videos can still be added to Watch later.
-            queued={item.folder == 'inbox'}
-            selected={false}
-            onOpen={() => props.onOpen(item)}
-            onFocus={() => undefined}
-            onSave={() => props.onSave(item)}
-            onArchive={() => props.onArchive(item)}
-            onOpenOriginal={() => props.onOpenOriginal(item)}
-          />
+          <ContextMenu key={item.id} entries={props.menuFor?.(item) ?? []}>
+            <VideoCard
+              key={item.id}
+              item={item}
+              channelName={props.sourceName(item)}
+              channelIcon={props.sourceIcon(item)}
+              showChannel
+              age={shortTimeAgo(item.publishedAt || item.savedAt, props.now)}
+              seen
+              saved={false}
+              // Started channel videos can still be added to Watch later.
+              queued={item.folder == 'inbox'}
+              selected={false}
+              onOpen={() => props.onOpen(item)}
+              onFocus={() => undefined}
+              onSave={() => props.onSave(item)}
+              onArchive={() => props.onArchive(item)}
+              onOpenOriginal={() => props.onOpenOriginal(item)}
+            />
+          </ContextMenu>
         ))}
       </Row>
     </Section>

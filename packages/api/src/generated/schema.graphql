@@ -2939,6 +2939,7 @@ enum SubscribeErrorCode {
 
 input SubscribeInput {
   autoAddToLibrary: Boolean
+  collectionId: ID
   fetchContent: Boolean
   fetchContentType: FetchContentType
   folder: String
@@ -2956,6 +2957,7 @@ type SubscribeSuccess {
 
 type Subscription {
   autoAddToLibrary: Boolean
+  collectionId: ID
   count: Int!
   createdAt: Date!
   description: String
@@ -3407,6 +3409,7 @@ enum UpdateSubscriptionErrorCode {
 
 input UpdateSubscriptionInput {
   autoAddToLibrary: Boolean
+  collectionId: ID
   description: String
   failedAt: Date
   fetchContent: Boolean

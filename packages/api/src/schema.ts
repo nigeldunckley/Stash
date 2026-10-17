@@ -1745,6 +1745,7 @@ const schema = gql`
     refreshedAt: Date
     failedAt: Date
     includeShorts: Boolean!
+    collectionId: ID
   }
 
   enum SubscriptionStatus {
@@ -2665,6 +2666,7 @@ const schema = gql`
     fetchContentType: FetchContentType
     folder: String
     includeShorts: Boolean
+    collectionId: ID
   }
 
   input UpdateSubscriptionInput {
@@ -2683,6 +2685,7 @@ const schema = gql`
     mostRecentItemDate: Date
     failedAt: Date
     includeShorts: Boolean
+    collectionId: ID
   }
 
   union UpdateSubscriptionResult =
