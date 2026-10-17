@@ -159,3 +159,34 @@ export async function markVideoWatched(
     },
   })
 }
+
+export type TranscriptLine = { start: number; duration: number; text: string }
+
+const GQL_YOUTUBE_TRANSCRIPT = gql`
+  query YouTubeTranscript($videoId: String!) {
+    youtubeTranscript(videoId: $videoId) {
+      ... on YouTubeTranscriptSuccess {
+        lines {
+          start
+          duration
+          text
+        }
+      }
+      ... on YouTubeTranscriptError {
+        errorCodes
+      }
+    }
+  }
+`
+
+// A video's captions, line by line. Empty when YouTube has none.
+export async function fetchTranscript(
+  videoId: string
+): Promise<TranscriptLine[]> {
+  const data = (await gqlFetcher(GQL_YOUTUBE_TRANSCRIPT, { videoId })) as {
+    youtubeTranscript: { lines?: TranscriptLine[]; errorCodes?: string[] }
+  }
+  const errors = data.youtubeTranscript.errorCodes
+  if (errors?.length) throw new Error(errors[0])
+  return data.youtubeTranscript.lines ?? []
+}

@@ -2047,6 +2047,7 @@ type Query {
   webhooks: WebhooksResult!
   youtubeChannel(url: String!): YouTubeChannelResult!
   youtubeChannelSearch(query: String!): YouTubeChannelSearchResult!
+  youtubeTranscript(videoId: String!): YouTubeTranscriptResult!
 }
 
 type Reaction {
@@ -3721,4 +3722,20 @@ type YouTubeChannelVideo {
   thumbnail: String!
   title: String!
   url: String!
+}
+
+type YouTubeTranscriptError {
+  errorCodes: [YouTubeChannelErrorCode!]!
+}
+
+type YouTubeTranscriptLine {
+  duration: Float!
+  start: Float!
+  text: String!
+}
+
+union YouTubeTranscriptResult = YouTubeTranscriptError | YouTubeTranscriptSuccess
+
+type YouTubeTranscriptSuccess {
+  lines: [YouTubeTranscriptLine!]!
 }

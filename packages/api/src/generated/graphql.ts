@@ -2642,6 +2642,7 @@ export type Query = {
   webhooks: WebhooksResult;
   youtubeChannel: YouTubeChannelResult;
   youtubeChannelSearch: YouTubeChannelSearchResult;
+  youtubeTranscript: YouTubeTranscriptResult;
 };
 
 
@@ -2776,6 +2777,11 @@ export type QueryYoutubeChannelArgs = {
 
 export type QueryYoutubeChannelSearchArgs = {
   query: Scalars['String'];
+};
+
+
+export type QueryYoutubeTranscriptArgs = {
+  videoId: Scalars['String'];
 };
 
 export type Reaction = {
@@ -4598,6 +4604,25 @@ export type YouTubeChannelVideo = {
   url: Scalars['String'];
 };
 
+export type YouTubeTranscriptError = {
+  __typename?: 'YouTubeTranscriptError';
+  errorCodes: Array<YouTubeChannelErrorCode>;
+};
+
+export type YouTubeTranscriptLine = {
+  __typename?: 'YouTubeTranscriptLine';
+  duration: Scalars['Float'];
+  start: Scalars['Float'];
+  text: Scalars['String'];
+};
+
+export type YouTubeTranscriptResult = YouTubeTranscriptError | YouTubeTranscriptSuccess;
+
+export type YouTubeTranscriptSuccess = {
+  __typename?: 'YouTubeTranscriptSuccess';
+  lines: Array<YouTubeTranscriptLine>;
+};
+
 
 
 export type ResolverTypeWrapper<T> = Promise<T> | T;
@@ -5372,6 +5397,10 @@ export type ResolversTypes = {
   YouTubeChannelSearchSuccess: ResolverTypeWrapper<YouTubeChannelSearchSuccess>;
   YouTubeChannelSuccess: ResolverTypeWrapper<YouTubeChannelSuccess>;
   YouTubeChannelVideo: ResolverTypeWrapper<YouTubeChannelVideo>;
+  YouTubeTranscriptError: ResolverTypeWrapper<YouTubeTranscriptError>;
+  YouTubeTranscriptLine: ResolverTypeWrapper<YouTubeTranscriptLine>;
+  YouTubeTranscriptResult: ResolversTypes['YouTubeTranscriptError'] | ResolversTypes['YouTubeTranscriptSuccess'];
+  YouTubeTranscriptSuccess: ResolverTypeWrapper<YouTubeTranscriptSuccess>;
 };
 
 /** Mapping between all available schema types and the resolvers parents */
@@ -5920,6 +5949,10 @@ export type ResolversParentTypes = {
   YouTubeChannelSearchSuccess: YouTubeChannelSearchSuccess;
   YouTubeChannelSuccess: YouTubeChannelSuccess;
   YouTubeChannelVideo: YouTubeChannelVideo;
+  YouTubeTranscriptError: YouTubeTranscriptError;
+  YouTubeTranscriptLine: YouTubeTranscriptLine;
+  YouTubeTranscriptResult: ResolversParentTypes['YouTubeTranscriptError'] | ResolversParentTypes['YouTubeTranscriptSuccess'];
+  YouTubeTranscriptSuccess: YouTubeTranscriptSuccess;
 };
 
 export type SanitizeDirectiveArgs = {
@@ -7571,6 +7604,7 @@ export type QueryResolvers<ContextType = ResolverContext, ParentType extends Res
   webhooks?: Resolver<ResolversTypes['WebhooksResult'], ParentType, ContextType>;
   youtubeChannel?: Resolver<ResolversTypes['YouTubeChannelResult'], ParentType, ContextType, RequireFields<QueryYoutubeChannelArgs, 'url'>>;
   youtubeChannelSearch?: Resolver<ResolversTypes['YouTubeChannelSearchResult'], ParentType, ContextType, RequireFields<QueryYoutubeChannelSearchArgs, 'query'>>;
+  youtubeTranscript?: Resolver<ResolversTypes['YouTubeTranscriptResult'], ParentType, ContextType, RequireFields<QueryYoutubeTranscriptArgs, 'videoId'>>;
 };
 
 export type ReactionResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['Reaction'] = ResolversParentTypes['Reaction']> = {
@@ -8737,6 +8771,27 @@ export type YouTubeChannelVideoResolvers<ContextType = ResolverContext, ParentTy
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 };
 
+export type YouTubeTranscriptErrorResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['YouTubeTranscriptError'] = ResolversParentTypes['YouTubeTranscriptError']> = {
+  errorCodes?: Resolver<Array<ResolversTypes['YouTubeChannelErrorCode']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type YouTubeTranscriptLineResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['YouTubeTranscriptLine'] = ResolversParentTypes['YouTubeTranscriptLine']> = {
+  duration?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  start?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  text?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type YouTubeTranscriptResultResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['YouTubeTranscriptResult'] = ResolversParentTypes['YouTubeTranscriptResult']> = {
+  __resolveType: TypeResolveFn<'YouTubeTranscriptError' | 'YouTubeTranscriptSuccess', ParentType, ContextType>;
+};
+
+export type YouTubeTranscriptSuccessResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['YouTubeTranscriptSuccess'] = ResolversParentTypes['YouTubeTranscriptSuccess']> = {
+  lines?: Resolver<Array<ResolversTypes['YouTubeTranscriptLine']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
 export type Resolvers<ContextType = ResolverContext> = {
   AddDiscoverFeedError?: AddDiscoverFeedErrorResolvers<ContextType>;
   AddDiscoverFeedResult?: AddDiscoverFeedResultResolvers<ContextType>;
@@ -9206,6 +9261,10 @@ export type Resolvers<ContextType = ResolverContext> = {
   YouTubeChannelSearchSuccess?: YouTubeChannelSearchSuccessResolvers<ContextType>;
   YouTubeChannelSuccess?: YouTubeChannelSuccessResolvers<ContextType>;
   YouTubeChannelVideo?: YouTubeChannelVideoResolvers<ContextType>;
+  YouTubeTranscriptError?: YouTubeTranscriptErrorResolvers<ContextType>;
+  YouTubeTranscriptLine?: YouTubeTranscriptLineResolvers<ContextType>;
+  YouTubeTranscriptResult?: YouTubeTranscriptResultResolvers<ContextType>;
+  YouTubeTranscriptSuccess?: YouTubeTranscriptSuccessResolvers<ContextType>;
 };
 
 export type DirectiveResolvers<ContextType = ResolverContext> = {

@@ -1,3 +1,4 @@
+import { NewVideosStrip } from '../watch/NewVideosStrip'
 import {
   Archive,
   ArrowRight,
@@ -1524,6 +1525,8 @@ export function StashHome(): JSX.Element {
             </StripGo>
           </Strip>
         )}
+
+        {tab == 'read' && <NewVideosStrip now={now.getTime()} />}
 
         <Columns peeking={peekingInline}>
           <Feeds aria-label="New from your feeds">

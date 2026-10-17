@@ -27,7 +27,11 @@ import {
 } from '../../../lib/watch/collections'
 import { useWatchLaterOrder } from '../../../lib/watch/order'
 import { SPEEDS, useWatchPlayer } from '../../../lib/watch/player'
-import { formatTimecode, videoSeconds } from '../../../lib/youtube'
+import {
+  formatTimecode,
+  videoIdFromUrl,
+  videoSeconds,
+} from '../../../lib/youtube'
 import {
   ContextMenu,
   CoverImage,
@@ -42,6 +46,7 @@ import { useMediaQuery } from '../feeds/feedRowParts'
 import { ExtraTab, VideoTabs } from '../feeds/VideoPeek'
 import { CollectionDot } from './Collections'
 import { SubscribeChannel } from './SubscribeChannel'
+import { Transcript } from './Transcript'
 
 const Page = styled('main', {
   display: 'grid',
@@ -653,6 +658,7 @@ export function WatchPlayerPage(props: { id: string }): JSX.Element {
   }
 
   const published = item.publishedAt || item.savedAt
+  const videoId = videoIdFromUrl(item.originalArticleUrl || item.url)
   const duration = player.state.duration || videoSeconds(item.wordsCount) || 0
 
   return (
@@ -729,6 +735,23 @@ export function WatchPlayerPage(props: { id: string }): JSX.Element {
             playing={player.state.playing}
             onSeek={player.seek}
             extra={phoneTabs}
+            after={
+              videoId
+                ? [
+                    {
+                      id: 'transcript',
+                      label: 'Transcript',
+                      content: (
+                        <Transcript
+                          videoId={videoId}
+                          time={player.state.time}
+                          onSeek={player.seek}
+                        />
+                      ),
+                    },
+                  ]
+                : []
+            }
           />
         </Body>
       </div>

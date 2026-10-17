@@ -2971,6 +2971,24 @@ const schema = gql`
     errorCodes: [YouTubeChannelErrorCode!]!
   }
 
+  type YouTubeTranscriptLine {
+    start: Float!
+    duration: Float!
+    text: String!
+  }
+
+  union YouTubeTranscriptResult =
+      YouTubeTranscriptSuccess
+    | YouTubeTranscriptError
+
+  type YouTubeTranscriptSuccess {
+    lines: [YouTubeTranscriptLine!]!
+  }
+
+  type YouTubeTranscriptError {
+    errorCodes: [YouTubeChannelErrorCode!]!
+  }
+
   # A feed Stash suggests because your reading keeps leading to it.
   type FeedSuggestion {
     id: ID!
@@ -3873,6 +3891,7 @@ const schema = gql`
     scanFeeds(input: ScanFeedsInput!): ScanFeedsResult!
     youtubeChannel(url: String!): YouTubeChannelResult!
     youtubeChannelSearch(query: String!): YouTubeChannelSearchResult!
+    youtubeTranscript(videoId: String!): YouTubeTranscriptResult!
     feedSuggestions(
       statuses: [FeedSuggestionStatus!]
       first: Int

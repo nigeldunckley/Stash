@@ -48,7 +48,11 @@ import {
   YouTubeChannelSearchError,
   YouTubeChannelSearchSuccess,
   QueryYoutubeChannelSearchArgs,
+  QueryYoutubeTranscriptArgs,
+  YouTubeTranscriptError,
+  YouTubeTranscriptSuccess,
 } from '../../generated/graphql'
+import { redisDataSource } from '../../redis_data_source'
 import { getRepository } from '../../repository'
 import { feedRepository } from '../../repository/feed'
 import { validateUrl } from '../../services/create_page_save_request'
@@ -66,6 +70,7 @@ import {
   isYouTubeUrl,
   resolveYouTubeChannel,
   searchYouTubeChannels,
+  getYouTubeTranscript,
   YouTubeUnavailableError,
 } from '../../utils/youtubeChannel'
 import { isArray } from 'lodash'
@@ -618,6 +623,29 @@ export const youtubeChannelSearchResolver = authorized<
   }
   try {
     return { channels: await searchYouTubeChannels(trimmed) }
+  } catch (error) {
+    if (error instanceof YouTubeUnavailableError) {
+      return { errorCodes: [YouTubeChannelErrorCode.Unavailable] }
+    }
+    throw error
+  }
+})
+
+export const youtubeTranscriptResolver = authorized<
+  YouTubeTranscriptSuccess,
+  YouTubeTranscriptError,
+  QueryYoutubeTranscriptArgs
+>(async (_, { videoId }) => {
+  if (!/^[\w-]{11}$/.test(videoId)) {
+    return { errorCodes: [YouTubeChannelErrorCode.BadRequest] }
+  }
+  try {
+    return {
+      lines: await getYouTubeTranscript(
+        videoId,
+        redisDataSource.redisClient ?? undefined
+      ),
+    }
   } catch (error) {
     if (error instanceof YouTubeUnavailableError) {
       return { errorCodes: [YouTubeChannelErrorCode.Unavailable] }

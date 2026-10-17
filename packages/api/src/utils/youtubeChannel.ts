@@ -587,3 +587,69 @@ export const searchYouTubeChannels = async (
       }
     })
 }
+
+export type YouTubeTranscriptLine = {
+  start: number
+  duration: number
+  text: string
+}
+
+const TRANSCRIPT_TTL = 7 * 24 * 60 * 60
+// Videos without captions are asked about again a day later; captions are
+// often added after upload.
+const NO_TRANSCRIPT_TTL = 24 * 60 * 60
+
+// A video's captions as lines with start times in seconds. Fetched from
+// YouTube once and kept in Redis, so every visit after the first is instant.
+export const getYouTubeTranscript = async (
+  videoId: string,
+  redis?: {
+    get: (key: string) => Promise<string | null>
+    set: (
+      key: string,
+      value: string,
+      mode: 'EX',
+      ttl: number
+    ) => Promise<unknown>
+  }
+): Promise<YouTubeTranscriptLine[]> => {
+  const key = `youtube-transcript:${videoId}`
+  const cached = await redis?.get(key).catch(() => null)
+  if (cached) {
+    try {
+      return JSON.parse(cached) as YouTubeTranscriptLine[]
+    } catch {
+      // Fetch it again below.
+    }
+  }
+
+  let captions
+  try {
+    captions = await innertube.getVideoTranscript(videoId)
+  } catch (error) {
+    logger.info('youtube: transcript failed', {
+      videoId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    throw new YouTubeUnavailableError('YouTube did not answer')
+  }
+  const lines = (captions ?? [])
+    .map((caption) => ({
+      start: Math.max(0, (caption.start || 0) / 1000),
+      duration: Math.max(0, (caption.duration || 0) / 1000),
+      text: _.unescape(caption.text || '')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    }))
+    .filter((line) => line.text)
+
+  await redis
+    ?.set(
+      key,
+      JSON.stringify(lines),
+      'EX',
+      lines.length ? TRANSCRIPT_TTL : NO_TRANSCRIPT_TTL
+    )
+    .catch(() => undefined)
+  return lines
+}
