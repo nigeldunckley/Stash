@@ -9,7 +9,7 @@ import { StashHome } from '../../components/templates/home/StashHome'
 import { StashFeeds } from '../../components/templates/feeds/StashFeeds'
 import { WatchPlayerPage } from '../../components/templates/watch/WatchPlayerPage'
 import { LibraryContainer } from '../../components/templates/library/LibraryContainer'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { HighlightsContainer } from '../../components/nav-containers/HighlightsContainer'
 import { usePersistedState } from '../../lib/hooks/usePersistedState'
 import { State } from '../../lib/networking/fragments/articleFragment'
@@ -17,6 +17,12 @@ import { StashDiscover } from '../../components/templates/discover/StashDiscover
 
 export default function Home(): JSX.Element {
   const router = useRouter()
+  const [theatre, setTheatre] = useState(false)
+  const isWatchPlayer =
+    router.query.section === 'watch' && typeof router.query.v === 'string'
+  useEffect(() => {
+    if (!isWatchPlayer) setTheatre(false)
+  }, [isWatchPlayer])
   useApplyLocalTheme()
 
   const [showNavigationMenu, setShowNavigationMenu, isShowNavigationLoading] =
@@ -73,7 +79,12 @@ export default function Home(): JSX.Element {
       case 'watch':
         // ?v= opens a video on the player page.
         return typeof router.query.v == 'string' ? (
-          <WatchPlayerPage key="player" id={router.query.v} />
+          <WatchPlayerPage
+            key="player"
+            id={router.query.v}
+            theatre={theatre}
+            onTheatreChange={setTheatre}
+          />
         ) : (
           <StashFeeds key={name} mode="watch" />
         )
@@ -149,6 +160,7 @@ export default function Home(): JSX.Element {
       title={sectionTitle(section)}
       showNavigationMenu={showNavigationMenu}
       setShowNavigationMenu={setShowNavigationMenu}
+      hideNavigation={isWatchPlayer && theatre}
     >
       {sectionView(section)}
     </NavigationLayout>
