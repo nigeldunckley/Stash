@@ -7,9 +7,11 @@ struct ItemRow: View {
   var subscriptionName: String?
   var unseen = false
   var selected = false
+  /// The 1pt line under the row; off for the last row in a bordered box.
+  var divider = true
 
   var body: some View {
-    StashRow(selected: selected, hasThumbnail: item.imageURL != nil) {
+    StashRow(selected: selected, hasThumbnail: item.imageURL != nil, divider: divider) {
       HStack(alignment: .center, spacing: 12) {
         SiteIcon(url: item.iconURL, size: 18)
           .frame(width: 18)
