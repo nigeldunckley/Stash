@@ -163,7 +163,8 @@ struct HomeView: View {
       .refreshable { await reload() }
       #if os(macOS)
       .onChange(of: selectedID) { _, id in
-        guard let id, id != peek?.id, let item = feeds.visibleItems.first(where: { $0.id == id }) else { return }
+        // Arrow keys in the list move the preview through Feeds, but not one opened from Up next.
+        guard let id, id != peek?.id, !(peek != nil && peekFromUpNext), let item = feeds.visibleItems.first(where: { $0.id == id }) else { return }
         open(item)
       }
       .onKeyPress(.delete) { performOnSelection(.archive) }

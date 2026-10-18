@@ -65,15 +65,15 @@ struct PeekCard: View {
           .monospacedDigit()
       }
       HStack(spacing: 2) {
-        HeaderButton(systemImage: "chevron.up", help: "Previous (K)") { onMove(-1) }
+        HeaderButton(systemImage: "chevron.up", help: "Previous (⌘↑)") { onMove(-1) }
           .disabled(!canGoBack)
-          .keyboardShortcut("k", modifiers: [])
-        HeaderButton(systemImage: "chevron.down", help: "Next (J)") { onMove(1) }
+          .keyboardShortcut(.upArrow, modifiers: .command)
+        HeaderButton(systemImage: "chevron.down", help: "Next (⌘↓)") { onMove(1) }
           .disabled(!canGoForward)
-          .keyboardShortcut("j", modifiers: [])
+          .keyboardShortcut(.downArrow, modifiers: .command)
       }
-      HeaderButton(systemImage: "arrow.up.left.and.arrow.down.right", help: "Open full size (F)") { onExpand() }
-        .keyboardShortcut("f", modifiers: [])
+      HeaderButton(systemImage: "arrow.up.left.and.arrow.down.right", help: "Open full size (⌘E)") { onExpand() }
+        .keyboardShortcut("e", modifiers: .command)
       HeaderButton(systemImage: "xmark", help: "Close (Esc)") { onClose() }
         .keyboardShortcut(.cancelAction)
     }
@@ -117,10 +117,10 @@ struct PeekCard: View {
         }
         .buttonStyle(.borderless)
         .help("Share")
-        DockButton(title: "Open original", systemImage: "safari", key: "↩", prominent: false, destructive: false) {
+        DockButton(title: "Open original", systemImage: "safari", key: "⌘↩", prominent: false, destructive: false) {
           perform(.openOriginal, item)
         }
-        .keyboardShortcut(.return, modifiers: [])
+        .keyboardShortcut(.return, modifiers: .command)
       }
     }
     .padding(.horizontal, 12)
@@ -130,10 +130,10 @@ struct PeekCard: View {
 
   private static func key(for action: ItemAction) -> String? {
     switch action {
-    case .save: return "S"
-    case .archive, .unarchive: return "⌫"
-    case .markRead, .markUnread: return "R"
-    case .markSeen: return "M"
+    case .save: return "⌘S"
+    case .archive, .unarchive: return "⌘⌫"
+    case .markRead, .markUnread: return "⌘R"
+    case .markSeen: return "⌘U"
     default: return nil
     }
   }
@@ -143,7 +143,7 @@ struct PeekCard: View {
     case .save: return "s"
     case .archive, .unarchive: return .delete
     case .markRead, .markUnread: return "r"
-    case .markSeen: return "m"
+    case .markSeen: return "u"
     default: return nil
     }
   }
@@ -154,7 +154,8 @@ private struct Shortcut: ViewModifier {
 
   func body(content: Content) -> some View {
     if let key {
-      content.keyboardShortcut(key, modifiers: [])
+      // With ⌘, so typing in the article (a highlight note) never triggers them.
+      content.keyboardShortcut(key, modifiers: .command)
     } else {
       content
     }

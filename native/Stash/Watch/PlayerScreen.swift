@@ -13,6 +13,7 @@ struct PlayerScreen: View {
 
   @Environment(PlayerController.self) private var player
   @State private var tab: PlayerTab = .upNext
+  @State private var screenID = UUID()
   @State private var transcript: [TranscriptLine]?
   @State private var transcriptError = false
 
@@ -49,9 +50,10 @@ struct PlayerScreen: View {
     .modifier(ScreenChrome(embedded: embedded, title: current.source) { toolbar })
     .onAppear {
       player.queue = queue
+      player.owner = screenID
       player.play(item)
     }
-    .onDisappear { player.stop() }
+    .onDisappear { if player.owner == screenID { player.stop() } }
     .task(id: current.id) { await loadTranscript() }
   }
 

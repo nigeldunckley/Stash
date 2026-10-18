@@ -13,6 +13,8 @@ final class PlayerController: NSObject {
   let webView: WKWebView
 
   private(set) var item: LibraryItem?
+  /// The player screen showing the video now; an older screen leaving doesn't stop it.
+  var owner: UUID?
   private(set) var time: Double = 0
   private(set) var duration: Double = 0
   private(set) var isPlaying = false
