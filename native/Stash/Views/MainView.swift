@@ -174,11 +174,11 @@ struct PageRow<Content: View>: View {
           HStack(spacing: 6) {
             ForEach(pages, id: \.0) { page, title in
               Button(title) { selection = page }
-                .font(.subheadline.weight(selection == page ? .semibold : .regular))
-                .foregroundStyle(selection == page ? Color.stashBackground : Color.stashInk)
+                .font(.ui(13, selection == page ? .medium : .regular, relativeTo: .subheadline))
+                .foregroundStyle(selection == page ? Color.stPage : Color.stInk)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(selection == page ? Color.stashInk : Color.stashSurface, in: Capsule())
+                .background(selection == page ? Color.stInk : Color.stSunken, in: Capsule())
                 .buttonStyle(.plain)
             }
           }

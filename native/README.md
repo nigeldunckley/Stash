@@ -61,3 +61,9 @@ The first time on iPhone:
 - `Stash/API/Edition.swift` is a port of the web's `lib/edition` (schedule and ranking).
   Keep the two in step if either changes; both store issues in personalization `edition`.
 - The project uses Xcode 16's folder sync: new files in `Stash/` are picked up automatically.
+- Look and feel: `Stash/Views/Theme.swift` holds the colours (`Color.st…`, copied from the
+  web's `stitches.config.ts`), the type scale and corner radii. Shared pieces (rows, the
+  segmented control, text buttons, the capture field, empty boxes, counts and headings) are
+  in `Stash/Views/Components`. Use these rather than system fonts or controls.
+- `Stash/Fonts` has Geist, Geist Mono and Newsreader (SIL OFL, licences alongside), cut to
+  static weights from the web's variable fonts and registered at launch by `StashFonts`.

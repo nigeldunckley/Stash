@@ -35,12 +35,7 @@ struct FeedsView: View {
       emptyTitle: showAll ? "No posts" : "All caught up",
       emptyMessage: showAll ? "Posts from the feeds you follow appear here." : "Nothing new from your feeds."
     ) {
-      Picker("Show", selection: $showAll) {
-        Text("Unseen").tag(false)
-        Text("All").tag(true)
-      }
-      .pickerStyle(.segmented)
-      .fixedSize()
+      StashSegmented(selection: $showAll, [.init("Unseen", false), .init("All", true)])
 
       Menu {
         Picker("Source", selection: $source) {

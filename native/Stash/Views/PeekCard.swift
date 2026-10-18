@@ -27,14 +27,14 @@ struct PeekCard: View {
       Divider()
       dock
     }
-    .background(Color.stashBackground)
+    .background(Color.stPage)
 
     if inSheet {
       card
     } else {
       card
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.stashBorder, lineWidth: 0.5))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.stLine, lineWidth: 0.5))
         .shadow(color: .black.opacity(0.10), radius: 2, y: 1)
         .shadow(color: .black.opacity(0.22), radius: 48, y: 24)
     }
@@ -49,19 +49,19 @@ struct PeekCard: View {
         .frame(width: 20, height: 20)
       VStack(alignment: .leading, spacing: 1) {
         Text(sourceName)
-          .font(.subheadline.weight(.semibold))
-          .foregroundStyle(Color.stashInk)
+          .font(.ui(13, .semibold))
+          .foregroundStyle(Color.stInk)
           .lineLimit(1)
         Text(details)
-          .font(.stashDetail)
-          .foregroundStyle(Color.stashMuted)
+          .font(.stDetail)
+          .foregroundStyle(Color.stMuted)
           .lineLimit(1)
       }
       Spacer(minLength: 8)
       if let position {
         Text(position)
-          .font(.stashDetail)
-          .foregroundStyle(Color.stashMuted)
+          .font(.stDetail)
+          .foregroundStyle(Color.stMuted)
           .monospacedDigit()
       }
       HStack(spacing: 2) {
@@ -171,13 +171,13 @@ private struct HeaderButton: View {
   var body: some View {
     Button(action: action) {
       Image(systemName: systemImage)
-        .font(.system(size: 13, weight: .semibold))
+        .font(.ui(13, .semibold))
         .frame(width: 30, height: 28)
-        .background(hovering ? Color.stashSurface : .clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .background(hovering ? Color.stSunken : .clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .foregroundStyle(Color.stashMuted)
+    .foregroundStyle(Color.stMuted)
     .help(help)
     .onHover { hovering = $0 }
   }
@@ -195,12 +195,12 @@ private struct DockButton: View {
   var body: some View {
     Button(action: action) {
       HStack(spacing: 6) {
-        Image(systemName: systemImage).font(.system(size: 12, weight: .semibold))
-        Text(title).font(.callout.weight(.medium))
+        Image(systemName: systemImage).font(.ui(12, .semibold))
+        Text(title).font(.ui(13, .medium))
         #if os(macOS)
         if let key {
           Text(key)
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .font(.mono(10, .medium))
             .padding(.horizontal, 4)
             .padding(.vertical, 1)
             .background(RoundedRectangle(cornerRadius: 4).strokeBorder(borderColor, lineWidth: 1))
@@ -214,7 +214,7 @@ private struct DockButton: View {
       .background(background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
       .overlay {
         if !prominent {
-          RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.stashBorder, lineWidth: 1)
+          RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1)
         }
       }
       .contentShape(Rectangle())
@@ -225,14 +225,14 @@ private struct DockButton: View {
   }
 
   private var foreground: Color {
-    if prominent { return .stashBackground }
-    return destructive ? .red : .stashInk
+    if prominent { return .stPage }
+    return destructive ? .red : .stInk
   }
 
   private var background: Color {
-    if prominent { return hovering ? Color.stashInk.opacity(0.85) : .stashInk }
-    return hovering ? .stashSurface : .stashBackground
+    if prominent { return hovering ? Color.stInk.opacity(0.85) : .stInk }
+    return hovering ? .stSunken : .stPage
   }
 
-  private var borderColor: Color { prominent ? .stashBackground : .stashMuted }
+  private var borderColor: Color { prominent ? .stPage : .stMuted }
 }

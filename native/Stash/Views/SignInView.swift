@@ -19,11 +19,11 @@ struct SignInView: View {
           .frame(width: 56, height: 56)
           .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
         Text("Stash")
-          .font(.system(.largeTitle, design: .default).weight(.semibold))
-          .foregroundStyle(Color.stashInk)
+          .font(.ui(30, .semibold, relativeTo: .largeTitle))
+          .foregroundStyle(Color.stInk)
         Text(StashConfig.server.host() ?? "")
-          .font(.stashDetail)
-          .foregroundStyle(Color.stashMuted)
+          .font(.stDetail)
+          .foregroundStyle(Color.stMuted)
       }
 
       VStack(spacing: 10) {
@@ -45,8 +45,8 @@ struct SignInView: View {
 
       if let error {
         Text(error)
-          .font(.callout)
-          .foregroundStyle(Color.stashAccentText)
+          .font(.ui(13))
+          .foregroundStyle(Color.stAccentText)
           .multilineTextAlignment(.center)
       }
 
@@ -56,7 +56,7 @@ struct SignInView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 22)
       }
-      .buttonStyle(.borderedProminent)
+      .buttonStyle(.textProminent)
       .controlSize(.large)
       .disabled(email.isEmpty || password.isEmpty || isWorking)
       .keyboardShortcut(.defaultAction)
@@ -67,7 +67,7 @@ struct SignInView: View {
     .padding(24)
     .frame(maxWidth: 380)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Color.stashBackground)
+    .background(Color.stPage)
     .onAppear { focus = .email }
   }
 
@@ -93,7 +93,7 @@ struct StashFieldStyle: TextFieldStyle {
       .textFieldStyle(.plain)
       .padding(.horizontal, 12)
       .padding(.vertical, 11)
-      .background(Color.stashBackground, in: RoundedRectangle(cornerRadius: 8))
-      .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stashBorder))
+      .background(Color.stPage, in: RoundedRectangle(cornerRadius: 8))
+      .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stLine))
   }
 }

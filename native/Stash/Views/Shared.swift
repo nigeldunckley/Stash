@@ -91,16 +91,18 @@ struct ToastOverlay: ViewModifier {
               toaster.dismiss()
               undo()
             }
-            .fontWeight(.semibold)
-            .foregroundStyle(Color.stashAccentText)
+            .font(.ui(13, .semibold))
+            .foregroundStyle(Color.stAccentText)
             .buttonStyle(.plain)
           }
         }
-          .font(.callout.weight(.medium))
+          .font(.ui(13, .medium))
           .padding(.horizontal, 14)
           .padding(.vertical, 9)
-          .background(.regularMaterial, in: Capsule())
-          .overlay(Capsule().strokeBorder(Color.stashBorder, lineWidth: 0.5))
+          .foregroundStyle(Color.stInk)
+          .background(Color.stPanel, in: RoundedRectangle(cornerRadius: Radius.item, style: .continuous))
+          .overlay(RoundedRectangle(cornerRadius: Radius.item, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
+          .shadow(color: .black.opacity(0.12), radius: 16, y: 8)
           .padding(.bottom, 16)
           .transition(.move(edge: .bottom).combined(with: .opacity))
       }
@@ -112,54 +114,12 @@ extension View {
   func toasts(_ toaster: Toaster) -> some View { modifier(ToastOverlay(toaster: toaster)) }
 }
 
-/// A small uppercase monospaced label, as used for section kickers on the web.
-struct Kicker: View {
-  let text: String
-  var accent = false
-
-  init(_ text: String, accent: Bool = false) {
-    self.text = text
-    self.accent = accent
-  }
-
-  var body: some View {
-    Text(text.uppercased())
-      .font(.system(size: 10.5, design: .monospaced))
-      .tracking(0.8)
-      .foregroundStyle(accent ? Color.stashAccentText : Color.stashMuted)
-  }
-}
-
-/// A section heading with an optional count beside it.
-struct SectionHeading<Trailing: View>: View {
-  let title: String
-  var detail: String?
-  @ViewBuilder var trailing: () -> Trailing
-
-  var body: some View {
-    HStack(alignment: .firstTextBaseline, spacing: 10) {
-      Text(title).font(.headline)
-      if let detail {
-        Text(detail).font(.stashDetail).foregroundStyle(Color.stashMuted)
-      }
-      Spacer(minLength: 0)
-      trailing()
-    }
-  }
-}
-
-extension SectionHeading where Trailing == EmptyView {
-  init(title: String, detail: String? = nil) {
-    self.init(title: title, detail: detail) { EmptyView() }
-  }
-}
-
 /// A cover image that fills its frame, with a quiet placeholder while it loads.
 struct CoverImage: View {
   let url: URL?
 
   var body: some View {
-    Color.stashSurface
+    Color.stSunken
       .overlay {
         AsyncImage(url: url) { image in
           image.resizable().scaledToFill()

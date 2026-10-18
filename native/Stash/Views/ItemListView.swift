@@ -31,11 +31,12 @@ struct ItemListView<Tools: View>: View {
           ReaderScreen(item: selection, actions: readerActions(for: selection), perform: perform)
             .id(selection.id)
         } else {
-          ContentUnavailableView("Pick something to read", systemImage: "text.alignleft")
+          EmptyBox(message: "Pick something to read", systemImage: "text.alignleft", boxed: false)
         }
       }
       .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
-      .background(Color.stashBackground)
+      .background(Color.stPage)
+      
     }
     #else
     NavigationStack {
@@ -49,7 +50,7 @@ struct ItemListView<Tools: View>: View {
 
   private var listView: some View {
     listContainer
-    .listStyle(.plain)
+    .stashList()
     .overlay { emptyState }
     .toasts(toaster)
     .navigationTitle(title)
@@ -59,6 +60,10 @@ struct ItemListView<Tools: View>: View {
     .task(id: query) { await list.load(query) }
     #if os(macOS)
     .onChange(of: selection) { _, item in if let item { open(item) } }
+    .focusable()
+    .focusEffectDisabled()
+    .onKeyPress(.downArrow) { step(1) }
+    .onKeyPress(.upArrow) { step(-1) }
     .onKeyPress(.delete) { performOnSelection(trailing.first) }
     .onKeyPress(.deleteForward) { performOnSelection(trailing.first) }
     .onKeyPress("s") { performOnSelection(leading == .save ? .save : nil) }
@@ -69,7 +74,14 @@ struct ItemListView<Tools: View>: View {
   @ViewBuilder
   private var listContainer: some View {
     #if os(macOS)
-    List(selection: macSelection) { rows }
+    // Selection is drawn by StashRow rather than the system, so the row stays Stash grey with
+    // an orange bar instead of the Mac's accent colour.
+    ScrollViewReader { proxy in
+      List { rows }
+        .onChange(of: selection) { _, item in
+          if let item { withAnimation(.snappy(duration: 0.15)) { proxy.scrollTo(item.id) } }
+        }
+    }
     #else
     List { rows }
     #endif
@@ -84,22 +96,25 @@ struct ItemListView<Tools: View>: View {
     }
     if list.isLoading && !list.items.isEmpty {
       HStack { Spacer(); ProgressView().controlSize(.small); Spacer() }
-        .listRowSeparator(.hidden)
+        .padding(.vertical, 8)
+        .stashListRow()
     }
   }
 
   private func row(_ item: LibraryItem) -> some View {
     rowBase(item)
+      .stashListRow()
       .itemSwipes(item, unseen: showsUnseen && list.isUnseen(item), perform: perform)
       .itemMenu(item, unseen: showsUnseen && list.isUnseen(item), perform: perform)
   }
 
   @ViewBuilder
   private func rowBase(_ item: LibraryItem) -> some View {
-    let content = ItemRow(item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item))
     #if os(macOS)
-    content
+    ItemRow(item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item), selected: selection?.id == item.id)
+      .onTapGesture { selection = item }
     #else
+    let content = ItemRow(item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item))
     Button { selection = item; open(item) } label: { content }
       .buttonStyle(.plain)
     #endif
@@ -109,29 +124,19 @@ struct ItemListView<Tools: View>: View {
   private var emptyState: some View {
     if list.visibleItems.isEmpty {
       if let error = list.error {
-        ContentUnavailableView {
-          Label("Couldn't load", systemImage: "wifi.exclamationmark")
-        } description: {
-          Text(error)
-        } actions: {
+        EmptyBox(title: "Couldn't load", message: error, systemImage: "wifi.exclamationmark", boxed: false) {
           Button("Try again") { Task { await list.reload(query) } }
         }
       } else if list.isLoading {
         ProgressView()
       } else {
-        ContentUnavailableView(emptyTitle, systemImage: "tray", description: Text(emptyMessage))
+        EmptyBox(title: emptyTitle, message: emptyMessage, systemImage: "tray", boxed: false)
       }
     }
   }
 
   // MARK: Doing things
 
-  private var macSelection: Binding<String?> {
-    Binding(
-      get: { selection?.id },
-      set: { id in selection = list.visibleItems.first { $0.id == id } }
-    )
-  }
 
   private func readerActions(for item: LibraryItem) -> [ItemAction] {
     [leading].compactMap { $0 } + trailing
@@ -166,6 +171,19 @@ struct ItemListView<Tools: View>: View {
   }
 
   #if os(macOS)
+  /// Up and down arrows move the selection through the list.
+  private func step(_ offset: Int) -> KeyPress.Result {
+    let items = list.visibleItems
+    guard !items.isEmpty else { return .ignored }
+    guard let current = selection, let index = items.firstIndex(of: current) else {
+      selection = offset > 0 ? items.first : items.last
+      return .handled
+    }
+    let next = min(max(index + offset, 0), items.count - 1)
+    selection = items[next]
+    return .handled
+  }
+
   private func performOnSelection(_ action: ItemAction?) -> KeyPress.Result {
     guard let action, let item = selection else { return .ignored }
     perform(action, item)

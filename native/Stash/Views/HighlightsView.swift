@@ -22,10 +22,11 @@ struct HighlightsView: View {
         }
         if isLoading && !highlights.isEmpty {
           HStack { Spacer(); ProgressView().controlSize(.small); Spacer() }
-            .listRowSeparator(.hidden)
+            .padding(.vertical, 8)
+            .stashListRow()
         }
       }
-      .listStyle(.plain)
+      .stashList()
       .overlay { emptyState }
       .navigationTitle("Highlights")
       .navigationDestination(for: LibraryItem.self) { item in
@@ -62,11 +63,11 @@ struct HighlightsView: View {
 
   @ViewBuilder
   private func row(_ highlight: Highlight) -> some View {
-    let content = VStack(alignment: .leading, spacing: 8) {
+    let content = StashRow { VStack(alignment: .leading, spacing: 8) {
       if let quote = highlight.quote, !quote.isEmpty {
         Text(quote)
-          .font(.system(.body, design: .serif))
-          .foregroundStyle(Color.stashInk)
+          .font(.reading(17, .regular))
+          .foregroundStyle(Color.stInk)
           .padding(.leading, 12)
           .overlay(alignment: .leading) {
             Rectangle().fill(color(highlight)).frame(width: 3)
@@ -74,8 +75,8 @@ struct HighlightsView: View {
       }
       if let note = highlight.annotation, !note.isEmpty {
         Label(note, systemImage: "text.bubble")
-          .font(.callout)
-          .foregroundStyle(Color.stashInk)
+          .font(.ui(13))
+          .foregroundStyle(Color.stInk)
       }
       HStack(spacing: 6) {
         if let item = highlight.libraryItem {
@@ -87,11 +88,9 @@ struct HighlightsView: View {
         Spacer(minLength: 0)
         Text(shortAge(highlight.createdAt))
       }
-      .font(.stashDetail)
-      .foregroundStyle(Color.stashMuted)
-    }
-    .padding(.vertical, 6)
-    .contentShape(Rectangle())
+      .font(.stDetail)
+      .foregroundStyle(Color.stMuted)
+    } }
     .contextMenu {
       if let quote = highlight.quote {
         Button { copy(quote) } label: { Label("Copy quote", systemImage: "doc.on.doc") }
@@ -111,6 +110,7 @@ struct HighlightsView: View {
         content
       }
     }
+    .stashListRow()
     .swipeActions(edge: .leading, allowsFullSwipe: true) {
       if let quote = highlight.quote {
         Button { copy(quote) } label: { Label("Copy", systemImage: "doc.on.doc") }
@@ -130,21 +130,15 @@ struct HighlightsView: View {
   private var emptyState: some View {
     if highlights.isEmpty {
       if let error {
-        ContentUnavailableView {
-          Label("Couldn't load", systemImage: "wifi.exclamationmark")
-        } description: {
-          Text(error)
-        } actions: {
+        EmptyBox(title: "Couldn't load", message: error, systemImage: "wifi.exclamationmark", boxed: false) {
           Button("Try again") { Task { await reload() } }
         }
       } else if isLoading {
         ProgressView()
       } else if !submittedSearch.isEmpty {
-        ContentUnavailableView.search(text: submittedSearch)
+        EmptyBox(title: "No results", message: "No highlights match “\(submittedSearch)”.", systemImage: "magnifyingglass", boxed: false)
       } else {
-        ContentUnavailableView(
-          "No highlights yet", systemImage: "highlighter",
-          description: Text("Select text while reading and choose Highlight."))
+        EmptyBox(title: "No highlights yet", message: "Select text while reading and choose Highlight.", systemImage: "highlighter", boxed: false)
       }
     }
   }

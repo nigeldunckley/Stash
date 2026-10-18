@@ -35,12 +35,7 @@ struct SavedView: View {
     ) {
       #if os(iOS)
       if !archive {
-        Picker("Show", selection: $archiveSwitch) {
-          Text("Saved").tag(false)
-          Text("Archive").tag(true)
-        }
-        .pickerStyle(.segmented)
-        .fixedSize()
+        StashSegmented(selection: $archiveSwitch, [.init("Saved", false), .init("Archive", true)])
       }
       #endif
       if !isArchive {

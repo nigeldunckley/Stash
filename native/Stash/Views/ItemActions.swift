@@ -45,7 +45,7 @@ enum ItemAction: Hashable {
 
   var tint: Color {
     switch self {
-    case .save: return .stashAccent
+    case .save: return .stAccent
     case .archive, .unarchive: return .gray
     case .delete: return .red
     case .markRead, .markUnread: return .blue

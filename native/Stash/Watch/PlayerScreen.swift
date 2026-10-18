@@ -46,7 +46,7 @@ struct PlayerScreen: View {
         }
       }
     }
-    .background(Color.stashBackground)
+    .background(Color.stPage)
     .modifier(ScreenChrome(embedded: embedded, title: current.source) { toolbar })
     .onAppear {
       player.queue = queue
@@ -85,8 +85,8 @@ struct PlayerScreen: View {
   private var details: some View {
     VStack(alignment: .leading, spacing: 10) {
       Text(current.title)
-        .font(.stashTitle(.title2))
-        .foregroundStyle(Color.stashInk)
+        .font(.reading(24, .medium, relativeTo: .title2))
+        .foregroundStyle(Color.stInk)
       HStack(spacing: 8) {
         Text(current.author ?? current.source)
         Text("·")
@@ -96,8 +96,8 @@ struct PlayerScreen: View {
           Text(Watch.timecode(length))
         }
       }
-      .font(.stashDetail)
-      .foregroundStyle(Color.stashMuted)
+      .font(.stDetail)
+      .foregroundStyle(Color.stMuted)
       controls
     }
   }
@@ -118,8 +118,8 @@ struct PlayerScreen: View {
         .help("Forward 10 seconds")
 
       Text("\(Watch.timecode(player.time)) / \(Watch.timecode(player.duration))")
-        .font(.stashDetail)
-        .foregroundStyle(Color.stashMuted)
+        .font(.stDetail)
+        .foregroundStyle(Color.stMuted)
         .monospacedDigit()
 
       Spacer()
@@ -132,17 +132,17 @@ struct PlayerScreen: View {
         }
       } label: {
         Text(player.rate == 1 ? "1×" : "\(player.rate.formatted())×")
-          .font(.stashDetail)
+          .font(.stDetail)
           .padding(.horizontal, 8)
           .padding(.vertical, 4)
-          .overlay(Capsule().strokeBorder(Color.stashBorder))
+          .overlay(Capsule().strokeBorder(Color.stLine))
       }
       .menuIndicator(.hidden)
       .fixedSize()
       .help("Playback speed, remembered for this channel")
     }
     .buttonStyle(.borderless)
-    .font(.title3)
+    .font(.ui(17, relativeTo: .title3))
   }
 
   private var tabs: some View {
@@ -153,11 +153,7 @@ struct PlayerScreen: View {
   }
 
   private var tabPicker: some View {
-    Picker("Show", selection: $tab) {
-      ForEach(PlayerTab.allCases) { Text($0.rawValue).tag($0) }
-    }
-    .pickerStyle(.segmented)
-    .labelsHidden()
+    StashSegmented(selection: $tab, PlayerTab.allCases.map { StashSegmented<PlayerTab>.Option($0.rawValue, $0) })
   }
 
   @ViewBuilder
@@ -176,12 +172,12 @@ struct PlayerScreen: View {
       Toggle("Play the next video automatically", isOn: Binding(
         get: { player.autoplay }, set: { player.autoplay = $0 }
       ))
-      .font(.callout)
+      .font(.ui(13))
       .padding(.bottom, 8)
       if player.upNext.isEmpty {
         Text("Nothing else in this list.")
-          .font(.callout)
-          .foregroundStyle(Color.stashMuted)
+          .font(.ui(13))
+          .foregroundStyle(Color.stMuted)
       }
       ForEach(player.upNext.prefix(30)) { next in
         Button { player.play(next) } label: {
@@ -204,19 +200,18 @@ struct PlayerScreen: View {
             Button { player.seek(to: line.start) } label: {
               HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(Watch.timecode(line.start))
-                  .font(.stashDetail)
-                  .foregroundStyle(Color.stashMuted)
+                  .font(.stDetail)
+                  .foregroundStyle(Color.stMuted)
                   .frame(width: 52, alignment: .leading)
                 Text(line.text)
-                  .font(.callout)
-                  .foregroundStyle(index == currentLine ? Color.stashInk : Color.stashMuted)
-                  .fontWeight(index == currentLine ? .semibold : .regular)
+                  .font(.ui(13, index == currentLine ? .semibold : .regular))
+                  .foregroundStyle(index == currentLine ? Color.stInk : Color.stMuted)
                   .frame(maxWidth: .infinity, alignment: .leading)
               }
               .padding(.vertical, 4)
               .padding(.horizontal, 6)
               .background(
-                index == currentLine ? Color.stashAccent.opacity(0.10) : .clear,
+                index == currentLine ? Color.stAccent.opacity(0.10) : .clear,
                 in: RoundedRectangle(cornerRadius: 6)
               )
               .contentShape(Rectangle())
@@ -231,8 +226,8 @@ struct PlayerScreen: View {
       }
     } else if transcriptError || transcript?.isEmpty == true {
       Text("This video has no transcript.")
-        .font(.callout)
-        .foregroundStyle(Color.stashMuted)
+        .font(.ui(13))
+        .foregroundStyle(Color.stMuted)
     } else {
       ProgressView().frame(maxWidth: .infinity)
     }
@@ -256,15 +251,15 @@ struct PlayerScreen: View {
     return VStack(alignment: .leading, spacing: 14) {
       if !chapters.isEmpty {
         VStack(alignment: .leading, spacing: 2) {
-          Text("Chapters").font(.headline)
+          Text("Chapters").font(.stSection)
           ForEach(chapters, id: \.self) { chapter in
             Button { player.seek(to: chapter.start) } label: {
               HStack(spacing: 10) {
                 Text(Watch.timecode(chapter.start))
-                  .font(.stashDetail)
-                  .foregroundStyle(Color.stashAccentText)
+                  .font(.stDetail)
+                  .foregroundStyle(Color.stAccentText)
                   .frame(width: 52, alignment: .leading)
-                Text(chapter.title).font(.callout).foregroundStyle(Color.stashInk)
+                Text(chapter.title).font(.ui(13)).foregroundStyle(Color.stInk)
                 Spacer()
               }
               .padding(.vertical, 4)
@@ -276,11 +271,11 @@ struct PlayerScreen: View {
       }
       if let description = current.description, !description.isEmpty {
         Text(description)
-          .font(.callout)
-          .foregroundStyle(Color.stashInk)
+          .font(.ui(13))
+          .foregroundStyle(Color.stInk)
           .textSelection(.enabled)
       } else if chapters.isEmpty {
-        Text("No description.").font(.callout).foregroundStyle(Color.stashMuted)
+        Text("No description.").font(.ui(13)).foregroundStyle(Color.stMuted)
       }
     }
   }

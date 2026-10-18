@@ -8,13 +8,19 @@ struct StashApp: App {
   /// The Edition's state, so the sidebar knows when an issue is out.
   @State private var edition = EditionModel()
 
+  init() {
+    StashFonts.register()
+  }
+
   var body: some Scene {
     WindowGroup {
       RootView()
         .environment(session)
         .environment(player)
         .environment(edition)
-        .tint(.stashAccent)
+        .font(.stBody)
+        .foregroundStyle(Color.stInk)
+        .tint(.stAccent)
     }
     #if os(macOS)
     .defaultSize(width: 1240, height: 820)

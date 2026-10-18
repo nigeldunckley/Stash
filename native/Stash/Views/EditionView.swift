@@ -96,19 +96,15 @@ struct EditionView: View {
           if let edition = model.current {
             issue(edition)
           } else if let error = model.error {
-            ContentUnavailableView {
-              Label("Couldn't make this week's issue", systemImage: "newspaper")
-            } description: {
-              Text(error)
-            } actions: {
+            EmptyBox(title: "Couldn't make this week's issue", message: error, systemImage: "newspaper", boxed: false) {
               Button("Try again") { Task { await model.make(subscriptions: subscriptions) } }
             }
           } else {
             VStack(spacing: 12) {
               ProgressView()
               Text("Putting this week's issue together…")
-                .font(.callout)
-                .foregroundStyle(Color.stashMuted)
+                .font(.ui(13))
+                .foregroundStyle(Color.stMuted)
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 80)
@@ -119,7 +115,7 @@ struct EditionView: View {
         .frame(maxWidth: 760)
         .frame(maxWidth: .infinity)
       }
-      .background(Color.stashBackground)
+      .background(Color.stPage)
       .navigationTitle("The Edition")
       #if os(iOS)
       .navigationBarTitleDisplayMode(.inline)
@@ -186,20 +182,20 @@ struct EditionView: View {
     let minutes = edition.entries.reduce(0) { $0 + (items[$1.id]?.readingMinutes ?? 4) }
     let day = EditionSchedule.at(edition.date, hour: 12)
     return VStack(alignment: .leading, spacing: 8) {
-      Rectangle().fill(Color.stashInk).frame(height: 2)
-      (Text("The Edition") + Text(".").foregroundStyle(Color.stashAccent))
-        .font(.system(size: 44, weight: .bold))
+      Rectangle().fill(Color.stInk).frame(height: 2)
+      (Text("The Edition") + Text(".").foregroundStyle(Color.stAccent))
+        .font(.ui(44, .bold, relativeTo: .largeTitle))
         .tracking(-2)
-        .foregroundStyle(Color.stashInk)
+        .foregroundStyle(Color.stInk)
       HStack(spacing: 10) {
         Kicker("No. \(edition.number)")
         Kicker(day.formatted(.dateTime.weekday(.wide).day().month(.wide)))
         Kicker("\(edition.entries.count) stories · \(minutes) min")
       }
       Text("Chosen from \(edition.considered) stories across \(edition.sources) sources you didn't get to this week.")
-        .font(.callout)
-        .foregroundStyle(Color.stashMuted)
-      Rectangle().fill(Color.stashBorder).frame(height: 1)
+        .font(.ui(13))
+        .foregroundStyle(Color.stMuted)
+      Rectangle().fill(Color.stLine).frame(height: 1)
     }
   }
 
@@ -213,13 +209,13 @@ struct EditionView: View {
         }
         Kicker("The week's best you missed", accent: true)
         Text(item.title)
-          .font(.system(size: 30, weight: .semibold, design: .serif))
-          .foregroundStyle(Color.stashInk)
+          .font(.reading(30, .medium, relativeTo: .largeTitle))
+          .foregroundStyle(Color.stInk)
           .multilineTextAlignment(.leading)
         if let description = item.description, !description.isEmpty {
           Text(description)
-            .font(.system(.body, design: .serif))
-            .foregroundStyle(Color.stashMuted)
+            .font(.reading(17, .regular))
+            .foregroundStyle(Color.stMuted)
             .lineLimit(4)
         }
         storyMeta(item, why: why)
@@ -241,14 +237,14 @@ struct EditionView: View {
             HStack(alignment: .top, spacing: 14) {
               VStack(alignment: .leading, spacing: 6) {
                 Text(item.title)
-                  .font(.stashTitle(.title3))
-                  .foregroundStyle(Color.stashInk)
+                  .font(.reading(20, .medium, relativeTo: .title3))
+                  .foregroundStyle(Color.stInk)
                   .lineLimit(3)
                   .multilineTextAlignment(.leading)
                 if let description = item.description, !description.isEmpty {
                   Text(description)
-                    .font(.subheadline)
-                    .foregroundStyle(Color.stashMuted)
+                    .font(.ui(13, relativeTo: .subheadline))
+                    .foregroundStyle(Color.stMuted)
                     .lineLimit(2)
                 }
                 storyMeta(item, why: entry.why)
@@ -274,15 +270,15 @@ struct EditionView: View {
   private func storyMeta(_ item: LibraryItem, why: String?) -> some View {
     HStack(spacing: 8) {
       if isDone(item) {
-        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.stashAccent)
+        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.stAccent)
       }
       SiteIcon(url: item.iconURL)
       Text(sourceName(item)).lineLimit(1)
       if let minutes = item.readingMinutes { Text("· \(minutes) min") }
-      if let why { Text("· \(why)").foregroundStyle(Color.stashAccentText).lineLimit(1) }
+      if let why { Text("· \(why)").foregroundStyle(Color.stAccentText).lineLimit(1) }
     }
-    .font(.stashDetail)
-    .foregroundStyle(Color.stashMuted)
+    .font(.stDetail)
+    .foregroundStyle(Color.stMuted)
   }
 
   @ViewBuilder
@@ -305,16 +301,16 @@ struct EditionView: View {
         Button { open(itemID: quote.itemId) } label: {
           VStack(alignment: .leading, spacing: 8) {
             Text("“\(quote.quote)”")
-              .font(.system(.title3, design: .serif).italic())
-              .foregroundStyle(Color.stashInk)
+              .font(.reading(20, .regular, italic: true, relativeTo: .title3))
+              .foregroundStyle(Color.stInk)
               .multilineTextAlignment(.leading)
             Text("\(quote.title) · \(quote.source)")
-              .font(.stashDetail)
-              .foregroundStyle(Color.stashMuted)
+              .font(.stDetail)
+              .foregroundStyle(Color.stMuted)
               .lineLimit(1)
           }
           .padding(.leading, 14)
-          .overlay(alignment: .leading) { Rectangle().fill(Color.stashAccent).frame(width: 2) }
+          .overlay(alignment: .leading) { Rectangle().fill(Color.stAccent).frame(width: 2) }
           .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -339,22 +335,22 @@ struct EditionView: View {
     VStack(alignment: .leading, spacing: 4) {
       Kicker(label)
       Text(value)
-        .font(.system(.title3, design: .serif))
-        .foregroundStyle(Color.stashInk)
+        .font(.reading(20, .medium, relativeTo: .title3))
+        .foregroundStyle(Color.stInk)
         .lineLimit(2)
     }
   }
 
   private func putAway(_ edition: Edition) -> some View {
     VStack(alignment: .leading, spacing: 8) {
-      Rectangle().fill(Color.stashBorder).frame(height: 1)
+      Rectangle().fill(Color.stLine).frame(height: 1)
       HStack {
         Text("That's this week's issue. The next one arrives on \(EditionSchedule.dayNames[model.state?.day ?? 6]).")
-          .font(.callout)
-          .foregroundStyle(Color.stashMuted)
+          .font(.ui(13))
+          .foregroundStyle(Color.stMuted)
         Spacer(minLength: 12)
         Button("Mark as read") { markRead(edition) }
-          .buttonStyle(.borderedProminent)
+          .buttonStyle(.textProminent)
       }
     }
     .padding(.bottom, 24)

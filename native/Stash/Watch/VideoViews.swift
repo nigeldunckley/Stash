@@ -11,18 +11,16 @@ struct VideoCard: View {
       VideoThumbnail(item: item)
       VStack(alignment: .leading, spacing: 4) {
         Text(item.title)
-          .font(.system(.subheadline).weight(.semibold))
-          .foregroundStyle(Color.stashInk)
+          .font(.stVideoTitle)
+          .foregroundStyle(Color.stInk)
           .lineLimit(2)
           .multilineTextAlignment(.leading)
         HStack(spacing: 6) {
-          if unseen { Circle().fill(Color.stashAccent).frame(width: 6, height: 6) }
-          Text(channelName ?? item.author ?? item.source).lineLimit(1)
-          Text("·")
-          Text(shortAge(item.publishedAt ?? item.savedAt))
+          if unseen { Circle().fill(Color.stAccent).frame(width: 6, height: 6) }
+          Text(channelName ?? item.author ?? item.source).font(.stSmall).lineLimit(1)
+          Text(shortAge(item.publishedAt ?? item.savedAt)).font(.stDetail)
         }
-        .font(.stashDetail)
-        .foregroundStyle(Color.stashMuted)
+        .foregroundStyle(Color.stMuted)
       }
     }
     .contentShape(Rectangle())
@@ -33,20 +31,20 @@ struct VideoThumbnail: View {
   let item: LibraryItem
 
   var body: some View {
-    Color.stashSurface
+    Color.stSunken
       .aspectRatio(16 / 9, contentMode: .fit)
       .overlay {
         AsyncImage(url: item.imageURL) { image in
           image.resizable().scaledToFill()
         } placeholder: {
-          Image(systemName: "play.rectangle").foregroundStyle(Color.stashMuted)
+          Image(systemName: "play.rectangle").foregroundStyle(Color.stMuted)
         }
       }
       .clipped()
       .overlay(alignment: .bottomTrailing) {
         if let length = Watch.duration(item) {
           Text(Watch.timecode(length))
-            .font(.system(.caption2, design: .monospaced).weight(.medium))
+            .font(.mono(10.5, .medium))
             .foregroundStyle(.white)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
@@ -58,38 +56,39 @@ struct VideoThumbnail: View {
         if item.progress > 0.02 {
           GeometryReader { geometry in
             Rectangle()
-              .fill(Color.stashAccent)
+              .fill(Color.stAccent)
               .frame(width: geometry.size.width * min(item.progress, 1), height: 3)
               .frame(maxHeight: .infinity, alignment: .bottom)
           }
         }
       }
-      .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-      .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stashBorder, lineWidth: 0.5))
+      .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+      .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
   }
 }
 
 /// A compact row, for Up next.
 struct VideoRow: View {
   let item: LibraryItem
+  var selected = false
 
   var body: some View {
+    StashRow(selected: selected, hasThumbnail: true) {
     HStack(alignment: .top, spacing: 10) {
       VideoThumbnail(item: item).frame(width: 128)
       VStack(alignment: .leading, spacing: 4) {
         Text(item.title)
-          .font(.callout.weight(.medium))
-          .foregroundStyle(Color.stashInk)
+          .font(.stVideoTitle)
+          .foregroundStyle(Color.stInk)
           .lineLimit(2)
           .multilineTextAlignment(.leading)
         Text(item.author ?? item.source)
-          .font(.stashDetail)
-          .foregroundStyle(Color.stashMuted)
+          .font(.stSmall)
+          .foregroundStyle(Color.stMuted)
           .lineLimit(1)
       }
       Spacer(minLength: 0)
     }
-    .padding(.vertical, 4)
-    .contentShape(Rectangle())
+    }
   }
 }

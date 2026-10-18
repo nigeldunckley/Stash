@@ -75,7 +75,7 @@ struct WatchView: View {
       videoList
       .overlay { emptyState }
       .toasts(toaster)
-      .background(Color.stashBackground)
+      .background(Color.stPage)
       .navigationTitle(title)
       .navigationDestination(for: LibraryItem.self) { item in
         PlayerScreen(item: item, queue: videos, actions: actions, perform: perform)
@@ -99,16 +99,17 @@ struct WatchView: View {
           card(item)
         }
         .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
         .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
         .itemSwipes(item, unseen: isUnseen(item), perform: perform)
         .itemMenu(item, unseen: isUnseen(item), perform: perform)
         .task { await list.loadMore(after: item) }
       }
       if list.isLoading && !list.items.isEmpty {
-        HStack { Spacer(); ProgressView(); Spacer() }.listRowSeparator(.hidden)
+        HStack { Spacer(); ProgressView(); Spacer() }.stashListRow()
       }
     }
-    .listStyle(.plain)
+    .stashList()
     #else
     ScrollView {
       LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 18, alignment: .top)], spacing: 22) {
@@ -136,12 +137,7 @@ struct WatchView: View {
   @ViewBuilder
   private var tools: some View {
     if kind != .saved {
-      Picker("Show", selection: $showAll) {
-        Text("New").tag(false)
-        Text("All").tag(true)
-      }
-      .pickerStyle(.segmented)
-      .fixedSize()
+      StashSegmented(selection: $showAll, [.init("New", false), .init("All", true)])
 
       Menu {
         Picker("Channel", selection: $channel) {
@@ -169,21 +165,15 @@ struct WatchView: View {
   private var emptyState: some View {
     if list.visibleItems.isEmpty {
       if let error = list.error {
-        ContentUnavailableView {
-          Label("Couldn't load", systemImage: "wifi.exclamationmark")
-        } description: {
-          Text(error)
-        } actions: {
+        EmptyBox(title: "Couldn't load", message: error, systemImage: "wifi.exclamationmark", boxed: false) {
           Button("Try again") { Task { await reload() } }
         }
       } else if list.isLoading {
         ProgressView()
       } else if kind == .saved {
-        ContentUnavailableView("No saved videos", systemImage: "play.rectangle.on.rectangle",
-                               description: Text("Save videos from your channels to watch them later."))
+        EmptyBox(title: "No saved videos", message: "Save videos from your channels to watch them later.", systemImage: "play.rectangle.on.rectangle", boxed: false)
       } else {
-        ContentUnavailableView(showAll ? "No videos" : "All caught up", systemImage: "play.rectangle",
-                               description: Text(showAll ? "Videos from the channels you follow appear here." : "Nothing new from your channels."))
+        EmptyBox(title: showAll ? "No videos" : "All caught up", message: showAll ? "Videos from the channels you follow appear here." : "Nothing new from your channels.", systemImage: "play.rectangle", boxed: false)
       }
     }
   }

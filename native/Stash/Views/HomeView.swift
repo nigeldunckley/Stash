@@ -43,13 +43,13 @@ struct HomeView: View {
   var body: some View {
     NavigationStack(path: $path) {
       content
-        .background(Color.stashBackground)
+        .background(Color.stPage)
         .navigationTitle("Home")
         .toolbar {
           ToolbarItem(placement: .primaryAction) {
             Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased())
-              .font(.stashDetail)
-              .foregroundStyle(Color.stashMuted)
+              .font(.stDetail)
+              .foregroundStyle(Color.stMuted)
               .fixedSize()
           }
         }
@@ -72,7 +72,7 @@ struct HomeView: View {
       peekCard(item, inSheet: true)
         .presentationDetents([.large])
         .presentationCornerRadius(22)
-        .presentationBackground(Color.stashBackground)
+        .presentationBackground(Color.stPage)
     }
     #endif
   }
@@ -129,7 +129,7 @@ struct HomeView: View {
     ZStack {
       HStack(spacing: 0) {
         homeList.frame(maxWidth: .infinity)
-        Divider()
+        Rectangle().fill(Color.stLine).frame(width: 1)
         ScrollView { upNextRail.padding(20) }
           .frame(width: 340)
       }
@@ -159,7 +159,7 @@ struct HomeView: View {
   /// swipe: right to save, left to archive.
   private var homeList: some View {
     listContainer
-      .listStyle(.plain)
+      .stashList()
       .refreshable { await reload() }
       #if os(macOS)
       .onChange(of: selectedID) { _, id in
@@ -167,6 +167,10 @@ struct HomeView: View {
         guard let id, id != peek?.id, !(peek != nil && peekFromUpNext), let item = feeds.visibleItems.first(where: { $0.id == id }) else { return }
         open(item)
       }
+      .focusable()
+      .focusEffectDisabled()
+      .onKeyPress(.downArrow) { step(1) }
+      .onKeyPress(.upArrow) { step(-1) }
       .onKeyPress(.delete) { performOnSelection(.archive) }
       .onKeyPress(.deleteForward) { performOnSelection(.archive) }
       .onKeyPress("s") { performOnSelection(.save) }
@@ -176,7 +180,13 @@ struct HomeView: View {
   @ViewBuilder
   private var listContainer: some View {
     #if os(macOS)
-    List(selection: $selectedID) { listRows }
+    // Selection is drawn by the rows (Stash grey with an orange bar), not the system.
+    ScrollViewReader { proxy in
+      List { listRows }
+        .onChange(of: selectedID) { _, id in
+          if let id { withAnimation(.snappy(duration: 0.15)) { proxy.scrollTo(id) } }
+        }
+    }
     #else
     List { listRows }
     #endif
@@ -187,31 +197,40 @@ struct HomeView: View {
     if edition.isFresh && edition.state?.showOnHome != false {
       editionStrip
         .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
         .selectionDisabled()
     }
     #if os(iOS)
     upNextStrip
       .listRowSeparator(.hidden)
+      .listRowBackground(Color.clear)
       .padding(.bottom, 8)
     #endif
     feedsHeading
       .listRowSeparator(.hidden)
+      .listRowBackground(Color.clear)
       .selectionDisabled()
 
     let items = Array(feeds.visibleItems.prefix(Self.feedLimit))
     if items.isEmpty {
-      feedsEmpty.listRowSeparator(.hidden).selectionDisabled()
+      feedsEmpty.listRowSeparator(.hidden).listRowBackground(Color.clear).selectionDisabled()
     } else {
       ForEach(groups(items), id: \.label) { group in
-        Section {
-          ForEach(group.items) { item in feedRow(item) }
-        } header: {
-          Kicker(group.label)
-        }
+        // A plain row rather than a Section header, so it scrolls with the list on Stash's
+        // background instead of sticking with the system's grey bar.
+        Kicker(group.label)
+          .padding(.horizontal, 12)
+          .padding(.top, 14)
+          .padding(.bottom, 6)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .stashListRow()
+          .selectionDisabled()
+        ForEach(group.items) { item in feedRow(item) }
       }
       if (feeds.total ?? 0) > items.count {
         moreButton(items.count)
           .listRowSeparator(.hidden)
+          .listRowBackground(Color.clear)
           .selectionDisabled()
       }
     }
@@ -223,8 +242,8 @@ struct HomeView: View {
     Button { go(.edition) } label: {
       HStack(spacing: 18) {
         VStack(alignment: .leading, spacing: 4) {
-          (Text("The Edition") + Text(".").foregroundStyle(Color.stashAccent))
-            .font(.system(size: 20, weight: .bold))
+          (Text("The Edition") + Text(".").foregroundStyle(Color.stAccent))
+            .font(.ui(20, .bold, relativeTo: .title3))
             .tracking(-0.8)
           if let current = edition.current {
             Kicker("No. \(current.number) · \(EditionSchedule.at(current.date, hour: 12).formatted(.dateTime.weekday(.wide).day().month(.wide)))")
@@ -238,20 +257,20 @@ struct HomeView: View {
           VStack(alignment: .leading, spacing: 2) {
             Kicker("The week's best you missed", accent: true)
             Text(leadTitle)
-              .font(.system(.title3, design: .serif))
-              .foregroundStyle(Color.stashInk)
+              .font(.reading(20, .medium, relativeTo: .title3))
+              .foregroundStyle(Color.stInk)
               .lineLimit(isWide ? 1 : 2)
               .multilineTextAlignment(.leading)
           }
         }
         Spacer(minLength: 0)
         Image(systemName: "arrow.right")
-          .font(.callout.weight(.semibold))
-          .foregroundStyle(Color.stashMuted)
+          .font(.ui(13, .semibold))
+          .foregroundStyle(Color.stMuted)
       }
       .padding(.vertical, 12)
-      .overlay(alignment: .top) { Rectangle().fill(Color.stashInk).frame(height: 2) }
-      .overlay(alignment: .bottom) { Rectangle().fill(Color.stashBorder).frame(height: 1) }
+      .overlay(alignment: .top) { Rectangle().fill(Color.stInk).frame(height: 2) }
+      .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
@@ -261,20 +280,16 @@ struct HomeView: View {
 
   private var feedsHeading: some View {
     SectionHeading(title: "New from your feeds", detail: feeds.total.map { "\($0) unseen" }) {
-      Picker("Show", selection: $tab) {
-        Text(label("Read", tab == .read ? feeds.total : otherCount)).tag(Tab.read)
-        Text(label("Watch", tab == .watch ? feeds.total : otherCount)).tag(Tab.watch)
-      }
-      .pickerStyle(.segmented)
-      .labelsHidden()
-      .fixedSize()
+      StashSegmented(selection: $tab, [
+        .init("Read", Tab.read, count: tab == .read ? feeds.total : otherCount),
+        .init("Watch", Tab.watch, count: tab == .watch ? feeds.total : otherCount),
+      ])
       Button { markAllSeen() } label: {
-        Label("Mark all seen", systemImage: "checkmark.circle")
+        Label("Mark all seen", systemImage: "checkmark")
       }
-      .labelStyle(.iconOnly)
-      .buttonStyle(.borderless)
+      .buttonStyle(.text)
       .disabled(feeds.visibleItems.isEmpty)
-      .help("Mark all as seen")
+      .help("Mark everything here as seen")
     }
     .padding(.top, 6)
   }
@@ -285,11 +300,9 @@ struct HomeView: View {
       if feeds.isLoading {
         ProgressView().frame(maxWidth: .infinity)
       } else if let error = feeds.error {
-        ContentUnavailableView("Couldn't load", systemImage: "wifi.exclamationmark", description: Text(error))
+        EmptyBox(title: "Couldn't load", message: error, systemImage: "wifi.exclamationmark", boxed: true)
       } else {
-        ContentUnavailableView(
-          "All caught up", systemImage: "checkmark.circle",
-          description: Text(tab == .watch ? "No new videos from your channels." : "Nothing new from your feeds."))
+        EmptyBox(title: "All caught up", message: tab == .watch ? "No new videos from your channels." : "Nothing new from your feeds.", systemImage: "checkmark.circle", boxed: true)
       }
     }
     .padding(.vertical, 24)
@@ -301,21 +314,16 @@ struct HomeView: View {
     } label: {
       HStack {
         Text("\((feeds.total ?? 0) - shown) more")
-          .foregroundStyle(Color.stashMuted)
+          .foregroundStyle(Color.stMuted)
         Spacer()
-        Text(tab == .watch ? "Open Channels" : "Open Feeds").fontWeight(.medium)
+        Text(tab == .watch ? "Open Channels" : "Open Feeds").font(.ui(13, .medium))
         Image(systemName: "chevron.right")
       }
-      .font(.callout)
+      .font(.ui(13))
       .padding(.vertical, 6)
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-  }
-
-  private func label(_ title: String, _ count: Int?) -> String {
-    guard let count, count > 0 else { return title }
-    return "\(title) \(count)"
   }
 
   private func groups(_ items: [LibraryItem]) -> [(label: String, items: [LibraryItem])] {
@@ -333,7 +341,7 @@ struct HomeView: View {
 
   private func feedRow(_ item: LibraryItem) -> some View {
     rowBase(item)
-      .tag(item.id)
+      .stashListRow()
       .itemSwipes(item, unseen: feeds.isUnseen(item), perform: perform)
       .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
   }
@@ -341,15 +349,20 @@ struct HomeView: View {
   /// On Mac the list's selection opens the preview; on iPhone a tap does.
   @ViewBuilder
   private func rowBase(_ item: LibraryItem) -> some View {
+    #if os(macOS)
+    let selected = selectedID == item.id
+    #else
+    let selected = false
+    #endif
     let content = Group {
       if Watch.isVideo(item) {
-        VideoRow(item: item)
+        VideoRow(item: item, selected: selected)
       } else {
-        ItemRow(item: item, subscriptionName: channelName(item), unseen: feeds.isUnseen(item))
+        ItemRow(item: item, subscriptionName: channelName(item), unseen: feeds.isUnseen(item), selected: selected)
       }
     }
     #if os(macOS)
-    content
+    content.onTapGesture { selectedID = item.id }
     #else
     Button { open(item) } label: { content }
       .buttonStyle(.plain)
@@ -368,10 +381,10 @@ struct HomeView: View {
             CoverImage(url: first.imageURL)
               .aspectRatio(16 / 10, contentMode: .fit)
               .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-              .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.stashBorder, lineWidth: 0.5))
-            upNextText(first, titleFont: .stashTitle(.title3))
+              .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.stLine, lineWidth: 0.5))
+            upNextText(first, titleFont: .reading(20, .medium, relativeTo: .title3))
             if first.progress > 0.02 {
-              ProgressView(value: first.progress).tint(Color.stashAccent)
+              ProgressView(value: first.progress).tint(Color.stAccent)
             }
           }
           .contentShape(Rectangle())
@@ -380,9 +393,9 @@ struct HomeView: View {
         .itemMenu(first, perform: perform)
 
         ForEach(upNext.dropFirst()) { item in
-          Divider()
+          Rectangle().fill(Color.stLine).frame(height: 1)
           Button { open(item) } label: {
-            upNextText(item, titleFont: .stashTitle(.subheadline)).contentShape(Rectangle())
+            upNextText(item, titleFont: .reading(16, .medium, relativeTo: .subheadline)).contentShape(Rectangle())
           }
           .buttonStyle(.plain)
           .itemMenu(item, perform: perform)
@@ -396,7 +409,7 @@ struct HomeView: View {
             Text("All \(unreadTotal) in Saved")
             Image(systemName: "chevron.right")
           }
-          .font(.callout)
+          .font(.ui(13))
         }
         .buttonStyle(.borderless)
         .padding(.top, 4)
@@ -422,10 +435,10 @@ struct HomeView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(alignment: .bottom) {
                       if item.progress > 0.02 {
-                        ProgressView(value: item.progress).tint(Color.stashAccent).padding(8)
+                        ProgressView(value: item.progress).tint(Color.stAccent).padding(8)
                       }
                     }
-                  upNextText(item, titleFont: .stashTitle(.subheadline))
+                  upNextText(item, titleFont: .reading(16, .medium, relativeTo: .subheadline))
                 }
                 .frame(width: 240, alignment: .leading)
                 .contentShape(Rectangle())
@@ -450,8 +463,8 @@ struct HomeView: View {
       ProgressView().frame(maxWidth: .infinity).padding(.vertical, 12)
     } else {
       Text("Nothing waiting. Save something from your feeds and it will show here.")
-        .font(.callout)
-        .foregroundStyle(Color.stashMuted)
+        .font(.ui(13))
+        .foregroundStyle(Color.stMuted)
     }
   }
 
@@ -461,17 +474,17 @@ struct HomeView: View {
         SiteIcon(url: item.iconURL)
         Text(item.source).lineLimit(1)
       }
-      .font(.stashDetail)
-      .foregroundStyle(Color.stashMuted)
+      .font(.stDetail)
+      .foregroundStyle(Color.stMuted)
       Text(item.title)
         .font(titleFont)
-        .foregroundStyle(Color.stashInk)
+        .foregroundStyle(Color.stInk)
         .lineLimit(3)
         .multilineTextAlignment(.leading)
       if let label = readingLabel(item) {
         Text(label)
-          .font(.stashDetail)
-          .foregroundStyle(item.progress >= 0.02 ? Color.stashAccentText : Color.stashMuted)
+          .font(.stDetail)
+          .foregroundStyle(item.progress >= 0.02 ? Color.stAccentText : Color.stMuted)
       }
     }
   }
@@ -552,6 +565,19 @@ struct HomeView: View {
   }
 
   #if os(macOS)
+  /// Up and down arrows move through the feed list, opening each item in the preview.
+  private func step(_ offset: Int) -> KeyPress.Result {
+    guard !(peek != nil && peekFromUpNext) else { return .ignored }
+    let items = Array(feeds.visibleItems.prefix(Self.feedLimit))
+    guard !items.isEmpty else { return .ignored }
+    guard let id = selectedID, let index = items.firstIndex(where: { $0.id == id }) else {
+      selectedID = (offset > 0 ? items.first : items.last)?.id
+      return .handled
+    }
+    selectedID = items[min(max(index + offset, 0), items.count - 1)].id
+    return .handled
+  }
+
   private func performOnSelection(_ action: ItemAction) -> KeyPress.Result {
     // While the preview is open its own buttons take the keys.
     guard peek == nil else { return .ignored }

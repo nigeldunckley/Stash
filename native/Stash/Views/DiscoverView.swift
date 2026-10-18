@@ -26,22 +26,14 @@ struct DiscoverView: View {
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 28) {
           if let result, !result.enabled {
-            ContentUnavailableView {
-              Label("Suggestions are off", systemImage: "sparkles")
-            } description: {
-              Text("Turn them on and Stash will look for feeds like the ones you read, each night.")
-            } actions: {
+            EmptyBox(title: "Suggestions are off", message: "Turn them on and Stash will look for feeds like the ones you read, each night.", systemImage: "sparkles", boxed: false) {
               Button("Turn on suggestions") { turnOn() }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.textProminent)
                 .disabled(turningOn)
             }
           } else if result == nil {
             if let error {
-              ContentUnavailableView {
-                Label("Couldn't load", systemImage: "wifi.exclamationmark")
-              } description: {
-                Text(error)
-              } actions: {
+              EmptyBox(title: "Couldn't load", message: error, systemImage: "wifi.exclamationmark", boxed: false) {
                 Button("Try again") { Task { await load() } }
               }
             } else {
@@ -52,9 +44,7 @@ struct DiscoverView: View {
               section("Trying for a week", trials)
             }
             if own.isEmpty && channels.isEmpty && starters.isEmpty && trials.isEmpty {
-              ContentUnavailableView(
-                "Nothing new to suggest", systemImage: "sparkles",
-                description: Text("Stash looks again each night, from what you read and save."))
+              EmptyBox(title: "Nothing new to suggest", message: "Stash looks again each night, from what you read and save.", systemImage: "sparkles", boxed: false)
             }
             if !own.isEmpty { section("From what you read", own) }
             if !channels.isEmpty { section("Channels for Watch", channels) }
@@ -62,8 +52,8 @@ struct DiscoverView: View {
             if !following.isEmpty { section("Followed from here", following) }
             if let built = result?.builtAt {
               Text("Updated \(built.formatted(.relative(presentation: .named)))")
-                .font(.stashDetail)
-                .foregroundStyle(Color.stashMuted)
+                .font(.stDetail)
+                .foregroundStyle(Color.stMuted)
             }
           }
         }
@@ -71,7 +61,7 @@ struct DiscoverView: View {
         .frame(maxWidth: 1100)
         .frame(maxWidth: .infinity)
       }
-      .background(Color.stashBackground)
+      .background(Color.stPage)
       .navigationTitle("Discover")
       .refreshable { await load() }
       .task { if result == nil { await load() } }
@@ -159,40 +149,40 @@ struct SuggestionCard: View {
         AsyncImage(url: suggestion.iconURL ?? URL(string: "https://\(suggestion.host)/favicon.ico")) { image in
           image.resizable().scaledToFit()
         } placeholder: {
-          RoundedRectangle(cornerRadius: 6).fill(Color.stashSurface)
+          RoundedRectangle(cornerRadius: 6).fill(Color.stSunken)
         }
         .frame(width: 28, height: 28)
         .clipShape(RoundedRectangle(cornerRadius: 6))
 
         VStack(alignment: .leading, spacing: 2) {
           Text(suggestion.title)
-            .font(.headline)
-            .foregroundStyle(Color.stashInk)
+            .font(.stSection)
+            .foregroundStyle(Color.stInk)
             .lineLimit(2)
           Text([suggestion.host, suggestion.cadence].compactMap { $0 }.joined(separator: " · "))
-            .font(.stashDetail)
-            .foregroundStyle(Color.stashMuted)
+            .font(.stDetail)
+            .foregroundStyle(Color.stMuted)
             .lineLimit(1)
         }
         Spacer(minLength: 0)
         if done == nil && suggestion.status == "NEW" {
           Button { act(.dismiss, suggestion) } label: {
-            Image(systemName: "xmark").font(.caption.weight(.semibold))
+            Image(systemName: "xmark").font(.ui(12, .semibold))
           }
           .buttonStyle(.borderless)
-          .foregroundStyle(Color.stashMuted)
+          .foregroundStyle(Color.stMuted)
           .help("Not for me")
         }
       }
 
       Text(suggestion.status == "TRIAL" ? trialLine : suggestion.why)
-        .font(.caption)
-        .foregroundStyle(Color.stashAccentText)
+        .font(.stSmall)
+        .foregroundStyle(Color.stAccentText)
 
       if let description = suggestion.description, !description.isEmpty {
         Text(description)
-          .font(.subheadline)
-          .foregroundStyle(Color.stashMuted)
+          .font(.ui(13, relativeTo: .subheadline))
+          .foregroundStyle(Color.stMuted)
           .lineLimit(2)
       }
 
@@ -202,13 +192,13 @@ struct SuggestionCard: View {
         } label: {
           HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(post.title)
-              .font(.system(.subheadline, design: .serif))
-              .foregroundStyle(Color.stashInk)
+              .font(.reading(15, .regular, relativeTo: .subheadline))
+              .foregroundStyle(Color.stInk)
               .lineLimit(2)
               .multilineTextAlignment(.leading)
             Spacer(minLength: 0)
             if let date = post.publishedAt {
-              Text(shortAge(date)).font(.stashDetail).foregroundStyle(Color.stashMuted)
+              Text(shortAge(date)).font(.stDetail).foregroundStyle(Color.stMuted)
             }
           }
           .contentShape(Rectangle())
@@ -219,32 +209,32 @@ struct SuggestionCard: View {
       HStack(spacing: 8) {
         if let done {
           Label(done, systemImage: "checkmark")
-            .font(.callout.weight(.medium))
-            .foregroundStyle(Color.stashMuted)
+            .font(.ui(13, .medium))
+            .foregroundStyle(Color.stMuted)
         } else if suggestion.status == "TRIAL" {
-          Button("Keep it") { act(.follow, suggestion) }.buttonStyle(.borderedProminent)
-          Button("Drop it") { act(.drop, suggestion) }.buttonStyle(.bordered)
+          Button("Keep it") { act(.follow, suggestion) }.buttonStyle(.textProminent)
+          Button("Drop it") { act(.drop, suggestion) }.buttonStyle(.text)
         } else if suggestion.status == "FOLLOWING" {
           Label("Following", systemImage: "checkmark")
-            .font(.callout)
-            .foregroundStyle(Color.stashMuted)
+            .font(.ui(13))
+            .foregroundStyle(Color.stMuted)
         } else {
-          Button("Follow") { act(.follow, suggestion) }.buttonStyle(.borderedProminent)
+          Button("Follow") { act(.follow, suggestion) }.buttonStyle(.textProminent)
           if !suggestion.isChannel {
-            Button("Try for a week") { act(.trial, suggestion) }.buttonStyle(.bordered)
+            Button("Try for a week") { act(.trial, suggestion) }.buttonStyle(.text)
           }
         }
         Spacer(minLength: 0)
         Text("\(suggestion.matchPercent)% match")
-          .font(.stashDetail)
-          .foregroundStyle(Color.stashMuted)
+          .font(.stDetail)
+          .foregroundStyle(Color.stMuted)
       }
       .controlSize(.small)
       .padding(.top, 2)
     }
     .padding(14)
-    .background(Color.stashBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stashBorder, lineWidth: 1))
+    .background(Color.stPage, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
     .opacity(done == nil ? 1 : 0.7)
   }
 

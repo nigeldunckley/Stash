@@ -53,6 +53,8 @@ struct SettingsView: View {
         }
       }
       .formStyle(.grouped)
+      .scrollContentBackground(.hidden)
+      .background(Color.stPage)
       .navigationTitle("Settings")
       .confirmationDialog("Sign out of Stash?", isPresented: $confirmSignOut) {
         Button("Sign out", role: .destructive) { session.signOut() }

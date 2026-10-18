@@ -26,7 +26,7 @@ struct ReaderScreen: View {
         ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
       }
     }
-    .background(Color.stashBackground)
+    .background(Color.stPage)
     .modifier(ScreenChrome(embedded: embedded, title: item.source) { toolbar })
     .task(id: item.id) { await load() }
     .onChange(of: fontSize) { _, size in reader?.send("updateFontSize", ["fontSize": size]) }
@@ -41,7 +41,7 @@ struct ReaderScreen: View {
       .overlay(alignment: .top) {
         GeometryReader { geometry in
           Rectangle()
-            .fill(Color.stashAccent)
+            .fill(Color.stAccent)
             .frame(width: geometry.size.width * reader.progress, height: 2)
         }
         .frame(height: 2)
@@ -52,11 +52,7 @@ struct ReaderScreen: View {
   @ViewBuilder
   private func placeholder(_ reader: ReaderController) -> some View {
     if let loadError, !reader.isReady {
-      ContentUnavailableView {
-        Label("Couldn't open this", systemImage: "doc.text")
-      } description: {
-        Text(loadError)
-      } actions: {
+      EmptyBox(title: "Couldn't open this", message: loadError, systemImage: "doc.text", boxed: false) {
         Button("Try again") { Task { await load() } }
         if let url = item.originalURL { Link("Open original", destination: url) }
       }
