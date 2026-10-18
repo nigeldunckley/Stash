@@ -6,6 +6,7 @@ struct SettingsView: View {
   @AppStorage("readerFontSize") private var fontSize = 20
   @AppStorage("readerFont") private var fontFamily = "Newsreader"
   @State private var confirmSignOut = false
+  @Environment(\.openURL) private var openURL
 
   var body: some View {
     NavigationStack {
@@ -80,7 +81,7 @@ struct SettingsView: View {
 
           SettingsGroup("On the web") {
             SettingsRow("Stash on the web", divider: false) {
-              Link(destination: StashConfig.server) {
+              Button { openURL(StashConfig.server) } label: {
                 Label("Open in Safari", systemImage: "safari")
               }
               .buttonStyle(.text)
