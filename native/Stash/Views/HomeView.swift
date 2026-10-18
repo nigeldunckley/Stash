@@ -15,8 +15,11 @@ struct HomeView: View {
   @State private var unreadTotal: Int?
   @State private var loadingUpNext = true
   @State private var leadTitle: String?
-  @State private var width: CGFloat = 0
-  @State private var path = NavigationPath()
+  /// The item open in the preview: beside the list on Mac, in a sheet over Home on iPhone.
+  @State private var peek: LibraryItem?
+  #if os(macOS)
+  @State private var selectedID: String?
+  #endif
   @State private var toaster = Toaster()
 
   private enum Tab: String { case read, watch }
@@ -27,56 +30,147 @@ struct HomeView: View {
     "in:following use:folders \(tab == .watch ? "type:video" : "-type:video") -is:seen sort:published-desc"
   }
 
-  private var isWide: Bool { width >= 860 }
+  #if os(macOS)
+  private let isWide = true
+  #else
+  private let isWide = false
+  #endif
 
   var body: some View {
-    NavigationStack(path: $path) {
-      ScrollView {
-        VStack(alignment: .leading, spacing: 26) {
-          if edition.isFresh && edition.state?.showOnHome != false {
-            editionStrip
-          }
-          if isWide {
-            HStack(alignment: .top, spacing: 40) {
-              feedsSection.frame(maxWidth: .infinity, alignment: .leading)
-              upNextRail.frame(width: 320)
-            }
-          } else {
-            upNextStrip
-            feedsSection
+    NavigationStack {
+      content
+        .background(Color.stashBackground)
+        .navigationTitle("Home")
+        .toolbar {
+          ToolbarItem(placement: .primaryAction) {
+            Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased())
+              .font(.stashDetail)
+              .foregroundStyle(Color.stashMuted)
+              .fixedSize()
           }
         }
-        .padding(.horizontal, isWide ? 32 : 16)
-        .padding(.vertical, 16)
-        .frame(maxWidth: 1180)
-        .frame(maxWidth: .infinity)
-      }
-      .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-      .background(Color.stashBackground)
-      .navigationTitle("Home")
-      .toolbar {
-        ToolbarItem(placement: .primaryAction) {
-          Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased())
-            .font(.stashDetail)
-            .foregroundStyle(Color.stashMuted)
-            .fixedSize()
+        .task(id: feedsQuery) {
+          await feeds.load(feedsQuery)
+          otherCount = await count(tab == .read ? "type:video" : "-type:video")
         }
-      }
-      .navigationDestination(for: LibraryItem.self) { item in
+        .task {
+          if subscriptions.isEmpty { subscriptions = (try? await Library.subscriptions()) ?? [] }
+          await loadUpNext()
+          await loadLead()
+        }
+        .toasts(toaster)
+    }
+    #if os(iOS)
+    .sheet(item: $peek) { item in
+      NavigationStack {
         ItemDestination(item: item, queue: feeds.visibleItems.filter(Watch.isVideo), perform: perform)
-          .onAppear { markSeen(item) }
+          .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+              Button("Done") { peek = nil }
+            }
+          }
       }
+      .presentationDragIndicator(.visible)
+    }
+    #endif
+  }
+
+  #if os(macOS)
+  /// The list, and beside it Up next, or the item you're previewing.
+  private var content: some View {
+    HSplitView {
+      homeList
+        .frame(minWidth: 380, idealWidth: 620, maxWidth: .infinity)
+      Group {
+        if let peek {
+          VStack(spacing: 0) {
+            HStack {
+              Button { close() } label: { Label("Back to Up next", systemImage: "xmark") }
+                .buttonStyle(.borderless)
+                .keyboardShortcut(.cancelAction)
+              Spacer()
+            }
+            .font(.callout)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            Divider()
+            ItemDestination(item: peek, queue: feeds.visibleItems.filter(Watch.isVideo), perform: perform)
+              .id(peek.id)
+          }
+        } else {
+          ScrollView { upNextRail.padding(20) }
+        }
+      }
+      .frame(minWidth: 320, idealWidth: peek == nil ? 360 : 620, maxWidth: .infinity, maxHeight: .infinity)
+      .background(Color.stashBackground)
+    }
+  }
+  #else
+  private var content: some View { homeList }
+  #endif
+
+  /// The Edition strip, Up next on iPhone, then new feed items grouped by day. A List, so rows
+  /// swipe: right to save, left to archive.
+  private var homeList: some View {
+    listContainer
+      .listStyle(.plain)
       .refreshable { await reload() }
-      .task(id: feedsQuery) {
-        await feeds.load(feedsQuery)
-        otherCount = await count(tab == .read ? "type:video" : "-type:video")
+      #if os(macOS)
+      .onChange(of: selectedID) { _, id in
+        guard let id, let item = feeds.visibleItems.first(where: { $0.id == id }) else { return }
+        open(item)
       }
-      .task {
-        if subscriptions.isEmpty { subscriptions = (try? await Library.subscriptions()) ?? [] }
-        await loadUpNext()
-        await loadLead()
+      .onKeyPress(.delete) { performOnSelection(.archive) }
+      .onKeyPress(.deleteForward) { performOnSelection(.archive) }
+      .onKeyPress("s") { performOnSelection(.save) }
+      .onKeyPress(.return) {
+        if let url = peek?.originalURL { NSWorkspace.shared.open(url) }
+        return .handled
       }
-      .toasts(toaster)
+      #endif
+  }
+
+  @ViewBuilder
+  private var listContainer: some View {
+    #if os(macOS)
+    List(selection: $selectedID) { listRows }
+    #else
+    List { listRows }
+    #endif
+  }
+
+  @ViewBuilder
+  private var listRows: some View {
+    if edition.isFresh && edition.state?.showOnHome != false {
+      editionStrip
+        .listRowSeparator(.hidden)
+        .selectionDisabled()
+    }
+    #if os(iOS)
+    upNextStrip
+      .listRowSeparator(.hidden)
+      .padding(.bottom, 8)
+    #endif
+    feedsHeading
+      .listRowSeparator(.hidden)
+      .selectionDisabled()
+
+    let items = Array(feeds.visibleItems.prefix(Self.feedLimit))
+    if items.isEmpty {
+      feedsEmpty.listRowSeparator(.hidden).selectionDisabled()
+    } else {
+      ForEach(groups(items), id: \.label) { group in
+        Section {
+          ForEach(group.items) { item in feedRow(item) }
+        } header: {
+          Kicker(group.label)
+        }
+      }
+      if (feeds.total ?? 0) > items.count {
+        moreButton(items.count)
+          .listRowSeparator(.hidden)
+          .selectionDisabled()
+      }
     }
   }
 
@@ -122,70 +216,58 @@ struct HomeView: View {
 
   // MARK: New from your feeds
 
-  private var feedsSection: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      SectionHeading(title: "New from your feeds", detail: feeds.total.map { "\($0) unseen" }) {
-        Picker("Show", selection: $tab) {
-          Text(label("Read", tab == .read ? feeds.total : otherCount)).tag(Tab.read)
-          Text(label("Watch", tab == .watch ? feeds.total : otherCount)).tag(Tab.watch)
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .fixedSize()
-        Button { markAllSeen() } label: {
-          Label("Mark all seen", systemImage: "checkmark.circle")
-        }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.borderless)
-        .disabled(feeds.visibleItems.isEmpty)
-        .help("Mark all as seen")
+  private var feedsHeading: some View {
+    SectionHeading(title: "New from your feeds", detail: feeds.total.map { "\($0) unseen" }) {
+      Picker("Show", selection: $tab) {
+        Text(label("Read", tab == .read ? feeds.total : otherCount)).tag(Tab.read)
+        Text(label("Watch", tab == .watch ? feeds.total : otherCount)).tag(Tab.watch)
       }
+      .pickerStyle(.segmented)
+      .labelsHidden()
+      .fixedSize()
+      Button { markAllSeen() } label: {
+        Label("Mark all seen", systemImage: "checkmark.circle")
+      }
+      .labelStyle(.iconOnly)
+      .buttonStyle(.borderless)
+      .disabled(feeds.visibleItems.isEmpty)
+      .help("Mark all as seen")
+    }
+    .padding(.top, 6)
+  }
 
-      let items = Array(feeds.visibleItems.prefix(Self.feedLimit))
-      if items.isEmpty {
-        Group {
-          if feeds.isLoading {
-            ProgressView().frame(maxWidth: .infinity)
-          } else if let error = feeds.error {
-            ContentUnavailableView("Couldn't load", systemImage: "wifi.exclamationmark", description: Text(error))
-          } else {
-            ContentUnavailableView(
-              "All caught up", systemImage: "checkmark.circle",
-              description: Text(tab == .watch ? "No new videos from your channels." : "Nothing new from your feeds."))
-          }
-        }
-        .padding(.vertical, 24)
+  @ViewBuilder
+  private var feedsEmpty: some View {
+    Group {
+      if feeds.isLoading {
+        ProgressView().frame(maxWidth: .infinity)
+      } else if let error = feeds.error {
+        ContentUnavailableView("Couldn't load", systemImage: "wifi.exclamationmark", description: Text(error))
       } else {
-        VStack(alignment: .leading, spacing: 0) {
-          ForEach(Array(groups(items).enumerated()), id: \.offset) { _, group in
-            Kicker(group.label)
-              .padding(.top, 14)
-              .padding(.bottom, 4)
-            ForEach(group.items) { item in
-              feedRow(item)
-              Divider()
-            }
-          }
-        }
-        if (feeds.total ?? 0) > items.count {
-          Button {
-            go(tab == .watch ? .channels : .feeds)
-          } label: {
-            HStack {
-              Text("\((feeds.total ?? 0) - items.count) more")
-                .foregroundStyle(Color.stashMuted)
-              Spacer()
-              Text(tab == .watch ? "Open Channels" : "Open Feeds").fontWeight(.medium)
-              Image(systemName: "chevron.right")
-            }
-            .font(.callout)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-          }
-          .buttonStyle(.plain)
-        }
+        ContentUnavailableView(
+          "All caught up", systemImage: "checkmark.circle",
+          description: Text(tab == .watch ? "No new videos from your channels." : "Nothing new from your feeds."))
       }
     }
+    .padding(.vertical, 24)
+  }
+
+  private func moreButton(_ shown: Int) -> some View {
+    Button {
+      go(tab == .watch ? .channels : .feeds)
+    } label: {
+      HStack {
+        Text("\((feeds.total ?? 0) - shown) more")
+          .foregroundStyle(Color.stashMuted)
+        Spacer()
+        Text(tab == .watch ? "Open Channels" : "Open Feeds").fontWeight(.medium)
+        Image(systemName: "chevron.right")
+      }
+      .font(.callout)
+      .padding(.vertical, 6)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
   }
 
   private func label(_ title: String, _ count: Int?) -> String {
@@ -207,27 +289,44 @@ struct HomeView: View {
   }
 
   private func feedRow(_ item: LibraryItem) -> some View {
-    NavigationLink(value: item) {
-      Group {
-        if Watch.isVideo(item) {
-          VideoRow(item: item)
-        } else {
-          ItemRow(item: item, subscriptionName: channelName(item), unseen: feeds.isUnseen(item))
+    rowBase(item)
+      .tag(item.id)
+      .swipeActions(edge: .leading) {
+        Button { perform(.save, item) } label: { Label("Save", systemImage: "bookmark") }
+          .tint(.stashAccent)
+      }
+      .swipeActions(edge: .trailing) {
+        Button { perform(.archive, item) } label: { Label("Archive", systemImage: "archivebox") }
+          .tint(.gray)
+      }
+      .contextMenu {
+        Button { perform(.save, item) } label: { Label(Watch.isVideo(item) ? "Save for later" : "Save", systemImage: "bookmark") }
+        Button { perform(.archive, item) } label: { Label("Archive", systemImage: "archivebox") }
+        Button { markSeen(item) } label: { Label("Mark as seen", systemImage: "eye") }
+        if let url = item.originalURL {
+          Divider()
+          Link(destination: url) { Label("Open original", systemImage: "safari") }
+          ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
         }
       }
-      .padding(.vertical, 4)
-    }
-    .buttonStyle(.plain)
-    .contextMenu {
-      Button { perform(.save, item) } label: { Label(Watch.isVideo(item) ? "Save for later" : "Save", systemImage: "bookmark") }
-      Button { perform(.archive, item) } label: { Label("Archive", systemImage: "archivebox") }
-      Button { markSeen(item) } label: { Label("Mark as seen", systemImage: "eye") }
-      if let url = item.originalURL {
-        Divider()
-        Link(destination: url) { Label("Open original", systemImage: "safari") }
-        ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
+  }
+
+  /// On Mac the list's selection opens the preview; on iPhone a tap does.
+  @ViewBuilder
+  private func rowBase(_ item: LibraryItem) -> some View {
+    let content = Group {
+      if Watch.isVideo(item) {
+        VideoRow(item: item)
+      } else {
+        ItemRow(item: item, subscriptionName: channelName(item), unseen: feeds.isUnseen(item))
       }
     }
+    #if os(macOS)
+    content
+    #else
+    Button { open(item) } label: { content }
+      .buttonStyle(.plain)
+    #endif
   }
 
   // MARK: Up next
@@ -237,7 +336,7 @@ struct HomeView: View {
     VStack(alignment: .leading, spacing: 12) {
       upNextHeading
       if let first = upNext.first {
-        NavigationLink(value: first) {
+        Button { open(first) } label: {
           VStack(alignment: .leading, spacing: 8) {
             CoverImage(url: first.imageURL)
               .aspectRatio(16 / 10, contentMode: .fit)
@@ -255,7 +354,7 @@ struct HomeView: View {
 
         ForEach(upNext.dropFirst()) { item in
           Divider()
-          NavigationLink(value: item) {
+          Button { open(item) } label: {
             upNextText(item, titleFont: .stashTitle(.subheadline)).contentShape(Rectangle())
           }
           .buttonStyle(.plain)
@@ -289,7 +388,7 @@ struct HomeView: View {
         ScrollView(.horizontal, showsIndicators: false) {
           HStack(alignment: .top, spacing: 12) {
             ForEach(upNext) { item in
-              NavigationLink(value: item) {
+              Button { open(item) } label: {
                 VStack(alignment: .leading, spacing: 8) {
                   CoverImage(url: item.imageURL)
                     .frame(width: 240, height: 130)
@@ -406,7 +505,7 @@ struct HomeView: View {
   }
 
   private func markSeen(_ item: LibraryItem) {
-    guard feeds.isUnseen(item) else { return }
+    guard item.isFeedItem, feeds.isUnseen(item) else { return }
     feeds.markSeen(item)
     Task { try? await Library.markSeen([item.id]) }
   }
@@ -424,8 +523,40 @@ struct HomeView: View {
     }
   }
 
+  private func open(_ item: LibraryItem) {
+    markSeen(item)
+    peek = item
+  }
+
+  private func close() {
+    peek = nil
+    #if os(macOS)
+    selectedID = nil
+    #endif
+  }
+
+  #if os(macOS)
+  private func performOnSelection(_ action: ItemAction) -> KeyPress.Result {
+    guard let id = selectedID, let item = feeds.visibleItems.first(where: { $0.id == id }) else { return .ignored }
+    perform(action, item)
+    return .handled
+  }
+  #endif
+
   private func perform(_ action: ItemAction, _ item: LibraryItem) {
-    if path.count > 0 { path.removeLast() }
+    if peek?.id == item.id {
+      #if os(macOS)
+      // Move on to the next feed item, as Feeds does; back to Up next at the end.
+      let items = Array(feeds.visibleItems.prefix(Self.feedLimit))
+      if let index = items.firstIndex(of: item), index + 1 < items.count {
+        selectedID = items[index + 1].id
+      } else {
+        close()
+      }
+      #else
+      peek = nil
+      #endif
+    }
     withAnimation {
       feeds.remove(item)
       upNext.removeAll { $0.id == item.id }
