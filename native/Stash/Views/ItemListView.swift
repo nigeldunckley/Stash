@@ -160,7 +160,7 @@ struct ItemListView<Tools: View>: View {
       remove: { list.remove(item) },
       restore: { list.restore(item) },
       refresh: {
-        if action == .markSeen { list.markSeen(item) } else { await list.reload(query) }
+        if action == .markSeen || action == .openOriginal { list.markSeen(item) } else { await list.reload(query) }
       }
     )
   }

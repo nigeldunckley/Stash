@@ -108,7 +108,8 @@ enum ItemAction: Hashable {
     case .unarchive: try await Library.setArchived(item.id, true)
     case .delete: try await Library.restore(item.id)
     case .markRead, .markUnread:
-      try await Library.setProgress(item.id, percent: item.readingProgressPercent ?? 0)
+      try await Library.setProgress(
+        item.id, percent: item.readingProgressPercent ?? 0, anchor: item.readingProgressAnchorIndex ?? 0)
     case .markSeen, .openOriginal: break
     }
   }
@@ -183,6 +184,7 @@ extension View {
   }
 }
 
+@MainActor
 func copyLink(_ url: URL) {
   #if os(iOS)
   UIPasteboard.general.url = url

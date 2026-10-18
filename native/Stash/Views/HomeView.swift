@@ -537,9 +537,12 @@ struct HomeView: View {
         feeds.remove(item)
         upNext.removeAll { $0.id == item.id }
       },
-      restore: { feeds.restore(item) },
+      restore: {
+        feeds.restore(item)
+        if wasUpNext { Task { await loadUpNext() } }
+      },
       refresh: {
-        if action == .markSeen {
+        if action == .markSeen || action == .openOriginal {
           feeds.markSeen(item)
         } else if wasUpNext || !item.isFeedItem || action == .save {
           await loadUpNext()

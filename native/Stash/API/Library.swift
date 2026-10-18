@@ -171,7 +171,7 @@ enum Library {
   }
 
   /// Sets how far through an item you are; 100 marks it read (or a video watched).
-  static func setProgress(_ id: String, percent: Double) async throws {
+  static func setProgress(_ id: String, percent: Double, anchor: Int = 0) async throws {
     let gql = """
       mutation SaveArticleReadingProgress($input: SaveArticleReadingProgressInput!) {
         saveArticleReadingProgress(input: $input) {
@@ -181,7 +181,7 @@ enum Library {
       }
       """
     try await mutate(gql, variables: ["input": [
-      "id": id, "force": true, "readingProgressPercent": percent, "readingProgressAnchorIndex": 0,
+      "id": id, "force": true, "readingProgressPercent": percent, "readingProgressAnchorIndex": anchor,
     ]])
   }
 
