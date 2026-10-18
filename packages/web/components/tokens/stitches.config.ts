@@ -558,10 +558,13 @@ export const globalStyles = globalCss({
     colorScheme: 'var(--colorScheme-colorScheme)',
     backgroundColor: '$readerBg',
   },
-  // Room for the iPhone navigation bar (MobileTopBar).
+  // Room for the iPhone navigation bar (MobileTopBar), taller when it shows
+  // the open section's pages. --topbar is that height without the inset.
+  'body[data-topbar="on"]': { '--topbar': '48px' },
+  'body[data-topbar="on"][data-subnav="on"]': { '--topbar': '88px' },
   '@media (max-width: 768px)': {
     'body[data-topbar="on"]': {
-      paddingTop: 'calc(48px + env(safe-area-inset-top, 0px))',
+      paddingTop: 'calc(var(--topbar) + env(safe-area-inset-top, 0px))',
     },
   },
   // browser prefers this loaded here vs in the article styling css

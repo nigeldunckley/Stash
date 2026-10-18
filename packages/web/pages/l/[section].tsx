@@ -62,7 +62,7 @@ export default function Home(): JSX.Element {
           <LibraryContainer
             key={name}
             folder="inbox"
-            // Videos saved to watch later live in Watch.
+            // Saved videos live in Watch.
             defaultSearch="-type:video"
             filterFunc={(item) => {
               return (
@@ -139,7 +139,7 @@ export default function Home(): JSX.Element {
       case 'discover':
         return 'Discover'
       case 'library':
-        return 'Library'
+        return 'Saved'
       case 'subscriptions':
         return 'Feeds'
       case 'watch':

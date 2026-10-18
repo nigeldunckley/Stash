@@ -492,7 +492,7 @@ const Divider = styled('span', {
   background: '$stLine',
 })
 
-// Videos are saved to Watch later rather than the Library.
+// Videos are saved to Watch's Saved list rather than Read's.
 function SaveLabel(props: {
   saved: boolean
   touch?: boolean
@@ -502,20 +502,16 @@ function SaveLabel(props: {
   return props.saved ? (
     <>
       <Icon size={15} weight="fill" />
-      {props.video ? 'In Watch later' : 'Saved'}
+      Saved
     </>
   ) : (
     <>
       <Icon size={15} />
       {props.touch ? (
-        props.video ? (
-          'Watch later'
-        ) : (
-          'Save to Library'
-        )
+        'Save'
       ) : (
         <>
-          {props.video ? 'Watch later' : 'Save'} <Kbd>S</Kbd>
+          Save <Kbd>S</Kbd>
         </>
       )}
     </>
@@ -648,15 +644,7 @@ export function FeedPeekPane(props: FeedPeekProps): JSX.Element {
           primary={!props.saved}
           saved={props.saved}
           onClick={props.saved ? undefined : props.onSave}
-          aria-label={
-            isVideoItem(props.item)
-              ? props.saved
-                ? 'In Watch later'
-                : 'Watch later'
-              : props.saved
-              ? 'Saved to Library'
-              : 'Save to Library'
-          }
+          aria-label={props.saved ? 'Saved' : 'Save'}
         >
           <SaveLabel saved={props.saved} video={isVideoItem(props.item)} />
         </Button>

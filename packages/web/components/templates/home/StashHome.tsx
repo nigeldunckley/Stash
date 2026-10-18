@@ -887,23 +887,20 @@ export function StashHome(): JSX.Element {
         await moveItemToFolder(item.id, 'inbox')
         refreshElsewhere()
         const video = isVideoItem(item)
-        showUndoToast(
-          video ? 'Added to Watch later' : 'Saved to Library',
-          async () => {
-            try {
-              await moveItemToFolder(item.id, 'following')
-              setSaved((current) => toggle(current, item.id, false))
-              refreshElsewhere()
-            } catch {
-              showErrorToast('Could not move it back to Feeds', {
-                position: 'bottom-center',
-              })
-            }
+        showUndoToast('Saved', async () => {
+          try {
+            await moveItemToFolder(item.id, 'following')
+            setSaved((current) => toggle(current, item.id, false))
+            refreshElsewhere()
+          } catch {
+            showErrorToast('Could not move it back to Feeds', {
+              position: 'bottom-center',
+            })
           }
-        )
+        })
       } catch {
         setSaved((current) => toggle(current, item.id, false))
-        showErrorToast('Could not save to Library', {
+        showErrorToast('Could not save this', {
           position: 'bottom-center',
         })
       }
@@ -1077,13 +1074,7 @@ export function StashHome(): JSX.Element {
       onSelect: () => (item.id == peekItem?.id ? closePeek() : openPeek(item)),
     },
     {
-      label: isVideoItem(item)
-        ? saved.has(item.id)
-          ? 'In Watch later'
-          : 'Watch later'
-        : saved.has(item.id)
-        ? 'Saved to Library'
-        : 'Save to Library',
+      label: saved.has(item.id) ? 'Saved' : 'Save',
       shortcut: 'S',
       separated: true,
       onSelect: () => save(item),
@@ -1162,15 +1153,7 @@ export function StashHome(): JSX.Element {
             actions={
               <>
                 <IconButton
-                  label={
-                    tab == 'watch'
-                      ? saved.has(item.id)
-                        ? 'In Watch later'
-                        : 'Watch later'
-                      : saved.has(item.id)
-                      ? 'Saved to Library'
-                      : 'Save to Library'
-                  }
+                  label={saved.has(item.id) ? 'Saved' : 'Save'}
                   shortcut="s"
                   size="sm"
                   active={saved.has(item.id)}
@@ -1426,7 +1409,7 @@ export function StashHome(): JSX.Element {
       )}
       {upNext.length > 0 && !!unreadTotal && (
         <LibraryLink href="/l/library">
-          <span>From your Library</span>
+          <span>From Saved</span>
           <b>All {unreadTotal} unread →</b>
         </LibraryLink>
       )}
