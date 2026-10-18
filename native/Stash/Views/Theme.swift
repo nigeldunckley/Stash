@@ -108,9 +108,9 @@ extension Font {
 
   private static func stash(_ name: String, _ size: CGFloat, _ style: Font.TextStyle) -> Font {
     #if os(iOS)
-    .custom(name, size: size, relativeTo: style)
+    return Font.custom(name, size: size, relativeTo: style)
     #else
-    .custom(name, fixedSize: size)
+    return Font.custom(name, fixedSize: size)
     #endif
   }
 
@@ -162,13 +162,11 @@ private enum StashFace {
   }
 
   static func newsreader(_ weight: Font.Weight, italic: Bool) -> String {
-    switch (weight, italic) {
-    case (.medium, true), (.semibold, true), (.bold, true): return "Newsreader-MediumItalic"
-    case (_, true): return "Newsreader-Italic"
-    case (.semibold, _), (.bold, _), (.heavy, _), (.black, _): return "Newsreader-SemiBold"
-    case (.medium, _): return "Newsreader-Medium"
-    default: return "Newsreader-Regular"
+    if italic {
+      return [.medium, .semibold, .bold].contains(weight) ? "Newsreader-MediumItalic" : "Newsreader-Italic"
     }
+    if [.semibold, .bold, .heavy, .black].contains(weight) { return "Newsreader-SemiBold" }
+    return weight == .medium ? "Newsreader-Medium" : "Newsreader-Regular"
   }
 }
 

@@ -26,7 +26,7 @@ struct EmptyBox<Actions: View>: View {
         .font(.ui(14))
         .foregroundStyle(Color.stMuted)
         .lineSpacing(3)
-      actions()
+      HStack(spacing: 8) { actions() }
         .buttonStyle(.text)
         .padding(.top, 4)
     }

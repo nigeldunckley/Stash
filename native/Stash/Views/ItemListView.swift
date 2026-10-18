@@ -36,7 +36,6 @@ struct ItemListView<Tools: View>: View {
       }
       .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
       .background(Color.stPage)
-      
     }
     #else
     NavigationStack {
@@ -114,8 +113,9 @@ struct ItemListView<Tools: View>: View {
     ItemRow(item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item), selected: selection?.id == item.id)
       .onTapGesture { selection = item }
     #else
-    let content = ItemRow(item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item))
-    Button { selection = item; open(item) } label: { content }
+    Button { selection = item; open(item) } label: {
+      ItemRow(item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item))
+    }
       .buttonStyle(.plain)
     #endif
   }
@@ -136,7 +136,6 @@ struct ItemListView<Tools: View>: View {
   }
 
   // MARK: Doing things
-
 
   private func readerActions(for item: LibraryItem) -> [ItemAction] {
     [leading].compactMap { $0 } + trailing

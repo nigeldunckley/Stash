@@ -349,11 +349,7 @@ struct HomeView: View {
   /// On Mac the list's selection opens the preview; on iPhone a tap does.
   @ViewBuilder
   private func rowBase(_ item: LibraryItem) -> some View {
-    #if os(macOS)
-    let selected = selectedID == item.id
-    #else
-    let selected = false
-    #endif
+    let selected = isSelected(item)
     let content = Group {
       if Watch.isVideo(item) {
         VideoRow(item: item, selected: selected)
@@ -366,6 +362,15 @@ struct HomeView: View {
     #else
     Button { open(item) } label: { content }
       .buttonStyle(.plain)
+    #endif
+  }
+
+  /// Only the Mac draws a selected row; on iPhone a tap opens the item straight away.
+  private func isSelected(_ item: LibraryItem) -> Bool {
+    #if os(macOS)
+    return selectedID == item.id
+    #else
+    return false
     #endif
   }
 
