@@ -7,6 +7,10 @@ struct StashApp: App {
   @State private var player = PlayerController()
   /// The Edition's state, so the sidebar knows when an issue is out.
   @State private var edition = EditionModel()
+  #if os(macOS)
+  /// Shared with the Mac sidebar, so ⌃⌘S and its strip button stay in step.
+  @AppStorage("sidebarHidden") private var sidebarHidden = false
+  #endif
 
   init() {
     StashFonts.register()
@@ -24,9 +28,21 @@ struct StashApp: App {
     }
     #if os(macOS)
     .defaultSize(width: 1240, height: 820)
+    .windowToolbarStyle(.unified)
+    .windowBackgroundDragBehavior(.enabled)
     .commands {
-      CommandGroup(replacing: .newItem) {}
-      SidebarCommands()
+      CommandGroup(replacing: .newItem) {
+        Button("Save a Link…") { NotificationCenter.default.post(name: .stashCapture, object: nil) }
+          .keyboardShortcut("n", modifiers: .command)
+      }
+      CommandGroup(replacing: .appSettings) {
+        Button("Settings…") { NotificationCenter.default.post(name: .stashOpenSettings, object: nil) }
+          .keyboardShortcut(",", modifiers: .command)
+      }
+      CommandGroup(replacing: .sidebar) {
+        Button(sidebarHidden ? "Show Sidebar" : "Hide Sidebar") { sidebarHidden.toggle() }
+          .keyboardShortcut("s", modifiers: [.control, .command])
+      }
     }
     #endif
   }

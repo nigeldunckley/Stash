@@ -57,6 +57,29 @@ struct MainView: View {
   @State private var watchPage: AppSection = .channels
 
   var body: some View {
+    shell
+      .onAppear {
+        let restored = AppSection(key: storedSection)
+        // The Edition's tab only exists while an issue is out; check again once it has loaded.
+        section = restored == .edition && !edition.isOut ? .home : restored
+      }
+      .onChange(of: section) { _, value in storedSection = value.key }
+      .onChange(of: edition.isOut) { _, out in if !out && section == .edition { section = .home } }
+      .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await edition.refresh() } } }
+      .task { collections = (try? await Watch.collections()) ?? [] }
+      .task {
+        await edition.refresh()
+        if storedSection == "edition" && edition.isOut { section = .edition }
+      }
+  }
+
+  #if os(macOS)
+  /// Stash's own floating sidebar beside the page, rather than the system sidebar.
+  private var shell: some View {
+    MacShell(section: $section, collections: collections)
+  }
+  #else
+  private var shell: some View {
     TabView(selection: $section) {
       Tab("Home", systemImage: "house", value: AppSection.home) {
         HomeView(go: go)
@@ -67,26 +90,6 @@ struct MainView: View {
         }
         .badge(edition.isFresh ? Text("New") : nil)
       }
-
-      #if os(macOS)
-      TabSection("Read") {
-        Tab("Feeds", systemImage: "dot.radiowaves.up.forward", value: AppSection.feeds) { FeedsView() }
-        Tab("Saved", systemImage: "bookmark", value: AppSection.saved) { SavedView(archive: false) }
-        Tab("Highlights", systemImage: "highlighter", value: AppSection.highlights) { HighlightsView() }
-        Tab("Discover", systemImage: "sparkles", value: AppSection.discover) { DiscoverView() }
-        Tab("Archive", systemImage: "archivebox", value: AppSection.archive) { SavedView(archive: true) }
-      }
-
-      TabSection("Watch") {
-        Tab("Channels", systemImage: "play.rectangle", value: AppSection.channels) { WatchView(kind: .channels) }
-        Tab("Saved", systemImage: "play.rectangle.on.rectangle", value: AppSection.savedVideos) { WatchView(kind: .saved) }
-        ForEach(collections) { collection in
-          Tab(collection.name, systemImage: "square.stack", value: AppSection.collection(collection.id)) {
-            WatchView(kind: .collection(collection))
-          }
-        }
-      }
-      #else
       Tab("Read", systemImage: "text.alignleft", value: AppSection.read) {
         PageRow(selection: $readPage, pages: [
           (.feeds, "Feeds"), (.saved, "Saved"), (.highlights, "Highlights"), (.discover, "Discover"),
@@ -113,27 +116,13 @@ struct MainView: View {
           }
         }
       }
-      #endif
-
       Tab("Settings", systemImage: "gearshape", value: AppSection.settings) {
         SettingsView()
       }
     }
     .tabViewStyle(.sidebarAdaptable)
-    .onAppear {
-      let restored = AppSection(key: storedSection)
-      // The Edition's tab only exists while an issue is out; check again once it has loaded.
-      section = restored == .edition && !edition.isOut ? .home : restored
-    }
-    .onChange(of: section) { _, value in storedSection = value.key }
-    .onChange(of: edition.isOut) { _, out in if !out && section == .edition { section = .home } }
-    .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await edition.refresh() } } }
-    .task { collections = (try? await Watch.collections()) ?? [] }
-    .task {
-      await edition.refresh()
-      if storedSection == "edition" && edition.isOut { section = .edition }
-    }
   }
+  #endif
 
   private var watchPages: [(AppSection, String)] {
     [(AppSection.channels, "Channels"), (AppSection.savedVideos, "Saved")]

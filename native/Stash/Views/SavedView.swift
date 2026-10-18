@@ -40,7 +40,6 @@ struct SavedView: View {
       #endif
       if !isArchive {
         Button { isAddingLink = true } label: { Label("Add link", systemImage: "plus") }
-          .keyboardShortcut("n", modifiers: .command)
           .help("Save a link")
       }
     }

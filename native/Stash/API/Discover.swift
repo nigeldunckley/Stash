@@ -129,6 +129,12 @@ enum Discover {
     return result
   }
 
+  /// How many new suggestions are waiting, for the sidebar's "11 new".
+  static func newCount() async throws -> Int {
+    let new = try await fetch("NEW", first: 40)
+    return new.enabled ? new.suggestions.count : 0
+  }
+
   static func dismissed() async throws -> [FeedSuggestion] {
     try await fetch("DISMISSED", first: 100).suggestions
   }
