@@ -28,12 +28,18 @@ struct HighlightsView: View {
       }
       .stashList()
       .overlay { emptyState }
-      .navigationTitle("Highlights")
+      .stashPage("Highlights", detail: highlights.isEmpty ? nil : "\(highlights.count)\(hasMore ? "+" : "")") {
+        #if os(macOS)
+        PageSearchField(text: $searchText, prompt: "Search highlights") { submittedSearch = searchText }
+        #endif
+      }
       .navigationDestination(for: LibraryItem.self) { item in
         ItemDestination(item: item, perform: perform)
       }
+      #if os(iOS)
       .searchable(text: $searchText, prompt: "Search highlights")
       .onSubmit(of: .search) { submittedSearch = searchText }
+      #endif
       .onChange(of: searchText) { _, text in if text.isEmpty { submittedSearch = "" } }
       .refreshable { await reload() }
       .task(id: submittedSearch) { await reload() }

@@ -14,10 +14,15 @@ struct SavedView: View {
   @State private var isAddingLink = false
   @State private var newLink = ""
   @State private var addError: String?
+  /// All, Unread or In progress, as on the web.
+  @AppStorage("savedFilter") private var filter = Filter.all
+
+  enum Filter: String { case all, unread, reading }
 
   private var query: String {
     let base = isArchive ? "in:archive use:folders -type:video" : "in:inbox use:folders -type:video"
-    return [base, submittedSearch].filter { !$0.isEmpty }.joined(separator: " ")
+    let state = isArchive ? "" : (filter == .unread ? "is:unread" : filter == .reading ? "is:reading" : "")
+    return [base, state, submittedSearch].filter { !$0.isEmpty }.joined(separator: " ")
   }
 
   var body: some View {
@@ -31,7 +36,9 @@ struct SavedView: View {
       emptyMessage: isArchive
         ? "Articles you archive end up here."
         : "Save from Feeds, or add a link with the + button.",
-      search: $searchText
+      search: $searchText,
+      countLabel: isArchive ? "archived" : "saved",
+      onSearch: { submittedSearch = searchText }
     ) {
       #if os(iOS)
       if !archive {
@@ -39,11 +46,14 @@ struct SavedView: View {
       }
       #endif
       if !isArchive {
+        #if os(macOS)
+        StashSegmented(selection: $filter, [.init("All", Filter.all), .init("Unread", Filter.unread), .init("In progress", Filter.reading)])
+        #endif
         Button { isAddingLink = true } label: { Label("Add link", systemImage: "plus") }
+          .buttonStyle(.text)
           .help("Save a link")
       }
     }
-    .onSubmit(of: .search) { submittedSearch = searchText }
     .onChange(of: searchText) { _, text in if text.isEmpty { submittedSearch = "" } }
     .alert("Save a link", isPresented: $isAddingLink) {
       TextField("https://", text: $newLink)

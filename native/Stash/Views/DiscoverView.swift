@@ -37,7 +37,7 @@ struct DiscoverView: View {
                 Button("Try again") { Task { await load() } }
               }
             } else {
-              ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
+              SkeletonCards()
             }
           } else {
             if !trials.isEmpty {
@@ -57,12 +57,11 @@ struct DiscoverView: View {
             }
           }
         }
-        .padding(16)
-        .frame(maxWidth: 1100)
-        .frame(maxWidth: .infinity)
+        .pageWidth()
+        .padding(.bottom, 40)
       }
       .background(Color.stPage)
-      .navigationTitle("Discover")
+      .stashPage("Discover", detail: fresh.isEmpty ? nil : "\(fresh.filter { $0.status == "NEW" }.count) new", accentDetail: true)
       .refreshable { await load() }
       .task { if result == nil { await load() } }
       .toasts(toaster)
@@ -146,11 +145,7 @@ struct SuggestionCard: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(alignment: .top, spacing: 10) {
-        AsyncImage(url: suggestion.iconURL ?? URL(string: "https://\(suggestion.host)/favicon.ico")) { image in
-          image.resizable().scaledToFit()
-        } placeholder: {
-          RoundedRectangle(cornerRadius: 6).fill(Color.stSunken)
-        }
+        FadeImage(url: suggestion.iconURL ?? URL(string: "https://\(suggestion.host)/favicon.ico"), contentMode: .fit)
         .frame(width: 28, height: 28)
         .clipShape(RoundedRectangle(cornerRadius: 6))
 
@@ -233,8 +228,8 @@ struct SuggestionCard: View {
       .padding(.top, 2)
     }
     .padding(14)
-    .background(Color.stPage, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
+    .background(Color.stSurface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+    .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
     .opacity(done == nil ? 1 : 0.7)
   }
 

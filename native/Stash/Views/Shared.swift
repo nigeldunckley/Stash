@@ -24,6 +24,9 @@ struct ScreenChrome<Bar: ToolbarContent>: ViewModifier {
   let title: String
   let toolbar: () -> Bar
 
+  /// Pages kept alive behind the current one on Mac leave the toolbar to it.
+  @Environment(\.isActivePage) private var isActive
+
   func body(content: Content) -> some View {
     if embedded {
       content
@@ -34,7 +37,9 @@ struct ScreenChrome<Bar: ToolbarContent>: ViewModifier {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         #endif
-        .toolbar { toolbar() }
+        .toolbar {
+          if isActive { toolbar() }
+        }
     }
   }
 }
@@ -120,13 +125,7 @@ struct CoverImage: View {
 
   var body: some View {
     Color.stSunken
-      .overlay {
-        AsyncImage(url: url) { image in
-          image.resizable().scaledToFill()
-        } placeholder: {
-          EmptyView()
-        }
-      }
+      .overlay { FadeImage(url: url) }
       .clipped()
   }
 }

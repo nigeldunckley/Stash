@@ -33,9 +33,13 @@ struct FeedsView: View {
       subscriptionName: name(for:),
       onOpen: { item in Task { try? await Library.markSeen([item.id]) } },
       emptyTitle: showAll ? "No posts" : "All caught up",
-      emptyMessage: showAll ? "Posts from the feeds you follow appear here." : "Nothing new from your feeds."
+      emptyMessage: showAll ? "Posts from the feeds you follow appear here." : "Nothing new from your feeds.",
+      countLabel: showAll ? "posts" : "unseen",
+      groupsByDay: true
     ) {
       StashSegmented(selection: $showAll, [.init("Unseen", false), .init("All", true)])
+      Button { markAllSeen() } label: { Label("Mark all seen", systemImage: "checkmark") }
+        .buttonStyle(.text)
 
       Menu {
         Picker("Source", selection: $source) {
@@ -45,11 +49,12 @@ struct FeedsView: View {
           }
         }
         .pickerStyle(.inline)
-        Divider()
-        Button("Mark all as seen", systemImage: "checkmark.circle") { markAllSeen() }
       } label: {
-        Label("Sources", systemImage: "line.3.horizontal.decrease.circle")
+        Label(source?.name ?? "All feeds", systemImage: "line.3.horizontal.decrease")
       }
+      .menuStyle(.button)
+      .buttonStyle(.text)
+      .fixedSize()
       .help("Choose a feed")
     }
     .task { subscriptions = (try? await Library.subscriptions()) ?? subscriptions }

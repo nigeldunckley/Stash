@@ -13,6 +13,12 @@ struct MacShell: View {
   @State private var channelsCount: Int?
   @State private var discoverCount: Int?
   @State private var capturing = false
+  /// Pages you've visited, newest last. They stay alive behind the current one, so each keeps
+  /// its scroll position and anything it has open.
+  @State private var visited: [AppSection] = []
+
+  /// How many pages stay alive at once.
+  private static let keepAlive = 6
 
   var body: some View {
     HStack(spacing: 0) {
@@ -28,8 +34,21 @@ struct MacShell: View {
         .padding(.bottom, 12)
         .transition(.move(edge: .leading).combined(with: .opacity))
       }
-      page
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      ZStack {
+        ForEach(visited, id: \.self) { visitedSection in
+          let active = visitedSection == section
+          page(visitedSection)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .opacity(active ? 1 : 0)
+            .allowsHitTesting(active)
+            // Hidden pages don't take key presses or keyboard shortcuts.
+            .disabled(!active)
+            .accessibilityHidden(!active)
+            .environment(\.isActivePage, active)
+            .zIndex(active ? 1 : 0)
+        }
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .animation(.snappy(duration: 0.25), value: sidebarHidden)
     .background(Color.stPage)
@@ -48,6 +67,15 @@ struct MacShell: View {
       capturing = true
     }
     .onReceive(NotificationCenter.default.publisher(for: .stashOpenSettings)) { _ in section = .settings }
+    .onAppear { visit(section) }
+    .onChange(of: section) { _, value in visit(value) }
+    .onChange(of: collections) { _, current in
+      // A collection that's gone shouldn't linger as a hidden page.
+      visited.removeAll { page in
+        if case .collection(let id) = page { return !current.contains { $0.id == id } }
+        return false
+      }
+    }
     .task(id: section) { await loadCounts() }
     .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await loadCounts() } } }
   }
@@ -55,8 +83,8 @@ struct MacShell: View {
   /// The page for the chosen sidebar item. Each page keeps its own navigation, so opening an
   /// article pushes inside the page and the sidebar stays put.
   @ViewBuilder
-  private var page: some View {
-    switch section {
+  private func page(_ target: AppSection) -> some View {
+    switch target {
     case .home, .read, .watch: HomeView(go: { section = $0 })
     case .edition: EditionView(onPutAway: { section = .home })
     case .feeds: FeedsView()
@@ -74,6 +102,12 @@ struct MacShell: View {
       }
     case .settings: SettingsView()
     }
+  }
+
+  private func visit(_ page: AppSection) {
+    visited.removeAll { $0 == page }
+    visited.append(page)
+    if visited.count > Self.keepAlive { visited.removeFirst(visited.count - Self.keepAlive) }
   }
 
   /// The Channels badge and Discover's "new" count.

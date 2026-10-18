@@ -45,11 +45,7 @@ struct VideoThumbnail: View {
     Color.stSunken
       .aspectRatio(16 / 9, contentMode: .fit)
       .overlay {
-        AsyncImage(url: item.imageURL) { image in
-          image.resizable().scaledToFill()
-        } placeholder: {
-          Image(systemName: "play.rectangle").foregroundStyle(Color.stMuted)
-        }
+        FadeImage(url: item.imageURL)
       }
       .clipped()
       .overlay(alignment: .bottomTrailing) {
@@ -109,11 +105,7 @@ struct VideoRow: View {
         .font(.stDetail)
         .foregroundStyle(Color.stMuted)
         .fixedSize()
-        AsyncImage(url: item.imageURL) { image in
-          image.resizable().scaledToFill()
-        } placeholder: {
-          Color.stSunken
-        }
+        FadeImage(url: item.imageURL)
         .frame(width: 72, height: 48)
         .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))

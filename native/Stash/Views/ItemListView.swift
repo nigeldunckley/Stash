@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// A list with the reader beside it on Mac, or pushed on top of it on iPhone.
+/// A list of articles. On Mac: the page header, the list as one bordered box, and the reader in a
+/// pane on the right with the item's actions along its top. On iPhone the reader is pushed.
 struct ItemListView<Tools: View>: View {
   let title: String
   let list: ItemList
@@ -17,28 +18,39 @@ struct ItemListView<Tools: View>: View {
   var search: Binding<String>?
   /// Already pushed inside another NavigationStack (e.g. Home's), so it doesn't make its own.
   var embedded = false
-  /// Buttons for this list's toolbar.
+  /// What the count in the header counts, e.g. "unseen" for "8 unseen".
+  var countLabel: String?
+  /// Bands for Today, Yesterday and so on, for lists in date order.
+  var groupsByDay = false
+  /// Called when a search is submitted.
+  var onSearch: () -> Void = {}
+  /// Controls for this list's header (or toolbar on iPhone).
   @ViewBuilder var tools: () -> Tools
 
   @State private var selection: LibraryItem?
   @State private var toaster = Toaster()
+  #if os(macOS)
+  @FocusState private var listFocused: Bool
+  #endif
+
+  private var detail: String? {
+    guard let countLabel, let total = list.total else { return nil }
+    return "\(total) \(countLabel)"
+  }
 
   var body: some View {
     #if os(macOS)
     HSplitView {
-      listView
-        .frame(minWidth: 300, idealWidth: 380, maxWidth: 560)
-      Group {
-        if let selection {
-          ReaderScreen(item: selection, actions: readerActions(for: selection), perform: perform)
-            .id(selection.id)
-        } else {
-          EmptyBox(message: "Pick something to read", systemImage: "text.alignleft", boxed: false)
-        }
-      }
-      .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
-      .background(Color.stPage)
+      macList
+        .frame(minWidth: 380, maxWidth: .infinity)
+      readerPane
+        .frame(minWidth: 420, idealWidth: 520, maxWidth: 860, maxHeight: .infinity)
     }
+    .background(Color.stPage)
+    .navigationTitle(title)
+    .toolbar(removing: .title)
+    .toasts(toaster)
+    .task(id: query) { await list.load(query) }
     #else
     if embedded {
       pushingList
@@ -48,101 +60,186 @@ struct ItemListView<Tools: View>: View {
     #endif
   }
 
+  // MARK: Mac
+
+  #if os(macOS)
+  private var macList: some View {
+    VStack(spacing: 0) {
+      PageHeader(title: title, detail: detail, accentDetail: showsUnseen) {
+        tools()
+        if let search {
+          PageSearchField(text: search, onSubmit: onSearch)
+        }
+      }
+      ScrollViewReader { proxy in
+        ScrollView {
+          Group {
+            if list.visibleItems.isEmpty {
+              emptyState
+            } else {
+              ListBox { rows }
+            }
+          }
+          .pageWidth()
+          .padding(.bottom, 40)
+        }
+        .scrollContentBackground(.hidden)
+        .focusable()
+        .focused($listFocused)
+        .focusEffectDisabled()
+        .onKeyPress(.downArrow) { step(1) }
+        .onKeyPress(.upArrow) { step(-1) }
+        .onKeyPress(.delete) { performOnSelection(trailing.first) }
+        .onKeyPress(.deleteForward) { performOnSelection(trailing.first) }
+        .onKeyPress("s") { performOnSelection(leading == .save ? .save : nil) }
+        .onKeyPress(.return) {
+          guard let url = selection?.originalURL else { return .ignored }
+          NSWorkspace.shared.open(url)
+          return .handled
+        }
+        .onChange(of: selection) { _, item in
+          guard let item else { return }
+          open(item)
+          withAnimation(.snappy(duration: 0.15)) { proxy.scrollTo(item.id) }
+        }
+      }
+    }
+  }
+
+  /// The reader beside the list, with the item's actions and its place in the list on top.
+  @ViewBuilder
+  private var readerPane: some View {
+    if let selection {
+      VStack(spacing: 0) {
+        HStack(spacing: 8) {
+          let actions = readerActions(for: selection)
+          ForEach(Array(actions.enumerated()), id: \.offset) { index, action in
+            Button { perform(action, selection) } label: {
+              Label(action.title(for: selection), systemImage: action.systemImage)
+            }
+            .buttonStyle(TextButtonStyle(prominent: index == 0))
+          }
+          if let url = selection.originalURL {
+            Button { NSWorkspace.shared.open(url) } label: {
+              Label("Open original", systemImage: "arrow.up.right.square")
+            }
+            .buttonStyle(.text)
+          }
+          Spacer(minLength: 0)
+          if let index = list.visibleItems.firstIndex(of: selection) {
+            Text("\(index + 1) of \(list.total ?? list.visibleItems.count)")
+              .font(.mono(11))
+              .monospacedDigit()
+              .foregroundStyle(Color.stMuted)
+          }
+        }
+        .padding(.horizontal, 20)
+        .frame(height: 52)
+        .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
+
+        ReaderScreen(item: selection, actions: readerActions(for: selection), perform: perform, embedded: true)
+          .id(selection.id)
+      }
+      .background(Color.stSurface)
+    } else {
+      EmptyBox(message: "Pick something to read", systemImage: "text.alignleft", boxed: false)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.stSurface)
+    }
+  }
+  #endif
+
+  // MARK: iPhone
+
   #if os(iOS)
   private var pushingList: some View {
-    listView
+    List { rows }
+      .stashList()
+      .overlay { if list.visibleItems.isEmpty { emptyState } }
+      .toasts(toaster)
+      .stashPage(title, detail: detail, accentDetail: showsUnseen) { tools() }
+      .modifier(Searchable(text: search, onSearch: onSearch))
+      .refreshable { await list.reload(query) }
+      .task(id: query) { await list.load(query) }
       .navigationDestination(item: $selection) { item in
         ReaderScreen(item: item, actions: readerActions(for: item), perform: perform)
       }
   }
   #endif
 
-  private var listView: some View {
-    listContainer
-    .stashList()
-    .overlay { emptyState }
-    .toasts(toaster)
-    .navigationTitle(title)
-    .toolbar { ToolbarItemGroup(placement: .primaryAction) { tools() } }
-    .modifier(Searchable(text: search))
-    .refreshable { await list.reload(query) }
-    .task(id: query) { await list.load(query) }
-    #if os(macOS)
-    .onChange(of: selection) { _, item in if let item { open(item) } }
-    .focusable()
-    .focusEffectDisabled()
-    .onKeyPress(.downArrow) { step(1) }
-    .onKeyPress(.upArrow) { step(-1) }
-    .onKeyPress(.delete) { performOnSelection(trailing.first) }
-    .onKeyPress(.deleteForward) { performOnSelection(trailing.first) }
-    .onKeyPress("s") { performOnSelection(leading == .save ? .save : nil) }
-    .onKeyPress(.return) { if let url = selection?.originalURL { NSWorkspace.shared.open(url) }; return .handled }
-    #endif
-  }
-
-  @ViewBuilder
-  private var listContainer: some View {
-    #if os(macOS)
-    // Selection is drawn by StashRow rather than the system, so the row stays Stash grey with
-    // an orange bar instead of the Mac's accent colour.
-    ScrollViewReader { proxy in
-      List { rows }
-        .onChange(of: selection) { _, item in
-          if let item { withAnimation(.snappy(duration: 0.15)) { proxy.scrollTo(item.id) } }
-        }
-    }
-    #else
-    List { rows }
-    #endif
-  }
+  // MARK: Rows
 
   @ViewBuilder
   private var rows: some View {
-    ForEach(list.visibleItems) { item in
-      row(item)
-        .tag(item.id)
-        .task { await list.loadMore(after: item) }
+    if groupsByDay {
+      ForEach(groups(list.visibleItems), id: \.label) { group in
+        DayBand(label: group.label)
+          .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
+          .stashListRow()
+        ForEach(group.items) { item in row(item) }
+      }
+    } else {
+      ForEach(list.visibleItems) { item in row(item) }
     }
     if list.isLoading && !list.items.isEmpty {
       HStack { Spacer(); ProgressView().controlSize(.small); Spacer() }
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
         .stashListRow()
     }
   }
 
   private func row(_ item: LibraryItem) -> some View {
     rowBase(item)
+      .id(item.id)
       .stashListRow()
       .itemSwipes(item, unseen: showsUnseen && list.isUnseen(item), perform: perform)
       .itemMenu(item, unseen: showsUnseen && list.isUnseen(item), perform: perform)
+      .task { await list.loadMore(after: item) }
   }
 
   @ViewBuilder
   private func rowBase(_ item: LibraryItem) -> some View {
     #if os(macOS)
-    ItemRow(item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item), selected: selection?.id == item.id)
-      .onTapGesture { selection = item }
+    ItemRow(
+      item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item),
+      selected: selection?.id == item.id, divider: item.id != list.visibleItems.last?.id
+    )
+    .onTapGesture {
+      listFocused = true
+      selection = item
+    }
     #else
     Button { selection = item; open(item) } label: {
       ItemRow(item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item))
     }
-      .buttonStyle(.plain)
+    .buttonStyle(.plain)
     #endif
   }
 
   @ViewBuilder
   private var emptyState: some View {
-    if list.visibleItems.isEmpty {
-      if let error = list.error {
-        EmptyBox(title: "Couldn't load", message: error, systemImage: "wifi.exclamationmark", boxed: false) {
-          Button("Try again") { Task { await list.reload(query) } }
-        }
-      } else if list.isLoading {
-        ProgressView()
+    if let error = list.error {
+      EmptyBox(title: "Couldn't load", message: error, systemImage: "wifi.exclamationmark") {
+        Button("Try again") { Task { await list.reload(query) } }
+      }
+    } else if list.isLoading {
+      ListBox { SkeletonRows() }
+    } else {
+      EmptyBox(title: emptyTitle, message: emptyMessage)
+    }
+  }
+
+  private func groups(_ items: [LibraryItem]) -> [(label: String, items: [LibraryItem])] {
+    var result: [(label: String, items: [LibraryItem])] = []
+    for item in items {
+      let label = dayGroup(item.date)
+      if let index = result.firstIndex(where: { $0.label == label }) {
+        result[index].items.append(item)
       } else {
-        EmptyBox(title: emptyTitle, message: emptyMessage, systemImage: "tray", boxed: false)
+        result.append((label, [item]))
       }
     }
+    return result
   }
 
   // MARK: Doing things
@@ -201,14 +298,19 @@ struct ItemListView<Tools: View>: View {
   #endif
 }
 
+#if os(iOS)
 private struct Searchable: ViewModifier {
   let text: Binding<String>?
+  let onSearch: () -> Void
 
   func body(content: Content) -> some View {
     if let text {
-      content.searchable(text: text, prompt: "Search")
+      content
+        .searchable(text: text, prompt: "Search")
+        .onSubmit(of: .search, onSearch)
     } else {
       content
     }
   }
 }
+#endif

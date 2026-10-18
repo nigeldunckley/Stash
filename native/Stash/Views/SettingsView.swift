@@ -9,57 +9,108 @@ struct SettingsView: View {
 
   var body: some View {
     NavigationStack {
-      Form {
-        Section("Account") {
-          LabeledContent("Name", value: session.viewer?.name ?? "…")
-          LabeledContent("Email", value: session.viewer?.email ?? "…")
-          LabeledContent("Server", value: StashConfig.server.host() ?? "")
-          Button("Sign out", role: .destructive) { confirmSignOut = true }
-        }
+      ScrollView {
+        VStack(alignment: .leading, spacing: 28) {
+          SettingsGroup("Account") {
+            SettingsRow("Name") { value(session.viewer?.name ?? "…") }
+            SettingsRow("Email") { value(session.viewer?.email ?? "…") }
+            SettingsRow("Server") { value(StashConfig.server.host() ?? "") }
+            SettingsRow("Signed in", divider: false) {
+              Button("Sign out", role: .destructive) { confirmSignOut = true }
+                .buttonStyle(.text)
+            }
+          }
 
-        Section("Reading") {
-          Picker("Font", selection: $fontFamily) {
-            ForEach(["Newsreader", "Literata", "Geist"], id: \.self) { Text($0).tag($0) }
+          SettingsGroup("Reading") {
+            SettingsRow("Font") {
+              Picker("Font", selection: $fontFamily) {
+                ForEach(["Newsreader", "Literata", "Geist"], id: \.self) { Text($0).tag($0) }
+              }
+              .settingsPicker()
+            }
+            SettingsRow("Text size", divider: false) {
+              HStack(spacing: 6) {
+                Button { fontSize = max(12, fontSize - 2) } label: { Image(systemName: "minus") }
+                  .disabled(fontSize <= 12)
+                  .accessibilityLabel("Smaller text")
+                Text("\(fontSize)")
+                  .font(.mono(12))
+                  .monospacedDigit()
+                  .foregroundStyle(Color.stInk)
+                  .frame(minWidth: 26)
+                Button { fontSize = min(40, fontSize + 2) } label: { Image(systemName: "plus") }
+                  .disabled(fontSize >= 40)
+                  .accessibilityLabel("Larger text")
+              }
+              .buttonStyle(.text)
+            }
           }
-          Stepper("Text size: \(fontSize)", value: $fontSize, in: 12...40, step: 2)
-        }
 
-        Section {
-          Picker("New issue on", selection: setting("day", edition.state?.day ?? 6)) {
-            ForEach(0..<7) { Text(EditionSchedule.dayNames[$0]).tag($0) }
+          SettingsGroup(
+            "The Edition",
+            footer: "A weekly issue of what you missed. It shows in the sidebar while it's out, until you mark it read."
+          ) {
+            SettingsRow("New issue on") {
+              Picker("New issue on", selection: setting("day", edition.state?.day ?? 6)) {
+                ForEach(0..<7) { Text(EditionSchedule.dayNames[$0]).tag($0) }
+              }
+              .settingsPicker()
+            }
+            SettingsRow("At") {
+              Picker("At", selection: setting("hour", edition.state?.hour ?? 7)) {
+                ForEach(5..<13) { Text(String(format: "%02d:00", $0)).tag($0) }
+              }
+              .settingsPicker()
+            }
+            SettingsRow("Show it on Home") {
+              Toggle("Show it on Home", isOn: setting("showOnHome", edition.state?.showOnHome ?? true))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .tint(Color.stAccent)
+                .controlSize(.small)
+            }
+            SettingsRow("Up next on Home", divider: false) {
+              Picker("Up next on Home", selection: setting("upNext", edition.state?.upNext ?? 5)) {
+                ForEach(3...5, id: \.self) { Text("\($0) saves").tag($0) }
+              }
+              .settingsPicker()
+            }
           }
-          Picker("At", selection: setting("hour", edition.state?.hour ?? 7)) {
-            ForEach(5..<13) { Text(String(format: "%02d:00", $0)).tag($0) }
-          }
-          Toggle("Show it on Home", isOn: setting("showOnHome", edition.state?.showOnHome ?? true))
-          Picker("Up next on Home", selection: setting("upNext", edition.state?.upNext ?? 5)) {
-            ForEach(3...5, id: \.self) { Text("\($0) saves").tag($0) }
-          }
-        } header: {
-          Text("The Edition")
-        } footer: {
-          Text("A weekly issue of what you missed. It shows in the sidebar while it's out, until you mark it read.")
-        }
-        .disabled(edition.state == nil)
+          .disabled(edition.state == nil)
 
-        Section("On the web") {
-          Link(destination: StashConfig.server) {
-            Label("Open Stash in Safari", systemImage: "safari")
+          SettingsGroup("On the web") {
+            SettingsRow("Stash on the web", divider: false) {
+              Link(destination: StashConfig.server) {
+                Label("Open in Safari", systemImage: "safari")
+              }
+              .buttonStyle(.text)
+            }
+          }
+
+          SettingsGroup("About") {
+            SettingsRow("Version", divider: false) { value(Self.version) }
           }
         }
-
-        Section {
-          LabeledContent("Version", value: Self.version)
-        }
+        .frame(maxWidth: 640, alignment: .leading)
+        .pageWidth()
+        .padding(.top, 8)
+        .padding(.bottom, 40)
       }
-      .formStyle(.grouped)
-      .scrollContentBackground(.hidden)
       .background(Color.stPage)
-      .navigationTitle("Settings")
+      .stashPage("Settings")
       .confirmationDialog("Sign out of Stash?", isPresented: $confirmSignOut) {
         Button("Sign out", role: .destructive) { session.signOut() }
       }
     }
+  }
+
+  private func value(_ text: String) -> some View {
+    Text(text)
+      .font(.ui(13))
+      .foregroundStyle(Color.stMuted)
+      .lineLimit(1)
+      .truncationMode(.middle)
+      .textSelection(.enabled)
   }
 
   /// A setting kept with The Edition on your account, shared with the web app.
@@ -72,5 +123,75 @@ struct SettingsView: View {
     let version = info?["CFBundleShortVersionString"] as? String ?? "1.0"
     let build = info?["CFBundleVersion"] as? String ?? "1"
     return "\(version) (\(build))"
+  }
+}
+
+/// A group of settings as the web draws them: a mono caps label over a bordered box of rows.
+struct SettingsGroup<Content: View>: View {
+  let title: String
+  var footer: String?
+  @ViewBuilder var content: () -> Content
+
+  init(_ title: String, footer: String? = nil, @ViewBuilder content: @escaping () -> Content) {
+    self.title = title
+    self.footer = footer
+    self.content = content
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text(title.uppercased())
+        .stashLabel()
+        .foregroundStyle(Color.stMuted)
+        .padding(.leading, 2)
+      VStack(spacing: 0) { content() }
+        .background(Color.stSurface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
+      if let footer {
+        Text(footer)
+          .font(.ui(12, relativeTo: .footnote))
+          .foregroundStyle(Color.stMuted)
+          .padding(.horizontal, 2)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+    }
+  }
+}
+
+/// One setting: its name on the left, its control on the right.
+struct SettingsRow<Control: View>: View {
+  let label: String
+  var divider = true
+  @ViewBuilder var control: () -> Control
+
+  init(_ label: String, divider: Bool = true, @ViewBuilder control: @escaping () -> Control) {
+    self.label = label
+    self.divider = divider
+    self.control = control
+  }
+
+  var body: some View {
+    HStack(spacing: 16) {
+      Text(label)
+        .font(.ui(13, .medium, relativeTo: .subheadline))
+        .foregroundStyle(Color.stInk)
+      Spacer(minLength: 12)
+      control()
+    }
+    .padding(.horizontal, 14)
+    .frame(minHeight: 46)
+    .overlay(alignment: .bottom) {
+      if divider { Rectangle().fill(Color.stLine).frame(height: 1).padding(.leading, 14) }
+    }
+  }
+}
+
+private extension View {
+  /// A picker that shows its choice as a quiet menu.
+  func settingsPicker() -> some View {
+    labelsHidden()
+      .pickerStyle(.menu)
+      .tint(Color.stInk2)
+      .fixedSize()
   }
 }

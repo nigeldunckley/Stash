@@ -101,7 +101,7 @@ struct EditionView: View {
             }
           } else {
             VStack(spacing: 12) {
-              ProgressView()
+              SkeletonRows(count: 4)
               Text("Putting this week's issue together…")
                 .font(.ui(13))
                 .foregroundStyle(Color.stMuted)
@@ -110,15 +110,19 @@ struct EditionView: View {
             .padding(.top, 80)
           }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .frame(maxWidth: 760)
+        .padding(.horizontal, PageLayout.gutter)
+        .padding(.top, 8)
+        .padding(.bottom, 40)
+        .frame(maxWidth: 760 + PageLayout.gutter * 2)
         .frame(maxWidth: .infinity)
       }
       .background(Color.stPage)
+      // The masthead is the page's title, so there's no page header here.
       .navigationTitle("The Edition")
       #if os(iOS)
       .navigationBarTitleDisplayMode(.inline)
+      #else
+      .toolbar(removing: .title)
       #endif
       .navigationDestination(for: LibraryItem.self) { item in
         ItemDestination(item: item, perform: perform)

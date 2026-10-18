@@ -40,11 +40,7 @@ struct ItemRow: View {
         #endif
 
         if let imageURL = item.imageURL {
-          AsyncImage(url: imageURL) { image in
-            image.resizable().scaledToFill()
-          } placeholder: {
-            Color.stSunken
-          }
+          FadeImage(url: imageURL)
           .frame(width: 72, height: 48)
           .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
           .overlay(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))

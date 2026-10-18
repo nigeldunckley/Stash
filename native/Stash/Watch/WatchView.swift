@@ -75,13 +75,11 @@ struct WatchView: View {
       videoList
       .overlay { emptyState }
       .toasts(toaster)
-      .background(Color.stPage)
-      .navigationTitle(title)
+      .stashPage(title, detail: detail, accentDetail: kind != .saved && !showAll) { tools }
       .navigationDestination(for: LibraryItem.self) { item in
         PlayerScreen(item: item, queue: videos, actions: actions, perform: perform)
           .onAppear { list.markSeen(item) }
       }
-      .toolbar { ToolbarItemGroup(placement: .primaryAction) { tools } }
       .refreshable { await reload() }
       .task(id: query) { await list.load(query) }
       .task { await loadExtras() }
@@ -111,19 +109,59 @@ struct WatchView: View {
     }
     .stashList()
     #else
+    // The web's grid: cards at least 232pt wide, 18pt apart, 22pt between rows, in day bands
+    // for new videos.
     ScrollView {
-      LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 18, alignment: .top)], spacing: 22) {
-        ForEach(videos) { item in
-          NavigationLink(value: item) { card(item) }
-            .buttonStyle(.plain)
-            .itemMenu(item, unseen: isUnseen(item), perform: perform)
-            .task { await list.loadMore(after: item) }
+      LazyVStack(alignment: .leading, spacing: 26) {
+        ForEach(dayGroups, id: \.label) { group in
+          VStack(alignment: .leading, spacing: 14) {
+            if kind != .saved {
+              HStack(spacing: 10) {
+                Kicker(group.label)
+                Rectangle().fill(Color.stLine).frame(height: 1)
+              }
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 232), spacing: 18, alignment: .top)], spacing: 22) {
+              ForEach(group.items) { item in
+                NavigationLink(value: item) { card(item) }
+                  .buttonStyle(.plain)
+                  .itemMenu(item, unseen: isUnseen(item), perform: perform)
+                  .task { await list.loadMore(after: item) }
+              }
+            }
+          }
+        }
+        if list.isLoading && !list.items.isEmpty {
+          ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding()
         }
       }
-      .padding(16)
-      if list.isLoading && !list.items.isEmpty { ProgressView().padding() }
+      .pageWidth()
+      .padding(.bottom, 40)
     }
+    .scrollContentBackground(.hidden)
     #endif
+  }
+
+  /// "12 new", "40 videos" or "8 saved" beside the title.
+  private var detail: String? {
+    guard let total = list.total else { return nil }
+    if kind == .saved { return "\(total) saved" }
+    return showAll ? "\(total) videos" : "\(total) new"
+  }
+
+  /// Videos grouped by the day they came out; saved videos stay in one group, in their order.
+  private var dayGroups: [(label: String, items: [LibraryItem])] {
+    guard kind != .saved else { return [("Saved", videos)] }
+    var result: [(label: String, items: [LibraryItem])] = []
+    for item in videos {
+      let label = dayGroup(item.publishedAt ?? item.savedAt)
+      if let index = result.firstIndex(where: { $0.label == label }) {
+        result[index].items.append(item)
+      } else {
+        result.append((label, [item]))
+      }
+    }
+    return result
   }
 
   private func card(_ item: LibraryItem) -> some View {
@@ -153,8 +191,11 @@ struct WatchView: View {
           .pickerStyle(.inline)
         }
       } label: {
-        Label("Channels", systemImage: "line.3.horizontal.decrease.circle")
+        Label(channel?.name ?? collection?.name ?? "All channels", systemImage: "line.3.horizontal.decrease")
       }
+      .menuStyle(.button)
+      .buttonStyle(.text)
+      .fixedSize()
       .help("Choose a channel or collection")
     }
   }
@@ -169,7 +210,11 @@ struct WatchView: View {
           Button("Try again") { Task { await reload() } }
         }
       } else if list.isLoading {
-        ProgressView()
+        #if os(macOS)
+        SkeletonCards(count: 8, minWidth: 232, height: 190).pageWidth().frame(maxHeight: .infinity, alignment: .top)
+        #else
+        SkeletonRows()
+        #endif
       } else if kind == .saved {
         EmptyBox(title: "No saved videos", message: "Save videos from your channels to watch them later.", systemImage: "play.rectangle.on.rectangle", boxed: false)
       } else {
