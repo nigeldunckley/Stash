@@ -129,17 +129,7 @@ enum Watch {
 
   /// Watch's lists kept with your account: the collections, and the order of Saved videos.
   private static func watchFields() async throws -> [String: Any] {
-    let data = try await StashAPI.shared.graphQLJSON("""
-      query WatchFields {
-        getUserPersonalization {
-          ... on GetUserPersonalizationSuccess { userPersonalization { fields } }
-          ... on GetUserPersonalizationError { errorCodes }
-        }
-      }
-      """, variables: [:])
-    let result = data["getUserPersonalization"] as? [String: Any]
-    let fields = (result?["userPersonalization"] as? [String: Any])?["fields"] as? [String: Any]
-    return fields?["watch"] as? [String: Any] ?? [:]
+    try await Personalization.fields()["watch"] as? [String: Any] ?? [:]
   }
 
   /// The pinned order of Saved videos, as set on the web.

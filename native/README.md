@@ -27,6 +27,16 @@ The first time on iPhone:
 ## What's in it
 
 - Sign in, kept in the Keychain so you stay signed in.
+- **Home**: new from your feeds (Read or Watch, grouped by day, mark all seen) and Up next
+  (anything you've started, then your newest saves). While The Edition is out, a strip at
+  the top points to it.
+- **The Edition**: the weekly issue, in the sidebar (and an iPhone tab) only while it's out
+  and until you mark it read. The week's best you missed, the back of the shelf, your
+  highlights, someone new to read and your week in reading. Issues are shared with the web
+  app: whichever opens first makes it. Day, time, the Home strip and Up next count are in Settings.
+- **Highlights**: everything you've highlighted, searchable; tap one to open its article.
+- **Discover**: suggested feeds with why each was picked, follow or try for a week,
+  keep or drop a trial, and "not for me". (The reading map stays on the web.)
 - **Feeds**: unseen or all posts, filter by feed, swipe right to save, swipe left to archive,
   mark all as seen. On Mac: Delete archives, S saves, Return opens the original.
 - **Saved** and **Archive**: search, add a link (⌘N), archive, delete.
@@ -47,4 +57,7 @@ The first time on iPhone:
 - `Stash/Reader/reader.js` is the web app's reader, built from `packages/appreader`:
   `cd packages/appreader && yarn build-stash-app` (after `yarn install` at the repo root).
   Rebuild it when the web reader changes.
+- On iPhone, Read and Watch are tabs with a row of pages along the top, as on the website.
+- `Stash/API/Edition.swift` is a port of the web's `lib/edition` (schedule and ranking).
+  Keep the two in step if either changes; both store issues in personalization `edition`.
 - The project uses Xcode 16's folder sync: new files in `Stash/` are picked up automatically.
