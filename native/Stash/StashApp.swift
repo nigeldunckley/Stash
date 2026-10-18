@@ -3,11 +3,14 @@ import SwiftUI
 @main
 struct StashApp: App {
   @State private var session = Session()
+  /// One video player for the whole app.
+  @State private var player = PlayerController()
 
   var body: some Scene {
     WindowGroup {
       RootView()
         .environment(session)
+        .environment(player)
         .tint(.stashAccent)
     }
     #if os(macOS)

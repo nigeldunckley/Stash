@@ -27,7 +27,7 @@ struct SettingsView: View {
           Link(destination: StashConfig.server) {
             Label("Open Stash in Safari", systemImage: "safari")
           }
-          Text("Watch, Discover, Highlights and The Edition are on the web for now and are coming to the app next.")
+          Text("Discover, Highlights and The Edition are on the web for now and are coming to the app next.")
             .font(.footnote)
             .foregroundStyle(Color.stashMuted)
         }

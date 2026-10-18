@@ -32,6 +32,13 @@ The first time on iPhone:
 - **Saved** and **Archive**: search, add a link (⌘N), archive, delete.
 - **Reader**: the same reader and highlighting as the website, with text size and font,
   share and open original. Highlights and reading position sync with the web app.
+- **Watch**: Channels (new or all videos, filter by channel or collection), Saved videos
+  (in the order you set on the web) and each collection in the Mac sidebar. The player has
+  speed remembered per channel, ±10 seconds (← and → on Mac, Space to pause), Up next with
+  autoplay, a transcript that follows along and seeks when tapped, and chapters.
+  Your place is saved as you watch and videos count as watched at 90%, same as the web.
+  On iPhone, Picture in Picture is in the video's full-screen controls, and sound
+  keeps playing with the screen locked.
 
 ## For developers
 

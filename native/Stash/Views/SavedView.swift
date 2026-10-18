@@ -4,6 +4,10 @@ import SwiftUI
 struct SavedView: View {
   let archive: Bool
 
+  /// On iPhone, Saved has a switch to show the archive instead.
+  @State private var archiveSwitch = false
+  private var isArchive: Bool { archive || archiveSwitch }
+
   @State private var list = ItemList()
   @State private var searchText = ""
   @State private var submittedSearch = ""
@@ -12,24 +16,34 @@ struct SavedView: View {
   @State private var addError: String?
 
   private var query: String {
-    let base = archive ? "in:archive use:folders -type:video" : "in:inbox use:folders -type:video"
+    let base = isArchive ? "in:archive use:folders -type:video" : "in:inbox use:folders -type:video"
     return [base, submittedSearch].filter { !$0.isEmpty }.joined(separator: " ")
   }
 
   var body: some View {
     ItemListView(
-      title: archive ? "Archive" : "Saved",
+      title: isArchive ? "Archive" : "Saved",
       list: list,
       query: query,
       leading: nil,
-      trailing: archive ? [.unarchive, .delete] : [.archive, .delete],
-      emptyTitle: archive ? "Nothing archived" : "Nothing saved",
-      emptyMessage: archive
+      trailing: isArchive ? [.unarchive, .delete] : [.archive, .delete],
+      emptyTitle: isArchive ? "Nothing archived" : "Nothing saved",
+      emptyMessage: isArchive
         ? "Articles you archive end up here."
         : "Save from Feeds, or add a link with the + button.",
       search: $searchText
     ) {
+      #if os(iOS)
       if !archive {
+        Picker("Show", selection: $archiveSwitch) {
+          Text("Saved").tag(false)
+          Text("Archive").tag(true)
+        }
+        .pickerStyle(.segmented)
+        .fixedSize()
+      }
+      #endif
+      if !isArchive {
         Button { isAddingLink = true } label: { Label("Add link", systemImage: "plus") }
           .keyboardShortcut("n", modifiers: .command)
           .help("Save a link")

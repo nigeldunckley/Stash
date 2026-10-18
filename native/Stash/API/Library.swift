@@ -5,7 +5,7 @@ enum Library {
   static let itemFields = """
     id title slug url folder pageType contentReader author image headerImage description
     siteName siteIcon subscription originalArticleUrl state createdAt savedAt publishedAt
-    readAt seenAt readingProgressPercent wordsCount highlightsCount
+    readAt seenAt readingProgressPercent readingProgressAnchorIndex wordsCount highlightsCount
     """
 
   struct Page {

@@ -23,6 +23,7 @@ struct LibraryItem: Decodable, Identifiable, Hashable {
   let readAt: Date?
   let seenAt: Date?
   let readingProgressPercent: Double?
+  let readingProgressAnchorIndex: Int?
   let wordsCount: Int?
   let highlightsCount: Int?
 

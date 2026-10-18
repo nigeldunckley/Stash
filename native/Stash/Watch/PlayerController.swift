@@ -1,0 +1,275 @@
+import SwiftUI
+import WebKit
+import Observation
+#if os(iOS)
+import AVFoundation
+#endif
+
+/// Plays YouTube videos through the same embedded player the web app uses, and
+/// keeps Stash up to date: where you got to, and when a video counts as watched.
+@MainActor
+@Observable
+final class PlayerController: NSObject {
+  let webView: WKWebView
+
+  private(set) var item: LibraryItem?
+  private(set) var time: Double = 0
+  private(set) var duration: Double = 0
+  private(set) var isPlaying = false
+  private(set) var rate: Double = 1
+  /// What to play next, in order. The current video is skipped.
+  var queue: [LibraryItem] = []
+  /// Play the next video when one ends.
+  var autoplay: Bool = UserDefaults.standard.object(forKey: "watchAutoplay") as? Bool ?? true {
+    didSet { UserDefaults.standard.set(autoplay, forKey: "watchAutoplay") }
+  }
+
+  @ObservationIgnored private var savedTime: Double = 0
+  @ObservationIgnored private var watched: Set<String> = []
+  @ObservationIgnored private var pageLoaded = false
+
+  static let speeds: [Double] = [1, 1.25, 1.5, 1.75, 2]
+  private static let origin = "https://www.youtube-nocookie.com"
+
+  override init() {
+    let config = WKWebViewConfiguration()
+    config.mediaTypesRequiringUserActionForPlayback = []
+    config.preferences.isElementFullscreenEnabled = true
+    #if os(iOS)
+    config.allowsInlineMediaPlayback = true
+    config.allowsPictureInPictureMediaPlayback = true
+    #endif
+    let controller = WKUserContentController()
+    config.userContentController = controller
+    webView = WKWebView(frame: .zero, configuration: config)
+    super.init()
+    controller.add(PlayerMessages(self), name: "player")
+    webView.navigationDelegate = self
+    webView.isInspectable = true
+    #if os(iOS)
+    webView.scrollView.isScrollEnabled = false
+    webView.isOpaque = false
+    webView.backgroundColor = .black
+    // Sound keeps playing with the screen locked, and in Picture in Picture.
+    try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+    #endif
+  }
+
+  // MARK: Playing
+
+  func play(_ next: LibraryItem) {
+    guard let videoID = Watch.videoID(next) else { return }
+    if item?.id == next.id {
+      command("playVideo")
+      return
+    }
+    savePosition()
+    let start = Watch.startTime(next).rounded(.down)
+    item = next
+    time = start
+    duration = Watch.duration(next) ?? 0
+    isPlaying = false
+    savedTime = start
+    rate = Self.rate(for: next)
+    Task { try? await Library.markSeen([next.id]) }
+
+    if pageLoaded {
+      command("loadVideoById", [["videoId": videoID, "startSeconds": start]])
+    } else {
+      webView.loadHTMLString(Self.page(videoID: videoID, start: Int(start)), baseURL: StashConfig.server)
+    }
+  }
+
+  func toggle() { command(isPlaying ? "pauseVideo" : "playVideo") }
+  func pause() { command("pauseVideo") }
+
+  func seek(to seconds: Double) {
+    let target = max(0, seconds)
+    command("seekTo", [target, true])
+    command("playVideo")
+    time = target
+  }
+
+  func skip(_ seconds: Double) { seek(to: time + seconds) }
+
+  func setRate(_ value: Double) {
+    command("setPlaybackRate", [value])
+    rate = value
+    if let item {
+      var rates = UserDefaults.standard.dictionary(forKey: "watchRates") as? [String: Double] ?? [:]
+      rates[Self.channelKey(item)] = value
+      UserDefaults.standard.set(rates, forKey: "watchRates")
+    }
+  }
+
+  func next() {
+    guard let upcoming = queue.first(where: { $0.id != item?.id }) else { return }
+    play(upcoming)
+  }
+
+  /// Saves the place and stops, when leaving the player.
+  func stop() {
+    savePosition()
+    pause()
+  }
+
+  var upNext: [LibraryItem] {
+    guard let item, let index = queue.firstIndex(where: { $0.id == item.id }) else {
+      return queue.filter { $0.id != self.item?.id }
+    }
+    return Array(queue[(index + 1)...]) + Array(queue[..<index])
+  }
+
+  // MARK: Player messages
+
+  fileprivate func handle(_ body: Any) {
+    guard let message = body as? [String: Any], let event = message["event"] as? String else { return }
+    switch event {
+    case "ready":
+      pageLoaded = true
+      if let item { command("setPlaybackRate", [Self.rate(for: item)]) }
+    case "info":
+      if let value = message["time"] as? Double { time = value }
+      if let value = message["duration"] as? Double, value > 0 { duration = value }
+      if let value = message["rate"] as? Double { rate = value }
+      if let state = message["state"] as? Int {
+        isPlaying = state == 1
+        if state == 0 { ended() }
+      }
+      progressChanged()
+    default:
+      break
+    }
+  }
+
+  /// Every so often, remember the place; at 90% the video counts as watched.
+  private func progressChanged() {
+    guard let item else { return }
+    Watch.positions[item.id] = Int(time)
+    if abs(time - savedTime) >= 10 { savePosition() }
+    if duration > 0, time / duration >= 0.9, !watched.contains(item.id) {
+      watched.insert(item.id)
+      Task { try? await Watch.markWatched(item.id) }
+    }
+  }
+
+  private func ended() {
+    if autoplay { next() }
+  }
+
+  private func savePosition() {
+    guard let item, duration > 0, abs(time - savedTime) >= 2 else { return }
+    savedTime = time
+    let (id, seconds, length) = (item.id, time, duration)
+    Task { try? await Watch.savePosition(id, seconds: seconds, duration: length) }
+  }
+
+  private func command(_ name: String, _ args: [Any] = []) {
+    guard let data = try? JSONSerialization.data(withJSONObject: args),
+          let json = String(data: data, encoding: .utf8) else { return }
+    webView.evaluateJavaScript("window.stashPlayer && window.stashPlayer.command('\(name)', \(json))", completionHandler: nil)
+  }
+
+  private static func channelKey(_ item: LibraryItem) -> String {
+    item.subscription ?? item.author ?? "other"
+  }
+
+  /// Speed is remembered per channel: a lecture at 1.75×, a film at 1×.
+  private static func rate(for item: LibraryItem) -> Double {
+    (UserDefaults.standard.dictionary(forKey: "watchRates") as? [String: Double])?[channelKey(item)] ?? 1
+  }
+
+  /// A page holding the YouTube player, which reports its time and state back to the app.
+  private static func page(videoID: String, start: Int) -> String {
+    let originParam = StashConfig.server.absoluteString
+      .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+      .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+    let src = "\(origin)/embed/\(videoID)?autoplay=1&playsinline=1&rel=0&enablejsapi=1&origin=\(originParam)"
+      + (start > 0 ? "&start=\(start)" : "")
+    return """
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <style>
+          html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+          iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+        </style>
+      </head>
+      <body>
+        <iframe id="player" src="\(src)"
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
+        <script>
+          const ORIGIN = '\(origin)'
+          const frame = document.getElementById('player')
+          const send = (message) => window.webkit.messageHandlers.player.postMessage(message)
+          let ready = false
+          window.stashPlayer = {
+            command: (func, args) => frame.contentWindow.postMessage(
+              JSON.stringify({ event: 'command', func, args: args || [] }), ORIGIN)
+          }
+          // The player only reports back once asked to; keep asking until it answers.
+          const listen = () => frame.contentWindow.postMessage(
+            JSON.stringify({ event: 'listening', id: 'stash' }), ORIGIN)
+          frame.addEventListener('load', listen)
+          const asking = setInterval(() => ready ? clearInterval(asking) : listen(), 500)
+          window.addEventListener('message', (event) => {
+            if (event.origin !== ORIGIN) return
+            let data
+            try { data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data } catch { return }
+            if (data.event === 'onReady') { ready = true; send({ event: 'ready' }); return }
+            if (data.event !== 'infoDelivery' || !data.info) return
+            ready = true
+            const info = data.info
+            send({
+              event: 'info',
+              time: info.currentTime ?? null,
+              duration: info.duration ?? null,
+              state: info.playerState ?? null,
+              rate: info.playbackRate ?? null,
+            })
+          })
+        </script>
+      </body>
+    </html>
+    """
+  }
+}
+
+extension PlayerController: WKNavigationDelegate {
+  func webView(
+    _ webView: WKWebView,
+    decidePolicyFor navigationAction: WKNavigationAction
+  ) async -> WKNavigationActionPolicy {
+    // "Watch on YouTube" and other links inside the player open outside the app.
+    if navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url {
+      #if os(iOS)
+      UIApplication.shared.open(url)
+      #else
+      NSWorkspace.shared.open(url)
+      #endif
+      return .cancel
+    }
+    return .allow
+  }
+
+  func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+    pageLoaded = false
+    if let item {
+      self.item = nil
+      play(item)
+    }
+  }
+}
+
+/// Holds the controller weakly, so the web view's handler doesn't keep it alive.
+@MainActor
+private final class PlayerMessages: NSObject, WKScriptMessageHandler {
+  weak var owner: PlayerController?
+
+  init(_ owner: PlayerController) { self.owner = owner }
+
+  func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+    owner?.handle(message.body)
+  }
+}
