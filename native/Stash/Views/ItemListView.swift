@@ -1,53 +1,5 @@
 import SwiftUI
 
-enum ItemAction: Hashable {
-  case save, archive, unarchive, delete
-
-  var title: String {
-    switch self {
-    case .save: return "Save"
-    case .archive: return "Archive"
-    case .unarchive: return "Move to Saved"
-    case .delete: return "Delete"
-    }
-  }
-
-  var systemImage: String {
-    switch self {
-    case .save: return "bookmark"
-    case .archive: return "archivebox"
-    case .unarchive: return "tray.and.arrow.up"
-    case .delete: return "trash"
-    }
-  }
-
-  var tint: Color {
-    switch self {
-    case .save: return .stashAccent
-    case .archive, .unarchive: return .gray
-    case .delete: return .red
-    }
-  }
-
-  var doneMessage: String {
-    switch self {
-    case .save: return "Saved"
-    case .archive: return "Archived"
-    case .unarchive: return "Moved to Saved"
-    case .delete: return "Deleted"
-    }
-  }
-
-  func run(on item: LibraryItem) async throws {
-    switch self {
-    case .save: try await Library.move(item.id, to: "inbox")
-    case .archive: try await Library.setArchived(item.id, true)
-    case .unarchive: try await Library.setArchived(item.id, false)
-    case .delete: try await Library.delete(item.id)
-    }
-  }
-}
-
 /// A list with the reader beside it on Mac, or pushed on top of it on iPhone.
 struct ItemListView<Tools: View>: View {
   let title: String
@@ -67,7 +19,7 @@ struct ItemListView<Tools: View>: View {
   @ViewBuilder var tools: () -> Tools
 
   @State private var selection: LibraryItem?
-  @State private var toast: String?
+  @State private var toaster = Toaster()
 
   var body: some View {
     #if os(macOS)
@@ -99,7 +51,7 @@ struct ItemListView<Tools: View>: View {
     listContainer
     .listStyle(.plain)
     .overlay { emptyState }
-    .overlay(alignment: .bottom) { toastView }
+    .toasts(toaster)
     .navigationTitle(title)
     .toolbar { ToolbarItemGroup(placement: .primaryAction) { tools() } }
     .modifier(Searchable(text: search))
@@ -138,13 +90,8 @@ struct ItemListView<Tools: View>: View {
 
   private func row(_ item: LibraryItem) -> some View {
     rowBase(item)
-      .swipeActions(edge: .leading) {
-        if let leading { actionButton(leading, item) }
-      }
-      .swipeActions(edge: .trailing) {
-        ForEach(trailing, id: \.self) { actionButton($0, item) }
-      }
-      .contextMenu { contextMenu(item) }
+      .itemSwipes(item, unseen: showsUnseen && list.isUnseen(item), perform: perform)
+      .itemMenu(item, unseen: showsUnseen && list.isUnseen(item), perform: perform)
   }
 
   @ViewBuilder
@@ -156,30 +103,6 @@ struct ItemListView<Tools: View>: View {
     Button { selection = item; open(item) } label: { content }
       .buttonStyle(.plain)
     #endif
-  }
-
-  private func actionButton(_ action: ItemAction, _ item: LibraryItem) -> some View {
-    Button(role: action == .delete ? .destructive : nil) {
-      perform(action, item)
-    } label: {
-      Label(action.title, systemImage: action.systemImage)
-    }
-    .tint(action.tint)
-  }
-
-  @ViewBuilder
-  private func contextMenu(_ item: LibraryItem) -> some View {
-    if let url = item.originalURL {
-      Link(destination: url) { Label("Open original", systemImage: "safari") }
-      ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
-      Button { copy(url) } label: { Label("Copy link", systemImage: "link") }
-      Divider()
-    }
-    ForEach(([leading].compactMap { $0 } + trailing), id: \.self) { action in
-      Button(role: action == .delete ? .destructive : nil) { perform(action, item) } label: {
-        Label(action.title, systemImage: action.systemImage)
-      }
-    }
   }
 
   @ViewBuilder
@@ -198,20 +121,6 @@ struct ItemListView<Tools: View>: View {
       } else {
         ContentUnavailableView(emptyTitle, systemImage: "tray", description: Text(emptyMessage))
       }
-    }
-  }
-
-  @ViewBuilder
-  private var toastView: some View {
-    if let toast {
-      Text(toast)
-        .font(.callout.weight(.medium))
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.stashBorder, lineWidth: 0.5))
-        .padding(.bottom, 16)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
   }
 
@@ -236,7 +145,7 @@ struct ItemListView<Tools: View>: View {
   private func perform(_ action: ItemAction, _ item: LibraryItem) {
     // Move on to the next item, as the web app does.
     let items = list.visibleItems
-    if selection?.id == item.id {
+    if action.removesItem && selection?.id == item.id {
       #if os(macOS)
       if let index = items.firstIndex(of: item) {
         let rest = items.dropFirst(index + 1)
@@ -246,16 +155,14 @@ struct ItemListView<Tools: View>: View {
       selection = nil
       #endif
     }
-    withAnimation { list.remove(item) }
-    Task {
-      do {
-        try await action.run(on: item)
-        show(action.doneMessage)
-      } catch {
-        withAnimation { list.restore(item) }
-        show(error.localizedDescription)
+    runItemAction(
+      action, item, toaster: toaster,
+      remove: { list.remove(item) },
+      restore: { list.restore(item) },
+      refresh: {
+        if action == .markSeen { list.markSeen(item) } else { await list.reload(query) }
       }
-    }
+    )
   }
 
   #if os(macOS)
@@ -265,23 +172,6 @@ struct ItemListView<Tools: View>: View {
     return .handled
   }
   #endif
-
-  private func show(_ message: String) {
-    withAnimation { toast = message }
-    Task {
-      try? await Task.sleep(for: .seconds(2))
-      withAnimation { if toast == message { toast = nil } }
-    }
-  }
-
-  private func copy(_ url: URL) {
-    #if os(iOS)
-    UIPasteboard.general.url = url
-    #else
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(url.absoluteString, forType: .string)
-    #endif
-  }
 }
 
 private struct Searchable: ViewModifier {

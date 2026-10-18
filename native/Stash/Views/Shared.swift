@@ -31,12 +31,27 @@ extension ItemAction {
 @Observable
 final class Toaster {
   private(set) var message: String?
+  private(set) var undo: (() -> Void)?
+  private var shown = 0
 
-  func show(_ message: String) {
-    withAnimation { self.message = message }
+  /// Shows a message for a moment, or longer with an Undo button.
+  func show(_ message: String, undo: (() -> Void)? = nil) {
+    shown += 1
+    let id = shown
+    withAnimation {
+      self.message = message
+      self.undo = undo
+    }
     Task {
-      try? await Task.sleep(for: .seconds(2))
-      withAnimation { if self.message == message { self.message = nil } }
+      try? await Task.sleep(for: .seconds(undo == nil ? 2 : 5))
+      if shown == id { dismiss() }
+    }
+  }
+
+  func dismiss() {
+    withAnimation {
+      message = nil
+      undo = nil
     }
   }
 }
@@ -47,7 +62,18 @@ struct ToastOverlay: ViewModifier {
   func body(content: Content) -> some View {
     content.overlay(alignment: .bottom) {
       if let message = toaster.message {
-        Text(message)
+        HStack(spacing: 14) {
+          Text(message)
+          if let undo = toaster.undo {
+            Button("Undo") {
+              toaster.dismiss()
+              undo()
+            }
+            .fontWeight(.semibold)
+            .foregroundStyle(Color.stashAccentText)
+            .buttonStyle(.plain)
+          }
+        }
           .font(.callout.weight(.medium))
           .padding(.horizontal, 14)
           .padding(.vertical, 9)

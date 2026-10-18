@@ -170,6 +170,34 @@ enum Library {
     try await markSeen(query: "in:following use:folders includes:\(ids.joined(separator: ","))", expectedCount: ids.count)
   }
 
+  /// Sets how far through an item you are; 100 marks it read (or a video watched).
+  static func setProgress(_ id: String, percent: Double) async throws {
+    let gql = """
+      mutation SaveArticleReadingProgress($input: SaveArticleReadingProgressInput!) {
+        saveArticleReadingProgress(input: $input) {
+          ... on SaveArticleReadingProgressSuccess { updatedArticle { id } }
+          ... on SaveArticleReadingProgressError { errorCodes }
+        }
+      }
+      """
+    try await mutate(gql, variables: ["input": [
+      "id": id, "force": true, "readingProgressPercent": percent, "readingProgressAnchorIndex": 0,
+    ]])
+  }
+
+  /// Brings back a deleted item, as Undo does on the web.
+  static func restore(_ id: String) async throws {
+    let gql = """
+      mutation UpdatePage($input: UpdatePageInput!) {
+        updatePage(input: $input) {
+          ... on UpdatePageSuccess { updatedPage { id } }
+          ... on UpdatePageError { errorCodes }
+        }
+      }
+      """
+    try await mutate(gql, variables: ["input": ["pageId": id, "state": "SUCCEEDED"]])
+  }
+
   static func save(url: String) async throws {
     let gql = """
       mutation SaveUrl($input: SaveUrlInput!) {

@@ -75,3 +75,18 @@ enum Highlights {
     return Array(found.prefix(max))
   }
 }
+
+extension Highlights {
+  static func delete(_ id: String) async throws {
+    let data = try await StashAPI.shared.graphQLJSON("""
+      mutation DeleteHighlight($highlightId: ID!) {
+        deleteHighlight(highlightId: $highlightId) {
+          ... on DeleteHighlightSuccess { highlight { id } }
+          ... on DeleteHighlightError { errorCodes }
+        }
+      }
+      """, variables: ["highlightId": id])
+    let result = data["deleteHighlight"] as? [String: Any]
+    if let code = (result?["errorCodes"] as? [String])?.first { throw StashError.server(code) }
+  }
+}

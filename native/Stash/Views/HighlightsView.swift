@@ -10,6 +10,8 @@ struct HighlightsView: View {
   @State private var searchText = ""
   @State private var submittedSearch = ""
   @State private var toaster = Toaster()
+  @State private var confirmDelete: Highlight?
+  @Environment(\.openURL) private var openURL
 
   var body: some View {
     NavigationStack {
@@ -35,6 +37,26 @@ struct HighlightsView: View {
       .refreshable { await reload() }
       .task(id: submittedSearch) { await reload() }
       .toasts(toaster)
+      .confirmationDialog(
+        "Delete this highlight?",
+        isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }),
+        presenting: confirmDelete
+      ) { highlight in
+        Button("Delete highlight", role: .destructive) { delete(highlight) }
+      }
+    }
+  }
+
+  private func delete(_ highlight: Highlight) {
+    withAnimation { highlights.removeAll { $0.id == highlight.id } }
+    Task {
+      do {
+        try await Highlights.delete(highlight.id)
+        toaster.show("Highlight deleted")
+      } catch {
+        toaster.show(error.localizedDescription)
+        await reload()
+      }
     }
   }
 
@@ -78,12 +100,29 @@ struct HighlightsView: View {
       if let url = highlight.libraryItem?.originalURL {
         Link(destination: url) { Label("Open original", systemImage: "safari") }
       }
+      Divider()
+      Button(role: .destructive) { confirmDelete = highlight } label: { Label("Delete highlight", systemImage: "trash") }
     }
 
-    if let item = highlight.libraryItem {
-      NavigationLink(value: item) { content }
-    } else {
-      content
+    Group {
+      if let item = highlight.libraryItem {
+        NavigationLink(value: item) { content }
+      } else {
+        content
+      }
+    }
+    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+      if let quote = highlight.quote {
+        Button { copy(quote) } label: { Label("Copy", systemImage: "doc.on.doc") }
+          .tint(.blue)
+      }
+      if let url = highlight.libraryItem?.originalURL {
+        Button { openURL(url) } label: { Label("Open original", systemImage: "safari") }
+          .tint(.teal)
+      }
+    }
+    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+      Button(role: .destructive) { confirmDelete = highlight } label: { Label("Delete", systemImage: "trash") }
     }
   }
 

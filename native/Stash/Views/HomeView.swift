@@ -291,24 +291,8 @@ struct HomeView: View {
   private func feedRow(_ item: LibraryItem) -> some View {
     rowBase(item)
       .tag(item.id)
-      .swipeActions(edge: .leading) {
-        Button { perform(.save, item) } label: { Label("Save", systemImage: "bookmark") }
-          .tint(.stashAccent)
-      }
-      .swipeActions(edge: .trailing) {
-        Button { perform(.archive, item) } label: { Label("Archive", systemImage: "archivebox") }
-          .tint(.gray)
-      }
-      .contextMenu {
-        Button { perform(.save, item) } label: { Label(Watch.isVideo(item) ? "Save for later" : "Save", systemImage: "bookmark") }
-        Button { perform(.archive, item) } label: { Label("Archive", systemImage: "archivebox") }
-        Button { markSeen(item) } label: { Label("Mark as seen", systemImage: "eye") }
-        if let url = item.originalURL {
-          Divider()
-          Link(destination: url) { Label("Open original", systemImage: "safari") }
-          ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
-        }
-      }
+      .itemSwipes(item, unseen: feeds.isUnseen(item), perform: perform)
+      .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
   }
 
   /// On Mac the list's selection opens the preview; on iPhone a tap does.
@@ -350,7 +334,7 @@ struct HomeView: View {
           .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .contextMenu { upNextMenu(first) }
+        .itemMenu(first, perform: perform)
 
         ForEach(upNext.dropFirst()) { item in
           Divider()
@@ -358,7 +342,7 @@ struct HomeView: View {
             upNextText(item, titleFont: .stashTitle(.subheadline)).contentShape(Rectangle())
           }
           .buttonStyle(.plain)
-          .contextMenu { upNextMenu(item) }
+          .itemMenu(item, perform: perform)
         }
       } else {
         upNextEmpty
@@ -404,7 +388,7 @@ struct HomeView: View {
                 .contentShape(Rectangle())
               }
               .buttonStyle(.plain)
-              .contextMenu { upNextMenu(item) }
+              .itemMenu(item, perform: perform)
             }
           }
         }
@@ -447,17 +431,6 @@ struct HomeView: View {
           .foregroundStyle(item.progress >= 0.02 ? Color.stashAccentText : Color.stashMuted)
       }
     }
-  }
-
-  @ViewBuilder
-  private func upNextMenu(_ item: LibraryItem) -> some View {
-    Button { perform(.archive, item) } label: { Label("Archive", systemImage: "archivebox") }
-    if let url = item.originalURL {
-      Link(destination: url) { Label("Open original", systemImage: "safari") }
-      ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
-    }
-    Divider()
-    Button(role: .destructive) { perform(.delete, item) } label: { Label("Delete", systemImage: "trash") }
   }
 
   // MARK: Loading
@@ -544,7 +517,7 @@ struct HomeView: View {
   #endif
 
   private func perform(_ action: ItemAction, _ item: LibraryItem) {
-    if peek?.id == item.id {
+    if action.removesItem && peek?.id == item.id {
       #if os(macOS)
       // Move on to the next feed item, as Feeds does; back to Up next at the end.
       let items = Array(feeds.visibleItems.prefix(Self.feedLimit))
@@ -557,19 +530,21 @@ struct HomeView: View {
       peek = nil
       #endif
     }
-    withAnimation {
-      feeds.remove(item)
-      upNext.removeAll { $0.id == item.id }
-    }
-    Task {
-      do {
-        try await action.run(on: item)
-        toaster.show(item.isFeedItem && action == .save && Watch.isVideo(item) ? "Saved for later" : action.doneMessage)
-        if !item.isFeedItem || action == .save { await loadUpNext() }
-      } catch {
-        withAnimation { feeds.restore(item) }
-        toaster.show(error.localizedDescription)
+    let wasUpNext = upNext.contains { $0.id == item.id }
+    runItemAction(
+      action, item, toaster: toaster,
+      remove: {
+        feeds.remove(item)
+        upNext.removeAll { $0.id == item.id }
+      },
+      restore: { feeds.restore(item) },
+      refresh: {
+        if action == .markSeen {
+          feeds.markSeen(item)
+        } else if wasUpNext || !item.isFeedItem || action == .save {
+          await loadUpNext()
+        }
       }
-    }
+    )
   }
 }

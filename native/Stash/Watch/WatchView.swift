@@ -16,7 +16,7 @@ struct WatchView: View {
   @State private var savedOrder: [String] = []
   @State private var channel: Subscription?
   @State private var collection: WatchCollection?
-  @State private var toast: String?
+  @State private var toaster = Toaster()
   @AppStorage("watchShowAll") private var showAll = false
 
   private var activeCollection: WatchCollection? {
@@ -72,22 +72,9 @@ struct WatchView: View {
 
   var body: some View {
     NavigationStack {
-      ScrollView {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 18, alignment: .top)], spacing: 22) {
-          ForEach(videos) { item in
-            NavigationLink(value: item) {
-              VideoCard(item: item, channelName: channelName(item), unseen: kind != .saved && list.isUnseen(item))
-            }
-            .buttonStyle(.plain)
-            .contextMenu { menu(for: item) }
-            .task { await list.loadMore(after: item) }
-          }
-        }
-        .padding(16)
-        if list.isLoading && !list.items.isEmpty { ProgressView().padding() }
-      }
+      videoList
       .overlay { emptyState }
-      .overlay(alignment: .bottom) { toastView }
+      .toasts(toaster)
       .background(Color.stashBackground)
       .navigationTitle(title)
       .navigationDestination(for: LibraryItem.self) { item in
@@ -100,6 +87,49 @@ struct WatchView: View {
       .task { await loadExtras() }
     }
   }
+
+  /// A grid on Mac; on iPhone a list, so videos swipe like everything else.
+  @ViewBuilder
+  private var videoList: some View {
+    #if os(iOS)
+    List {
+      ForEach(videos) { item in
+        ZStack {
+          NavigationLink(value: item) { EmptyView() }.opacity(0)
+          card(item)
+        }
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+        .itemSwipes(item, unseen: isUnseen(item), perform: perform)
+        .itemMenu(item, unseen: isUnseen(item), perform: perform)
+        .task { await list.loadMore(after: item) }
+      }
+      if list.isLoading && !list.items.isEmpty {
+        HStack { Spacer(); ProgressView(); Spacer() }.listRowSeparator(.hidden)
+      }
+    }
+    .listStyle(.plain)
+    #else
+    ScrollView {
+      LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 18, alignment: .top)], spacing: 22) {
+        ForEach(videos) { item in
+          NavigationLink(value: item) { card(item) }
+            .buttonStyle(.plain)
+            .itemMenu(item, unseen: isUnseen(item), perform: perform)
+            .task { await list.loadMore(after: item) }
+        }
+      }
+      .padding(16)
+      if list.isLoading && !list.items.isEmpty { ProgressView().padding() }
+    }
+    #endif
+  }
+
+  private func card(_ item: LibraryItem) -> some View {
+    VideoCard(item: item, channelName: channelName(item), unseen: isUnseen(item))
+  }
+
+  private func isUnseen(_ item: LibraryItem) -> Bool { kind != .saved && list.isUnseen(item) }
 
   // MARK: Toolbar
 
@@ -133,28 +163,6 @@ struct WatchView: View {
     }
   }
 
-  @ViewBuilder
-  private func menu(for item: LibraryItem) -> some View {
-    if let url = item.originalURL {
-      Link(destination: url) { Label("Open on YouTube", systemImage: "play.rectangle") }
-      ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
-      Divider()
-    }
-    Button {
-      Task {
-        try? await Watch.markWatched(item.id, item.progress < 0.9)
-        await list.reload(query)
-      }
-    } label: {
-      Label(item.progress < 0.9 ? "Mark as watched" : "Mark as not watched", systemImage: "checkmark.circle")
-    }
-    ForEach(actions, id: \.self) { action in
-      Button(role: action == .delete ? .destructive : nil) { perform(action, item) } label: {
-        Label(kind != .saved && action == .save ? "Save for later" : action.title, systemImage: action.systemImage)
-      }
-    }
-  }
-
   // MARK: States
 
   @ViewBuilder
@@ -180,20 +188,6 @@ struct WatchView: View {
     }
   }
 
-  @ViewBuilder
-  private var toastView: some View {
-    if let toast {
-      Text(toast)
-        .font(.callout.weight(.medium))
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.stashBorder, lineWidth: 0.5))
-        .padding(.bottom, 16)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-    }
-  }
-
   // MARK: Doing things
 
   private func channelName(_ item: LibraryItem) -> String? {
@@ -213,23 +207,13 @@ struct WatchView: View {
   }
 
   private func perform(_ action: ItemAction, _ item: LibraryItem) {
-    withAnimation { list.remove(item) }
-    Task {
-      do {
-        try await action.run(on: item)
-        show(kind != .saved && action == .save ? "Saved for later" : action.doneMessage)
-      } catch {
-        withAnimation { list.restore(item) }
-        show(error.localizedDescription)
+    runItemAction(
+      action, item, toaster: toaster,
+      remove: { list.remove(item) },
+      restore: { list.restore(item) },
+      refresh: {
+        if action == .markSeen { list.markSeen(item) } else { await list.reload(query) }
       }
-    }
-  }
-
-  private func show(_ message: String) {
-    withAnimation { toast = message }
-    Task {
-      try? await Task.sleep(for: .seconds(2))
-      withAnimation { if toast == message { toast = nil } }
-    }
+    )
   }
 }
