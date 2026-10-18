@@ -531,10 +531,11 @@ struct HomeView: View {
 
   private func groups(_ items: [LibraryItem]) -> [(label: String, items: [LibraryItem])] {
     var result: [(label: String, items: [LibraryItem])] = []
+    // Grouped by label, not just by neighbours, so a label never appears twice.
     for item in items {
       let label = dayGroup(item.date)
-      if result.last?.label == label {
-        result[result.count - 1].items.append(item)
+      if let index = result.firstIndex(where: { $0.label == label }) {
+        result[index].items.append(item)
       } else {
         result.append((label, [item]))
       }
@@ -736,7 +737,8 @@ private struct HomeSearchResults: View {
       leading: nil,
       trailing: [.archive, .delete],
       emptyTitle: "No results",
-      emptyMessage: "Nothing in Stash matches “\(search.text)”."
+      emptyMessage: "Nothing in Stash matches “\(search.text)”.",
+      embedded: true
     ) {
       EmptyView()
     }

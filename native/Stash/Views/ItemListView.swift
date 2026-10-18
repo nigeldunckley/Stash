@@ -15,6 +15,8 @@ struct ItemListView<Tools: View>: View {
   var emptyMessage = ""
   /// Search box text, for lists that can be searched.
   var search: Binding<String>?
+  /// Already pushed inside another NavigationStack (e.g. Home's), so it doesn't make its own.
+  var embedded = false
   /// Buttons for this list's toolbar.
   @ViewBuilder var tools: () -> Tools
 
@@ -38,14 +40,22 @@ struct ItemListView<Tools: View>: View {
       .background(Color.stPage)
     }
     #else
-    NavigationStack {
-      listView
-        .navigationDestination(item: $selection) { item in
-          ReaderScreen(item: item, actions: readerActions(for: item), perform: perform)
-        }
+    if embedded {
+      pushingList
+    } else {
+      NavigationStack { pushingList }
     }
     #endif
   }
+
+  #if os(iOS)
+  private var pushingList: some View {
+    listView
+      .navigationDestination(item: $selection) { item in
+        ReaderScreen(item: item, actions: readerActions(for: item), perform: perform)
+      }
+  }
+  #endif
 
   private var listView: some View {
     listContainer

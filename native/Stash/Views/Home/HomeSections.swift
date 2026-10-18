@@ -193,7 +193,7 @@ struct UpNextColumn: View {
           .foregroundStyle(Color.stInk)
           .lineLimit(2)
           .multilineTextAlignment(.leading)
-        Text("\(item.source) · Saved \(shortAge(item.savedAt)) ago".uppercased())
+        Text("\(item.source) · \(savedLabel(item.savedAt))".uppercased())
           .font(.mono(10.5))
           .tracking(0.3)
           .foregroundStyle(Color.stMuted)
@@ -214,6 +214,15 @@ struct UpNextColumn: View {
     .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
     .contentShape(Rectangle())
   }
+}
+
+/// "Saved 2h ago", "Saved just now", or "Saved 14 Oct" once it's older than a week.
+private func savedLabel(_ date: Date?) -> String {
+  let age = shortAge(date)
+  if age.isEmpty { return "Saved" }
+  if age == "now" { return "Saved just now" }
+  if let last = age.last, "mhd".contains(last), age.dropLast().allSatisfy(\.isNumber) { return "Saved \(age) ago" }
+  return "Saved \(age)"
 }
 
 /// "TODAY", "YESTERDAY": the band that starts each day in the feed list.
