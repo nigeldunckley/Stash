@@ -8,6 +8,8 @@ struct PlayerScreen: View {
   let queue: [LibraryItem]
   let actions: [ItemAction]
   let perform: (ItemAction, LibraryItem) -> Void
+  /// Shown inside Home's preview card, which brings its own header and buttons.
+  var embedded = false
 
   @Environment(PlayerController.self) private var player
   @State private var tab: PlayerTab = .upNext
@@ -44,12 +46,7 @@ struct PlayerScreen: View {
       }
     }
     .background(Color.stashBackground)
-    .navigationTitle(current.source)
-    #if os(iOS)
-    .navigationBarTitleDisplayMode(.inline)
-    .toolbar(.hidden, for: .tabBar)
-    #endif
-    .toolbar { toolbar }
+    .modifier(ScreenChrome(embedded: embedded, title: current.source) { toolbar })
     .onAppear {
       player.queue = queue
       player.play(item)

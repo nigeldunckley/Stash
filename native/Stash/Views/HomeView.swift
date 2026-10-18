@@ -17,6 +17,10 @@ struct HomeView: View {
   @State private var leadTitle: String?
   /// The item open in the preview: beside the list on Mac, in a sheet over Home on iPhone.
   @State private var peek: LibraryItem?
+  /// Whether the preview came from the feed list or Up next, for moving up and down.
+  @State private var peekFromUpNext = false
+  /// Items opened full size from the preview.
+  @State private var path = NavigationPath()
   #if os(macOS)
   @State private var selectedID: String?
   #endif
@@ -37,7 +41,7 @@ struct HomeView: View {
   #endif
 
   var body: some View {
-    NavigationStack {
+    NavigationStack(path: $path) {
       content
         .background(Color.stashBackground)
         .navigationTitle("Home")
@@ -58,52 +62,94 @@ struct HomeView: View {
           await loadUpNext()
           await loadLead()
         }
+        .navigationDestination(for: LibraryItem.self) { item in
+          ItemDestination(item: item, queue: videoQueue, perform: perform)
+        }
         .toasts(toaster)
     }
     #if os(iOS)
     .sheet(item: $peek) { item in
-      NavigationStack {
-        ItemDestination(item: item, queue: feeds.visibleItems.filter(Watch.isVideo), perform: perform)
-          .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-              Button("Done") { peek = nil }
-            }
-          }
-      }
-      .presentationDragIndicator(.visible)
+      peekCard(item, inSheet: true)
+        .presentationDetents([.large])
+        .presentationCornerRadius(22)
+        .presentationBackground(Color.stashBackground)
     }
     #endif
   }
 
+  // MARK: The preview
+
+  private var peekList: [LibraryItem] {
+    peekFromUpNext ? upNext : Array(feeds.visibleItems.prefix(Self.feedLimit))
+  }
+
+  private var videoQueue: [LibraryItem] { feeds.visibleItems.filter(Watch.isVideo) }
+
+  private func peekCard(_ item: LibraryItem, inSheet: Bool) -> some View {
+    let list = peekList
+    let index = list.firstIndex(of: item)
+    return PeekCard(
+      item: item,
+      sourceName: channelName(item) ?? item.source,
+      position: index.map { "\($0 + 1) of \(list.count)" },
+      canGoBack: (index ?? 0) > 0,
+      canGoForward: index.map { $0 + 1 < list.count } ?? false,
+      queue: videoQueue,
+      inSheet: inSheet,
+      onClose: close,
+      onMove: move,
+      onExpand: { expand(item) },
+      perform: perform
+    )
+  }
+
+  private func move(_ step: Int) {
+    let list = peekList
+    guard let peek, let index = list.firstIndex(of: peek), list.indices.contains(index + step) else { return }
+    show(list[index + step])
+  }
+
+  private func show(_ item: LibraryItem) {
+    markSeen(item)
+    withAnimation(.snappy(duration: 0.2)) { peek = item }
+    #if os(macOS)
+    if !peekFromUpNext { selectedID = item.id }
+    #endif
+  }
+
+  /// Opens the item full size, with the reader's own toolbar.
+  private func expand(_ item: LibraryItem) {
+    close()
+    path.append(item)
+  }
+
   #if os(macOS)
-  /// The list, and beside it Up next, or the item you're previewing.
+  /// The list with Up next beside it, and the preview floating over both.
   private var content: some View {
-    HSplitView {
-      homeList
-        .frame(minWidth: 380, idealWidth: 620, maxWidth: .infinity)
-      Group {
-        if let peek {
-          VStack(spacing: 0) {
-            HStack {
-              Button { close() } label: { Label("Back to Up next", systemImage: "xmark") }
-                .buttonStyle(.borderless)
-                .keyboardShortcut(.cancelAction)
-              Spacer()
-            }
-            .font(.callout)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            Divider()
-            ItemDestination(item: peek, queue: feeds.visibleItems.filter(Watch.isVideo), perform: perform)
-              .id(peek.id)
-          }
-        } else {
-          ScrollView { upNextRail.padding(20) }
-        }
+    ZStack {
+      HStack(spacing: 0) {
+        homeList.frame(maxWidth: .infinity)
+        Divider()
+        ScrollView { upNextRail.padding(20) }
+          .frame(width: 340)
       }
-      .frame(minWidth: 320, idealWidth: peek == nil ? 360 : 620, maxWidth: .infinity, maxHeight: .infinity)
-      .background(Color.stashBackground)
+      if let peek {
+        Color.black.opacity(0.18)
+          .ignoresSafeArea()
+          .onTapGesture { close() }
+          .transition(.opacity)
+        GeometryReader { geometry in
+          peekCard(peek, inSheet: false)
+            .frame(width: min(860, geometry.size.width - 64), height: max(320, geometry.size.height - 48))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .transition(.asymmetric(
+          insertion: .scale(scale: 0.96).combined(with: .opacity),
+          removal: .scale(scale: 0.98).combined(with: .opacity)
+        ))
+      }
     }
+    .animation(.spring(duration: 0.32, bounce: 0.12), value: peek == nil)
   }
   #else
   private var content: some View { homeList }
@@ -117,16 +163,12 @@ struct HomeView: View {
       .refreshable { await reload() }
       #if os(macOS)
       .onChange(of: selectedID) { _, id in
-        guard let id, let item = feeds.visibleItems.first(where: { $0.id == id }) else { return }
+        guard let id, id != peek?.id, let item = feeds.visibleItems.first(where: { $0.id == id }) else { return }
         open(item)
       }
       .onKeyPress(.delete) { performOnSelection(.archive) }
       .onKeyPress(.deleteForward) { performOnSelection(.archive) }
       .onKeyPress("s") { performOnSelection(.save) }
-      .onKeyPress(.return) {
-        if let url = peek?.originalURL { NSWorkspace.shared.open(url) }
-        return .handled
-      }
       #endif
   }
 
@@ -497,8 +539,8 @@ struct HomeView: View {
   }
 
   private func open(_ item: LibraryItem) {
-    markSeen(item)
-    peek = item
+    peekFromUpNext = upNext.contains(item) && !feeds.visibleItems.contains(item)
+    show(item)
   }
 
   private func close() {
@@ -510,6 +552,8 @@ struct HomeView: View {
 
   #if os(macOS)
   private func performOnSelection(_ action: ItemAction) -> KeyPress.Result {
+    // While the preview is open its own buttons take the keys.
+    guard peek == nil else { return .ignored }
     guard let id = selectedID, let item = feeds.visibleItems.first(where: { $0.id == id }) else { return .ignored }
     perform(action, item)
     return .handled
@@ -518,17 +562,15 @@ struct HomeView: View {
 
   private func perform(_ action: ItemAction, _ item: LibraryItem) {
     if action.removesItem && peek?.id == item.id {
-      #if os(macOS)
-      // Move on to the next feed item, as Feeds does; back to Up next at the end.
-      let items = Array(feeds.visibleItems.prefix(Self.feedLimit))
-      if let index = items.firstIndex(of: item), index + 1 < items.count {
-        selectedID = items[index + 1].id
+      // Move on to the next item, or the one before at the end of the list.
+      let list = peekList
+      if let index = list.firstIndex(of: item), list.indices.contains(index + 1) {
+        show(list[index + 1])
+      } else if let index = list.firstIndex(of: item), index > 0 {
+        show(list[index - 1])
       } else {
         close()
       }
-      #else
-      peek = nil
-      #endif
     }
     let wasUpNext = upNext.contains { $0.id == item.id }
     runItemAction(

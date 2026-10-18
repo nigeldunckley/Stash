@@ -6,13 +6,35 @@ struct ItemDestination: View {
   var queue: [LibraryItem] = []
   var actions: [ItemAction]?
   let perform: (ItemAction, LibraryItem) -> Void
+  var embedded = false
 
   var body: some View {
     let actions = actions ?? ItemAction.defaults(for: item)
     if Watch.isVideo(item) {
-      PlayerScreen(item: item, queue: queue.isEmpty ? [item] : queue, actions: actions, perform: perform)
+      PlayerScreen(item: item, queue: queue.isEmpty ? [item] : queue, actions: actions, perform: perform, embedded: embedded)
     } else {
-      ReaderScreen(item: item, actions: actions, perform: perform)
+      ReaderScreen(item: item, actions: actions, perform: perform, embedded: embedded)
+    }
+  }
+}
+
+/// A screen's title and toolbar, left off when it's shown inside a card.
+struct ScreenChrome<Bar: ToolbarContent>: ViewModifier {
+  let embedded: Bool
+  let title: String
+  let toolbar: () -> Bar
+
+  func body(content: Content) -> some View {
+    if embedded {
+      content
+    } else {
+      content
+        .navigationTitle(title)
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
+        #endif
+        .toolbar { toolbar() }
     }
   }
 }

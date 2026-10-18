@@ -6,6 +6,8 @@ struct ReaderScreen: View {
   let item: LibraryItem
   let actions: [ItemAction]
   let perform: (ItemAction, LibraryItem) -> Void
+  /// Shown inside Home's preview card, which brings its own header and buttons.
+  var embedded = false
 
   @Environment(Session.self) private var session
   /// Made when the screen first appears, rather than every time SwiftUI rebuilds this view.
@@ -25,12 +27,7 @@ struct ReaderScreen: View {
       }
     }
     .background(Color.stashBackground)
-    .navigationTitle(item.source)
-    #if os(iOS)
-    .navigationBarTitleDisplayMode(.inline)
-    .toolbar(.hidden, for: .tabBar)
-    #endif
-    .toolbar { toolbar }
+    .modifier(ScreenChrome(embedded: embedded, title: item.source) { toolbar })
     .task(id: item.id) { await load() }
     .onChange(of: fontSize) { _, size in reader?.send("updateFontSize", ["fontSize": size]) }
     .onChange(of: fontFamily) { _, font in reader?.send("updateFontFamily", ["fontFamily": font]) }
