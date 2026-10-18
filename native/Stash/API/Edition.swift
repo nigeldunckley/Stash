@@ -257,7 +257,7 @@ enum EditionStore {
     let historyItems = try await history
     let readItems = try await read
     let recentHighlights = await highlights
-    let buzz = await HackerNews.buzz(for: Array(missedItems.filter { !featured.contains($0.id) }.prefix(60)))
+    let buzz = await HackerNews.buzz(for: Array(missedItems.filter { !featured.contains($0.id) }.prefix(30)))
 
     return EditionEngine.build(.init(
       now: now,
@@ -546,7 +546,7 @@ enum EditionEngine {
       let fromCoverage = min(1, Double(cover[index]) / 2)
       let popularity = max(fromPoints, fromCoverage)
       let freshness = exp(-ageHours(item, input.now) / 36)
-      let quality = (hasImage(item) ? 0.6 : 0) + (item.description != nil ? 0.2 : 0) + ((item.wordsCount ?? 0) >= 600 ? 0.2 : 0)
+      let quality: Double = (hasImage(item) ? 0.6 : 0) + (item.description != nil ? 0.2 : 0) + ((item.wordsCount ?? 0) >= 600 ? 0.2 : 0)
       let saved = isSavedByYou(item)
       let score = 0.35 * rel + 0.25 * source.value + 0.2 * popularity + 0.1 * freshness + 0.1 * quality + (saved ? 0.08 : 0)
 

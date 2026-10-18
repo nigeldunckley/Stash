@@ -56,6 +56,14 @@ final class EditionModel {
   }
 
   func set(_ key: String, _ value: Any) async {
+    // Show the change straight away; the server copy follows.
+    switch (key, value) {
+    case ("day", let day as Int): state?.day = day
+    case ("hour", let hour as Int): state?.hour = hour
+    case ("showOnHome", let show as Bool): state?.showOnHome = show
+    case ("upNext", let count as Int): state?.upNext = count
+    default: break
+    }
     do {
       try await EditionStore.setSetting(key, value)
     } catch {
@@ -175,7 +183,7 @@ struct EditionView: View {
   }
 
   private func masthead(_ edition: Edition, shown: [Edition.Entry]) -> some View {
-    let minutes = shown.compactMap { items[$0.id] }.reduce(0) { $0 + ($1.readingMinutes ?? 4) }
+    let minutes = edition.entries.reduce(0) { $0 + (items[$1.id]?.readingMinutes ?? 4) }
     let day = EditionSchedule.at(edition.date, hour: 12)
     return VStack(alignment: .leading, spacing: 8) {
       Rectangle().fill(Color.stashInk).frame(height: 2)
@@ -186,7 +194,7 @@ struct EditionView: View {
       HStack(spacing: 10) {
         Kicker("No. \(edition.number)")
         Kicker(day.formatted(.dateTime.weekday(.wide).day().month(.wide)))
-        Kicker("\(shown.count) stories · \(minutes) min")
+        Kicker("\(edition.entries.count) stories · \(minutes) min")
       }
       Text("Chosen from \(edition.considered) stories across \(edition.sources) sources you didn't get to this week.")
         .font(.callout)

@@ -120,12 +120,19 @@ struct MainView: View {
       }
     }
     .tabViewStyle(.sidebarAdaptable)
-    .onAppear { section = AppSection(key: storedSection) }
+    .onAppear {
+      let restored = AppSection(key: storedSection)
+      // The Edition's tab only exists while an issue is out; check again once it has loaded.
+      section = restored == .edition && !edition.isOut ? .home : restored
+    }
     .onChange(of: section) { _, value in storedSection = value.key }
     .onChange(of: edition.isOut) { _, out in if !out && section == .edition { section = .home } }
     .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await edition.refresh() } } }
     .task { collections = (try? await Watch.collections()) ?? [] }
-    .task { await edition.refresh() }
+    .task {
+      await edition.refresh()
+      if storedSection == "edition" && edition.isOut { section = .edition }
+    }
   }
 
   private var watchPages: [(AppSection, String)] {
