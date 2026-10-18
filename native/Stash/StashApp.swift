@@ -1,0 +1,37 @@
+import SwiftUI
+
+@main
+struct StashApp: App {
+  @State private var session = Session()
+
+  var body: some Scene {
+    WindowGroup {
+      RootView()
+        .environment(session)
+        .tint(.stashAccent)
+    }
+    #if os(macOS)
+    .defaultSize(width: 1240, height: 820)
+    .commands {
+      CommandGroup(replacing: .newItem) {}
+      SidebarCommands()
+    }
+    #endif
+  }
+}
+
+struct RootView: View {
+  @Environment(Session.self) private var session
+
+  var body: some View {
+    Group {
+      if session.isSignedIn {
+        MainView()
+          .task { await session.loadViewer() }
+      } else {
+        SignInView()
+      }
+    }
+    .animation(.default, value: session.isSignedIn)
+  }
+}

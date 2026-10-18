@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "webpack --mode production",
+    "build-stash-app": "STASH_APP=1 webpack --mode production && cp build/bundle.js ../../native/Stash/Reader/reader.js",
     "build-and-update": "yarn build && cp build/bundle.js ../../apple/OmnivoreKit/Sources/Views/Resources/bundle.js && cp build/bundle.js ../../android/Omnivore/app/src/main/assets/bundle.js"
   },
   "dependencies": {

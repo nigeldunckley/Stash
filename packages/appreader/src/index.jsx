@@ -15,8 +15,28 @@ const queryClient = new QueryClient({
   },
 })
 
+// The Stash app answers each request by calling window.stashReply with the
+// request's id, rather than through a message reply.
+const pendingRequests = new Map()
+let nextRequestId = 1
+window.stashReply = (requestId, result) => {
+  const resolve = pendingRequests.get(requestId)
+  pendingRequests.delete(requestId)
+  resolve?.(result)
+}
+
 const mutation = async (name, input) => {
-  if (window.webkit) {
+  if (window.stashApp) {
+    const requestId = nextRequestId++
+    return new Promise((resolve) => {
+      pendingRequests.set(requestId, resolve)
+      window.webkit.messageHandlers.stashAction.postMessage({
+        actionID: name,
+        requestId,
+        input,
+      })
+    })
+  } else if (window.webkit) {
     // Send iOS a message
     const result =
       await window?.webkit?.messageHandlers.articleAction?.postMessage({
@@ -127,6 +147,7 @@ const App = () => {
         >
           <ArticleContainer
             article={window.omnivoreArticle}
+            viewer={window.omnivoreViewer}
             labels={window.omnivoreArticle.labels}
             isAppleAppEmbed={true}
             highlightBarDisabled={!window.enableHighlightBar}
