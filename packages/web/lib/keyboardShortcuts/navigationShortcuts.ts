@@ -27,9 +27,9 @@ export function navigationCommands(router: NextRouter | undefined): Action[] {
     {
       id: 'nav-library',
       section: { name: 'Go to', priority: 0 },
-      name: 'Library',
+      name: 'Saved articles',
       shortcut: ['g', 'l'],
-      keywords: 'go library',
+      keywords: 'go read saved library articles read later',
       perform: () => {
         router?.push(`/library`)
       },
@@ -49,9 +49,18 @@ export function navigationCommands(router: NextRouter | undefined): Action[] {
       section: { name: 'Go to', priority: 0 },
       name: 'Watch',
       shortcut: ['g', 'w'],
-      keywords: 'go watch videos youtube channels subscriptions watch later',
+      keywords: 'go watch videos youtube channels subscriptions',
       perform: () => {
         router?.push(`/watch`)
+      },
+    },
+    {
+      id: 'nav-watch-saved',
+      section: { name: 'Go to', priority: 0 },
+      name: 'Saved videos',
+      keywords: 'go watch saved videos watch later queue',
+      perform: () => {
+        router?.push(`/watch?view=saved`)
       },
     },
     {

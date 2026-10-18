@@ -92,7 +92,7 @@ export const EmptyLibrary = (props: EmptyLibraryProps) => {
   return (
     <EmptyState
       icon={<Books size={ICON_SIZE} />}
-      title="Your Library is empty"
+      title="Nothing saved yet"
       action={
         props.onAddLinkClicked
           ? { label: 'Add a link', onClick: props.onAddLinkClicked }

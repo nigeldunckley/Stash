@@ -43,7 +43,7 @@ export type LibraryHeaderProps = {
 }
 
 const TITLES: Record<string, string> = {
-  inbox: 'Library',
+  inbox: 'Saved',
   archive: 'Archive',
   trash: 'Trash',
 }

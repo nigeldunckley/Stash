@@ -6,9 +6,10 @@ import { motion, reducedMotion } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
 import type { NavigationSection } from '../NavigationLayout'
 import { useEditionStatus } from '../../../lib/edition/useEdition'
-import { useGetLibraryItems } from '../../../lib/networking/library_items/useLibraryItems'
+import { NavPage, useNavCount, useNavGroups } from './sections'
 
 export const MOBILE_TOP_BAR_HEIGHT = 48
+export const MOBILE_SUB_ROW_HEIGHT = 40
 
 // The iPhone's main navigation sits at the top. Safari keeps its own
 // toolbar at the bottom of the screen, so a bar there would stack on it.
@@ -20,11 +21,8 @@ const Bar = styled('nav', {
   left: 0,
   right: 0,
   zIndex: 8,
-  alignItems: 'center',
-  gap: '4px',
-  height: `calc(${MOBILE_TOP_BAR_HEIGHT}px + env(safe-area-inset-top, 0px))`,
-  padding:
-    'env(safe-area-inset-top, 0px) calc(8px + env(safe-area-inset-right, 0px)) 0 calc(16px + env(safe-area-inset-left, 0px))',
+  flexDirection: 'column',
+  paddingTop: 'env(safe-area-inset-top, 0px)',
   boxSizing: 'border-box',
   background: 'color-mix(in srgb, $colors$stCanvas 86%, transparent)',
   backdropFilter: 'saturate(1.6) blur(16px)',
@@ -36,6 +34,57 @@ const Bar = styled('nav', {
   '&[data-hidden="true"]': { transform: 'translateY(-100%)' },
   [reducedMotion]: { transition: 'none' },
   '@media print': { display: 'none' },
+})
+
+const Row = styled('div', {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+  height: `${MOBILE_TOP_BAR_HEIGHT}px`,
+  padding:
+    '0 calc(8px + env(safe-area-inset-right, 0px)) 0 calc(16px + env(safe-area-inset-left, 0px))',
+})
+
+// The open section's pages, as a row of pills under the tabs.
+const Pages = styled('div', {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  height: `${MOBILE_SUB_ROW_HEIGHT}px`,
+  padding:
+    '0 calc(16px + env(safe-area-inset-right, 0px)) 2px calc(16px + env(safe-area-inset-left, 0px))',
+  overflowX: 'auto',
+  scrollbarWidth: 'none',
+  '&::-webkit-scrollbar': { display: 'none' },
+})
+
+const Pill = styled(Link, {
+  flex: 'none',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '5px',
+  height: '28px',
+  padding: '0 11px',
+  borderRadius: '999px',
+  border: '1px solid $stLine',
+  fontSize: '13px',
+  fontWeight: 500,
+  color: '$stMuted',
+  textDecoration: 'none',
+  WebkitTapHighlightColor: 'transparent',
+  '&[aria-current="page"]': {
+    background: '$stInk',
+    borderColor: '$stInk',
+    color: '$stCanvas',
+  },
+  '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '2px' },
+})
+
+const PillCount = styled('span', {
+  fontFamily: '$mono',
+  fontSize: '10.5px',
+  opacity: 0.7,
+  fontVariantNumeric: 'tabular-nums',
 })
 
 const Tabs = styled('div', {
@@ -109,58 +158,26 @@ const Count = styled('sup', {
 
 // How many new videos wait in Watch.
 function NewVideos(): JSX.Element | null {
-  const { data } = useGetLibraryItems(
-    'nav-count-watch',
-    'following',
-    {
-      limit: 1,
-      sortDescending: true,
-      searchQuery: 'type:video -is:seen',
-      includeCount: true,
-    },
-    true,
-    2 * 60 * 1000
-  )
-  const count = data?.pages[0]?.pageInfo.totalCount ?? 0
+  const count = useNavCount({
+    kind: 'items',
+    folder: 'following',
+    query: 'type:video -is:seen',
+  })
   if (!count) return null
   return <Count aria-label={`${count} new`}>{count > 99 ? '99+' : count}</Count>
 }
 
-type TabItem = { section: NavigationSection; label: string; href: string }
-
-const HOME: TabItem = { section: 'home', label: 'Home', href: '/l/home' }
-const EDITION: TabItem = {
-  section: 'edition',
-  label: 'Edition',
-  href: '/l/edition',
-}
-const LIBRARY: TabItem = {
-  section: 'library',
-  label: 'Library',
-  href: '/l/library',
-}
-const FEEDS: TabItem = {
-  section: 'subscriptions',
-  label: 'Feeds',
-  href: '/l/subscriptions',
-}
-const WATCH: TabItem = {
-  section: 'watch',
-  label: 'Watch',
-  href: '/l/watch',
-}
-const HIGHLIGHTS: TabItem = {
-  section: 'highlights',
-  label: 'Highlights',
-  href: '/l/highlights',
+function PageCount(props: { page: NavPage }): JSX.Element | null {
+  const count = useNavCount(props.page.count)
+  if (!count) return null
+  return (
+    <PillCount aria-label={`${count} new`}>
+      {count > 99 ? '99+' : count}
+    </PillCount>
+  )
 }
 
-// While The Edition is out it takes Highlights' place, which stays in More.
-// The tabs scroll sideways when they don't all fit.
-const tabsFor = (editionOut: boolean): TabItem[] =>
-  editionOut
-    ? [HOME, EDITION, FEEDS, WATCH, LIBRARY]
-    : [HOME, FEEDS, WATCH, LIBRARY, HIGHLIGHTS]
+type TabItem = { key: string; label: string; href: string; current: boolean }
 
 export function MobileTopBar(props: {
   section: NavigationSection
@@ -168,7 +185,33 @@ export function MobileTopBar(props: {
 }): JSX.Element {
   const { query } = useKBar()
   const edition = useEditionStatus()
-  const tabs = tabsFor(edition.out || props.section == 'edition')
+  const groups = useNavGroups(props.section)
+  const open = groups.find((group) => group.selected)
+  // While The Edition is out it sits beside Home.
+  const tabs: TabItem[] = [
+    {
+      key: 'home',
+      label: 'Home',
+      href: '/l/home',
+      current: props.section == 'home',
+    },
+    ...(edition.out || props.section == 'edition'
+      ? [
+          {
+            key: 'edition',
+            label: 'Edition',
+            href: '/l/edition',
+            current: props.section == 'edition',
+          },
+        ]
+      : []),
+    ...groups.map((group) => ({
+      key: group.id,
+      label: group.label,
+      href: group.href,
+      current: group.selected,
+    })),
+  ]
   const [hidden, setHidden] = useState(false)
   const lastY = useRef(0)
 
@@ -179,6 +222,14 @@ export function MobileTopBar(props: {
       delete document.body.dataset.topbar
     }
   }, [])
+  // The pill row adds to the room pages leave at the top.
+  useEffect(() => {
+    if (open) document.body.dataset.subnav = 'on'
+    else delete document.body.dataset.subnav
+    return () => {
+      delete document.body.dataset.subnav
+    }
+  }, [open])
 
   useEffect(() => {
     const onScroll = () => {
@@ -195,31 +246,45 @@ export function MobileTopBar(props: {
 
   return (
     <Bar aria-label="Main" data-hidden={hidden}>
-      <Tabs>
-        {tabs.map((item) => (
-          <Tab
-            key={item.section}
-            href={item.href}
-            data-nav={item.section}
-            aria-current={
-              props.section == item.section ||
-              (props.section == 'discover' && item.section == 'subscriptions')
-                ? 'page'
-                : undefined
-            }
-          >
-            {item.label}
-            {item.section == 'edition' && edition.fresh && <Fresh />}
-            {item.section == 'watch' && <NewVideos />}
-          </Tab>
-        ))}
-      </Tabs>
-      <More type="button" onClick={() => query.toggle()} aria-label="Search">
-        <MagnifyingGlass size={20} />
-      </More>
-      <More type="button" onClick={props.onMore} aria-label="More">
-        <DotsThree size={22} weight="bold" />
-      </More>
+      <Row>
+        <Tabs>
+          {tabs.map((item) => (
+            <Tab
+              key={item.key}
+              href={item.href}
+              data-nav={item.key}
+              aria-current={item.current ? 'page' : undefined}
+            >
+              {item.label}
+              {item.key == 'edition' && edition.fresh && <Fresh />}
+              {item.key == 'watch' && <NewVideos />}
+            </Tab>
+          ))}
+        </Tabs>
+        <More type="button" onClick={() => query.toggle()} aria-label="Search">
+          <MagnifyingGlass size={20} />
+        </More>
+        <More type="button" onClick={props.onMore} aria-label="More">
+          <DotsThree size={22} weight="bold" />
+        </More>
+      </Row>
+      {open && (
+        <Pages aria-label={open.label}>
+          {/* Watch's collections already have chips on the page itself. */}
+          {open.pages
+            .filter((page) => !page.color)
+            .map((page) => (
+              <Pill
+                key={page.key}
+                href={page.href}
+                aria-current={page.selected ? 'page' : undefined}
+              >
+                {page.label}
+                <PageCount page={page} />
+              </Pill>
+            ))}
+        </Pages>
+      )}
     </Bar>
   )
 }

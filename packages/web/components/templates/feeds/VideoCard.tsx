@@ -223,7 +223,7 @@ type VideoCardOwnProps = {
   age: ReactNode
   seen: boolean
   saved: boolean
-  // Already in Watch later, so there is nothing to save.
+  // Already saved, so there is nothing to save.
   queued?: boolean
   selected: boolean
   onOpen: () => void
@@ -306,7 +306,7 @@ export const VideoCard = forwardRef<HTMLDivElement, VideoCardProps>(
           <Actions>
             {!props.queued && (
               <IconButton
-                label={props.saved ? 'In Watch later' : 'Watch later'}
+                label={props.saved ? 'Saved' : 'Save'}
                 shortcut="s"
                 size="sm"
                 active={props.saved}
@@ -360,7 +360,7 @@ export const VideoCard = forwardRef<HTMLDivElement, VideoCardProps>(
               {props.saved && !props.queued && (
                 <>
                   <span>·</span>
-                  <span>In Watch later</span>
+                  <span>Saved</span>
                 </>
               )}
             </Meta>

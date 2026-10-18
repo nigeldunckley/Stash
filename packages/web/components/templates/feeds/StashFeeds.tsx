@@ -349,7 +349,9 @@ const NewItemsBar = styled('div', {
   // The pill sits on the list's top edge, and 12px below the top once stuck.
   top: '27px',
   // Below the navigation bar on iPhone.
-  '@mdDown': { top: 'calc(60px + env(safe-area-inset-top, 0px))' },
+  '@mdDown': {
+    top: 'calc(var(--topbar, 48px) + 12px + env(safe-area-inset-top, 0px))',
+  },
   zIndex: 3,
   display: 'flex',
   justifyContent: 'center',
@@ -399,8 +401,8 @@ const MobileSources = styled('div', {
   overflowY: 'auto',
 })
 
-// Watch adds a third view: videos saved to watch later, from the channels
-// or from Save to Stash.
+// Watch adds a third view: videos you've saved, from the channels or from
+// Save to Stash.
 type View = 'unseen' | 'all' | 'later'
 
 const PEEK_WIDTH_KEY = 'feeds-peek-width'
@@ -700,7 +702,7 @@ function SourceList(props: {
 
 // Feeds and Watch as two panes: sources on the left with unseen counts, items
 // on the right. Items count as seen when opened or scrolled past, and only
-// enter the Library (or, for videos, Watch later) when saved.
+// enter Saved when saved.
 export function StashFeeds(props: { mode: Tab }): JSX.Element {
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -768,7 +770,12 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     collectionId ? `-c${collectionId}` : ''
   }${watching ? `-${filterQuery(filters).replace(/\s+/g, '')}` : ''}`
 
-  const [view, setView] = useState<View>('unseen')
+  // Watch's Saved list lives in the address (?view=saved) so the sidebar
+  // and the iPhone pills can link to it.
+  const savedInAddress = watching && router.query.view == 'saved'
+  const [view, setViewState] = useState<View>(
+    savedInAddress ? 'later' : 'unseen'
+  )
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const isPhone = useMediaQuery('(max-width: 768px)')
@@ -888,7 +895,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     [collections, setChannelCollection]
   )
 
-  // Watch later is a queue: the oldest save comes first.
+  // Watch's Saved list is a queue: the oldest save comes first.
   const later = view == 'later'
   const searchQuery = [
     scope,
@@ -970,6 +977,28 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
 
   // Seen state is kept locally so rows stay put while they are being read.
   const [seen, setSeen] = useState<Set<string>>(new Set())
+
+  // Follow the address when the sidebar or a pill opens or leaves Saved.
+  useEffect(() => {
+    setViewState((current) =>
+      savedInAddress ? 'later' : current == 'later' ? 'unseen' : current
+    )
+    setSeen(new Set())
+    setPeekItem(undefined)
+  }, [savedInAddress])
+  const setView = useCallback(
+    (next: View) => {
+      setViewState(next)
+      if (!watching || (next == 'later') == savedInAddress) return
+      const query = { ...router.query }
+      if (next == 'later') query.view = 'saved'
+      else delete query.view
+      router.replace({ pathname: router.pathname, query }, undefined, {
+        shallow: true,
+      })
+    },
+    [watching, savedInAddress, router]
+  )
   const pending = useRef(new Set<string>())
   const flushTimer = useRef<ReturnType<typeof setTimeout>>()
 
@@ -1171,29 +1200,21 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
       try {
         await moveItemToFolder(item.id, 'inbox')
         refreshElsewhere()
-        showUndoToast(
-          watching ? 'Added to Watch later' : 'Saved to Library',
-          async () => {
-            try {
-              await moveItemToFolder(item.id, 'following')
-              setSaved((current) => toggle(current, item.id, false))
-              refreshElsewhere()
-            } catch {
-              showErrorToast('Could not move it back to Feeds', {
-                position: 'bottom-center',
-              })
-            }
+        showUndoToast('Saved', async () => {
+          try {
+            await moveItemToFolder(item.id, 'following')
+            setSaved((current) => toggle(current, item.id, false))
+            refreshElsewhere()
+          } catch {
+            showErrorToast('Could not move it back to Feeds', {
+              position: 'bottom-center',
+            })
           }
-        )
+        })
       } catch {
         setSaved((current) => toggle(current, item.id, false))
         setLeaving((current) => toggle(current, item.id, false))
-        showErrorToast(
-          watching
-            ? 'Could not add to Watch later'
-            : 'Could not save to Library',
-          { position: 'bottom-center' }
-        )
+        showErrorToast('Could not save this', { position: 'bottom-center' })
       }
     },
     [saved, later, peekItem, markSeen, refreshElsewhere, watching]
@@ -1485,8 +1506,8 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     )
   const addLabel = watching ? 'Add a channel' : 'Add a feed'
 
-  // Swipe left to save (or, for videos, to watch later) and right to
-  // archive. In Watch later, swiping left archives.
+  // Swipe left to save and right to archive. In Saved, swiping left
+  // archives.
   const swipeFor = (item: LibraryItemNode) =>
     later
       ? {
@@ -1495,8 +1516,8 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
           onAction: () => archive(item),
         }
       : {
-          label: watching ? 'Watch later' : 'Save',
-          icon: watching ? <Clock size={16} /> : <Bookmark size={16} />,
+          label: 'Save',
+          icon: <Bookmark size={16} />,
           onAction: () => save(item),
           start: {
             label: 'Archive',
@@ -1653,9 +1674,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
         ? []
         : [
             {
-              label: saved.has(item.id)
-                ? 'In Watch later'
-                : 'Add to Watch later',
+              label: saved.has(item.id) ? 'Saved' : 'Save',
               shortcut: 'S',
               onSelect: () => save(item),
             },
@@ -1684,13 +1703,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
       ? []
       : [
           {
-            label: watching
-              ? saved.has(item.id)
-                ? 'In Watch later'
-                : 'Watch later'
-              : saved.has(item.id)
-              ? 'Saved to Library'
-              : 'Save to Library',
+            label: saved.has(item.id) ? 'Saved' : 'Save',
             shortcut: 'S',
             separated: true,
             onSelect: () => save(item),
@@ -1738,11 +1751,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
                       subscriptionName(item.subscription, allSubscriptions)
                       ? item.author
                       : undefined,
-                    saved.has(item.id)
-                      ? watching
-                        ? 'In Watch later'
-                        : 'Saved'
-                      : undefined,
+                    saved.has(item.id) ? 'Saved' : undefined,
                   ]
                     .filter(Boolean)
                     .map((part, index) => (
@@ -1779,15 +1788,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
                 <>
                   {!later && (
                     <IconButton
-                      label={
-                        watching
-                          ? saved.has(item.id)
-                            ? 'In Watch later'
-                            : 'Watch later'
-                          : saved.has(item.id)
-                          ? 'Saved to Library'
-                          : 'Save to Library'
-                      }
+                      label={saved.has(item.id) ? 'Saved' : 'Save'}
                       shortcut="s"
                       size="sm"
                       active={saved.has(item.id)}
@@ -1969,7 +1970,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
                   ? [
                       { value: 'unseen', label: 'New' },
                       { value: 'all', label: 'All' },
-                      { value: 'later', label: 'Watch later' },
+                      { value: 'later', label: 'Saved' },
                     ]
                   : [
                       { value: 'unseen', label: 'Unseen' },
@@ -2060,7 +2061,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
           ) : listed.length == 0 ? (
             <Empty>
               {later
-                ? 'Nothing to watch later. Press Watch later on a video, or share a YouTube link to Stash.'
+                ? 'Nothing saved yet. Press Save on a video, or share a YouTube link to Stash.'
                 : watching && filterQuery(filters)
                 ? 'No videos match these filters.'
                 : view == 'unseen'

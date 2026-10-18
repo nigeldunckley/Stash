@@ -441,7 +441,7 @@ export function WatchAddBox(props: {
             <>
               <Hint>
                 <Clock size={15} />
-                Paste a video link to add it to Watch later
+                Paste a video link to save it
               </Hint>
               <Hint>
                 <LinkSimple size={15} />
@@ -460,7 +460,7 @@ export function WatchAddBox(props: {
               <Row data-active={active == 0}>
                 <Clock size={18} />
                 <div>
-                  <b>{added ? 'Added to Watch later' : 'Add to Watch later'}</b>
+                  <b>{added ? 'Saved' : 'Save'}</b>
                   <small>{state.url.replace(/^https?:\/\/(www\.)?/, '')}</small>
                 </div>
                 <Action

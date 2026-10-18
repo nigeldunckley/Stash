@@ -8,7 +8,7 @@ import { styled } from '../../tokens/stitches.config'
 import { VideoCard, VideoGroup } from '../feeds/VideoCard'
 import { isVisible } from '../feeds/feedRowParts'
 
-// Videos started and not finished, from the channels or Watch later.
+// Videos started and not finished, from the channels or Saved.
 export const CONTINUE_QUERY =
   'use:folders (in:following OR in:inbox) type:video is:reading sort:read-desc'
 
@@ -74,7 +74,7 @@ export function ContinueWatching(props: {
               age={shortTimeAgo(item.publishedAt || item.savedAt, props.now)}
               seen
               saved={false}
-              // Started channel videos can still be added to Watch later.
+              // Started channel videos can still be saved.
               queued={item.folder == 'inbox'}
               selected={false}
               onOpen={() => props.onOpen(item)}

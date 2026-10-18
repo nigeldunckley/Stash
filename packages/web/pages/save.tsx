@@ -186,7 +186,7 @@ export default function SavePage(): JSX.Element {
   const [inPopup, setInPopup] = useState(false)
   const started = useRef(false)
   const target = typeof router.query.url === 'string' ? router.query.url : ''
-  // YouTube videos go to Watch later, and the window offers the channel.
+  // YouTube videos go to Watch › Saved, and the window offers the channel.
   const video = !!videoIdFromUrl(target)
   const [offering, setOffering] = useState(false)
 
@@ -266,8 +266,8 @@ export default function SavePage(): JSX.Element {
               />
               {video
                 ? status.alreadySaved
-                  ? 'Already in Watch later'
-                  : 'Saved to Watch later'
+                  ? 'Already saved in Watch'
+                  : 'Saved to Watch'
                 : status.alreadySaved
                 ? 'Already in Stash'
                 : 'Saved to Stash'}

@@ -24,7 +24,7 @@ const Card = styled('div', {
     right: 0,
     left: 0,
     bottom: 'auto',
-    top: 'calc(48px + env(safe-area-inset-top, 0px))',
+    top: 'calc(var(--topbar, 48px) + env(safe-area-inset-top, 0px))',
     width: '100%',
     height: MINI.phoneBar,
     borderRadius: 0,
@@ -109,7 +109,7 @@ const Progress = styled('div', {
 const roomForBar = globalCss({
   '@media (max-width: 768px)': {
     'body[data-topbar="on"].watch-mini': {
-      paddingTop: `calc(48px + ${MINI.phoneBar}px + env(safe-area-inset-top, 0px))`,
+      paddingTop: `calc(var(--topbar, 48px) + ${MINI.phoneBar}px + env(safe-area-inset-top, 0px))`,
     },
   },
 })

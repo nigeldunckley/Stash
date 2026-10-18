@@ -4,7 +4,8 @@ import { Box, HStack, SpanBox, VStack } from '../../elements/LayoutPrimitives'
 import { Button } from '../../elements/Button'
 import {
   Archive,
-  Books,
+  BookmarkSimple,
+  CaretDown,
   Compass,
   DotsThree,
   Highlighter,
@@ -16,13 +17,8 @@ import {
   Trash,
 } from '@phosphor-icons/react'
 import { IconButton } from '../../elements/stash'
-import { useGetLibraryItems } from '../../../lib/networking/library_items/useLibraryItems'
 import { useGetShortcuts } from '../../../lib/networking/shortcuts/useShortcuts'
-import {
-  useFeedSuggestions,
-  useFeedSuggestionsEnabled,
-} from '../../../lib/networking/feedSuggestions'
-import { theme } from '../../tokens/stitches.config'
+import { styled, theme } from '../../tokens/stitches.config'
 import { usePersistedState } from '../../../lib/hooks/usePersistedState'
 import { NavMenuFooter } from './Footer'
 import { ServerVersionChip } from '../settings/ServerVersionChip'
@@ -31,7 +27,7 @@ import { Dropdown, DropdownOption } from '../../elements/DropdownElements'
 import { useRouter } from 'next/router'
 import { NavigationSection } from '../NavigationLayout'
 import { useEditionStatus } from '../../../lib/edition/useEdition'
-import { useWatchCollections } from '../../../lib/watch/collections'
+import { NavCountSource, NavGroup, useNavCount, useNavGroups } from './sections'
 import { TreeApi } from 'react-arborist'
 import React from 'react'
 import { NavMoreButtonDownIcon } from '../../elements/icons/NavMoreButtonDown'
@@ -155,23 +151,9 @@ export function NavigationMenu(props: NavigationMenuProps): JSX.Element {
 }
 
 const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
-  const [moreFolderSectionOpen, setMoreFolderSectionOpen] =
-    usePersistedState<boolean>({
-      key: 'nav-more-folder-open',
-      isSessionStorage: false,
-      initialValue: true,
-    })
-  // Discover is hidden while suggestions are turned off in Settings.
-  const suggesting = useFeedSuggestionsEnabled()
   // The Edition appears only while this week's issue is out and unread.
   const edition = useEditionStatus()
-  // Watch's collections sit under it, as Discover does under Feeds.
-  const { collections } = useWatchCollections()
-  const router = useRouter()
-  const collectionId =
-    typeof router.query.collection == 'string'
-      ? router.query.collection
-      : undefined
+  const groups = useNavGroups(props.section)
   return (
     <VStack
       css={{
@@ -203,73 +185,18 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
           count={edition.fresh ? <FreshDot /> : undefined}
         />
       )}
-      <NavButton
-        {...props}
-        text="Library"
-        section="library"
-        isSelected={props.section == 'library'}
-        icon={<Books size={18} />}
-        count={<NavCount folder="inbox" query="is:unread -type:video" />}
-      />
-      <NavButton
-        {...props}
-        text="Feeds"
-        section="subscriptions"
-        isSelected={props.section == 'subscriptions'}
-        icon={<Rss size={18} />}
-        count={<NavCount folder="following" query="-is:seen -type:video" />}
-      />
-      {suggesting && (
-        <NavButton
-          {...props}
-          text="Discover"
-          section="l/discover"
-          isSelected={props.section == 'discover'}
-          icon={<Compass size={16} />}
-          count={<DiscoverCount />}
-          child
-        />
-      )}
-      <NavButton
-        {...props}
-        text="Watch"
-        section="watch"
-        isSelected={props.section == 'watch' && !collectionId}
-        icon={<MonitorPlay size={18} />}
-        count={
-          <NavCount folder="following" query="type:video -is:seen" accent />
-        }
-      />
-      {collections.map((collection) => (
-        <NavButton
-          {...props}
-          key={collection.id}
-          text={collection.name}
-          section="watch"
-          href={`/l/watch?collection=${collection.id}`}
-          isSelected={props.section == 'watch' && collectionId == collection.id}
-          icon={
-            <SpanBox
-              css={{
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                flex: 'none',
-              }}
-              style={{ background: collection.color }}
-            />
-          }
-          child
-        />
+      {groups.map((group) => (
+        <NavGroupSection key={group.id} group={group} {...props} />
       ))}
-      <NavButton
-        {...props}
-        text="Highlights"
-        section="highlights"
-        isSelected={props.section == 'highlights'}
-        icon={<Highlighter size={18} />}
+      <SpanBox
+        css={{
+          height: '1px',
+          width: 'calc(100% - 40px)',
+          mx: '20px',
+          my: '8px',
+          background: '$thBorderSubtle',
+        }}
       />
-
       <NavButton
         {...props}
         text="Archive"
@@ -288,28 +215,143 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
   )
 }
 
-// A Mail-style count beside a section: unread in the Library, unseen in
-// Feeds. Nothing shows at zero. Watch's new videos show as an orange badge,
-// so they are hard to miss.
-function NavCount(props: {
-  folder: string
-  query: string
-  accent?: boolean
-}): JSX.Element | null {
-  const { data } = useGetLibraryItems(
-    `nav-count-${props.folder}`,
-    props.folder,
-    {
-      limit: 1,
-      sortDescending: true,
-      searchQuery: props.query,
-      includeCount: true,
-    },
-    true,
-    2 * 60 * 1000
+const PAGE_ICONS: Record<string, ReactNode> = {
+  feeds: <Rss size={18} />,
+  'read-saved': <BookmarkSimple size={18} />,
+  highlights: <Highlighter size={18} />,
+  discover: <Compass size={18} />,
+  channels: <MonitorPlay size={18} />,
+  'watch-saved': <BookmarkSimple size={18} />,
+}
+
+const GroupLabel = styled('button', {
+  all: 'unset',
+  cursor: 'pointer',
+  '&:hover': { color: '$thLibraryMenuSecondary' },
+  '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '2px' },
+})
+
+const GroupFold = styled('button', {
+  all: 'unset',
+  ml: 'auto',
+  display: 'grid',
+  placeItems: 'center',
+  width: '22px',
+  height: '22px',
+  borderRadius: '6px',
+  cursor: 'pointer',
+  '&:hover:not(:disabled)': { background: '$thBackground4' },
+  // The open group can't be folded away from under you.
+  '&:disabled': { cursor: 'default', opacity: 0.35 },
+  '& svg': { transition: 'transform 120ms' },
+  '&[data-folded="true"] svg': { transform: 'rotate(-90deg)' },
+  '&:focus-visible': { outline: '2px solid $stAccent' },
+})
+
+// A group's label opens its first page; the chevron folds the group away,
+// remembered on this device. A folded Watch still shows a dot for new videos.
+function NavGroupSection(
+  props: NavigationMenuProps & { group: NavGroup }
+): JSX.Element {
+  const router = useRouter()
+  const { group } = props
+  const [open, setOpen] = usePersistedState<boolean>({
+    key: `nav-group-open-${group.id}`,
+    isSessionStorage: false,
+    initialValue: true,
+  })
+  const expanded = open || group.selected
+  return (
+    <>
+      <HStack
+        alignment="center"
+        distribution="start"
+        css={{
+          width: 'calc(100% - 20px)',
+          mx: '10px',
+          mt: '10px',
+          height: '26px',
+          px: '10px',
+          gap: '8px',
+          fontFamily: '$mono',
+          fontSize: '11px',
+          fontWeight: 500,
+          letterSpacing: '0.09em',
+          textTransform: 'uppercase',
+          color: '$stMuted',
+        }}
+      >
+        <GroupLabel type="button" onClick={() => router.push(group.href)}>
+          {group.label}
+        </GroupLabel>
+        {!expanded && group.id == 'watch' && <FoldedNewDot group={group} />}
+        <GroupFold
+          type="button"
+          aria-label={expanded ? `Fold ${group.label}` : `Show ${group.label}`}
+          aria-expanded={expanded}
+          disabled={group.selected}
+          data-folded={!expanded}
+          onClick={() => setOpen(!expanded)}
+        >
+          <CaretDown size={12} weight="bold" />
+        </GroupFold>
+      </HStack>
+      {expanded &&
+        group.pages.map((page) => (
+          <NavButton
+            {...props}
+            key={page.key}
+            text={page.label}
+            section={page.section}
+            href={page.href}
+            isSelected={page.selected}
+            child={!!page.color}
+            icon={
+              page.color ? (
+                <SpanBox
+                  css={{
+                    width: '7px',
+                    height: '7px',
+                    borderRadius: '50%',
+                    flex: 'none',
+                  }}
+                  style={{ background: page.color }}
+                />
+              ) : (
+                PAGE_ICONS[page.key == 'saved' ? `${group.id}-saved` : page.key]
+              )
+            }
+            count={page.count && <NavCount source={page.count} />}
+          />
+        ))}
+    </>
   )
-  const count = data?.pages[0]?.pageInfo.totalCount ?? 0
+}
+
+function FoldedNewDot(props: { group: NavGroup }): JSX.Element | null {
+  const count = useNavCount(props.group.pages[0]?.count)
   if (!count) return null
+  return (
+    <SpanBox
+      aria-label={`${count} new`}
+      css={{
+        width: '6px',
+        height: '6px',
+        borderRadius: '50%',
+        background: '$stAccent',
+      }}
+    />
+  )
+}
+
+// A Mail-style count beside a page: unseen in Feeds, unread in Saved. Nothing
+// shows at zero. New videos show as an orange badge, so they are hard to
+// miss, and Discover's new suggestions in the accent colour.
+function NavCount(props: { source: NavCountSource }): JSX.Element | null {
+  const count = useNavCount(props.source)
+  if (!count) return null
+  const discover = props.source.kind == 'discover'
+  const accent = props.source.kind == 'items' && props.source.accent
   return (
     <SpanBox
       aria-label={`${count} new`}
@@ -317,9 +359,9 @@ function NavCount(props: {
         ml: 'auto',
         fontFamily: '$mono',
         fontSize: '11px',
-        color: '$stMuted',
+        color: discover ? '$stAccentText' : '$stMuted',
         fontVariantNumeric: 'tabular-nums',
-        ...(props.accent && {
+        ...(accent && {
           padding: '0 6px',
           lineHeight: '18px',
           borderRadius: '5px',
@@ -329,7 +371,7 @@ function NavCount(props: {
         }),
       }}
     >
-      {count > 999 ? '999+' : count}
+      {discover ? `${count} new` : count > 999 ? '999+' : count}
     </SpanBox>
   )
 }
@@ -348,27 +390,6 @@ function FreshDot(): JSX.Element {
         flex: 'none',
       }}
     />
-  )
-}
-
-// How many new feed suggestions are waiting, in the accent colour.
-function DiscoverCount(): JSX.Element | null {
-  const { data } = useFeedSuggestions()
-  const count = data?.suggestions.filter((s) => s.status == 'NEW').length ?? 0
-  if (!count) return null
-  return (
-    <SpanBox
-      aria-label={`${count} new`}
-      css={{
-        ml: 'auto',
-        fontFamily: '$mono',
-        fontSize: '11px',
-        color: '$stAccentText',
-        fontVariantNumeric: 'tabular-nums',
-      }}
-    >
-      {count} new
-    </SpanBox>
   )
 }
 

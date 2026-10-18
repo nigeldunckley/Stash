@@ -328,7 +328,7 @@ const Empty = styled('p', {
 const UP_NEXT_LATER = 'type:video -is:read sort:saved-asc'
 
 // A full page for watching: the video, its channel and actions, chapters and
-// description, and Up next (Watch later first, then new videos from the same
+// description, and Up next (Saved first, then new videos from the same
 // collection) which plays on by itself.
 export function WatchPlayerPage(props: {
   id: string
@@ -443,10 +443,10 @@ export function WatchPlayerPage(props: {
     try {
       await moveItemToFolder(item.id, 'inbox')
       queryClient.invalidateQueries({ queryKey: ['libraryItems'] })
-      showUndoToast('Added to Watch later')
+      showUndoToast('Saved')
     } catch {
       setQueued(false)
-      showErrorToast('Could not add to Watch later')
+      showErrorToast('Could not save this video')
     }
   }
 
@@ -534,7 +534,7 @@ export function WatchPlayerPage(props: {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [player, goBack, theatre, onTheatreChange, toggleTheatre])
 
-  // Dragging in Watch later reorders it (on a Mac).
+  // Dragging in Saved reorders it (on a Mac).
   const [dragging, setDragging] = useState<string>()
   const [dropOn, setDropOn] = useState<string>()
 
@@ -599,10 +599,7 @@ export function WatchPlayerPage(props: {
           <EntryText>
             <b>{node.title}</b>
             <small>
-              {[
-                channelName(node),
-                queuedLater ? 'Watch later' : nodeCollection?.name,
-              ]
+              {[channelName(node), queuedLater ? 'Saved' : nodeCollection?.name]
                 .filter(Boolean)
                 .join(' · ')}
             </small>
@@ -615,16 +612,14 @@ export function WatchPlayerPage(props: {
   const queueList = (
     <Queue aria-label="Up next">
       {upNext.length == 0 && (
-        <Empty>
-          Nothing queued. Add videos to Watch later and they play here next.
-        </Empty>
+        <Empty>Nothing queued. Save videos and they play here next.</Empty>
       )}
       {upNext.map((node, index) => {
         const first = index == 0
         const firstMore = index == later.filter((l) => l.id != item?.id).length
         return [
           first && later.some((l) => l.id == node.id) ? (
-            <QueueGroup key="g-later">Watch later</QueueGroup>
+            <QueueGroup key="g-later">Saved</QueueGroup>
           ) : null,
           firstMore && !later.some((l) => l.id == node.id) ? (
             <QueueGroup key="g-more">
@@ -746,7 +741,7 @@ export function WatchPlayerPage(props: {
               {!inLater && (
                 <Action aria-pressed={queued} onClick={addToLater}>
                   <Clock size={14} weight={queued ? 'fill' : 'regular'} />
-                  {queued ? 'In Watch later' : 'Watch later'}
+                  {queued ? 'Saved' : 'Save'}
                 </Action>
               )}
               <Action aria-pressed={watched} onClick={toggleWatched}>
