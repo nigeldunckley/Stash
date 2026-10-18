@@ -54,7 +54,7 @@ struct ReaderScreen: View {
 
   @ViewBuilder
   private func placeholder(_ reader: ReaderController) -> some View {
-    if let loadError {
+    if let loadError, !reader.isReady {
       ContentUnavailableView {
         Label("Couldn't open this", systemImage: "doc.text")
       } description: {
@@ -116,6 +116,12 @@ struct ReaderScreen: View {
       )
       await reader.load(html: html, token: StashAPI.shared.token)
     } catch {
+      // A load that was cancelled (the screen changed, or a newer load took over) isn't a
+      // failure, and an article that's already showing doesn't need an error over it.
+      if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled
+        || reader.isReady {
+        return
+      }
       loadError = error.localizedDescription
     }
   }
