@@ -11,6 +11,7 @@ struct HomeView: View {
   @State private var feeds = ItemList()
   @State private var subscriptions: [Subscription] = []
   @State private var tab: Tab = .read
+  @State private var sorting = false
   @State private var otherCount: Int?
   @State private var videos: [LibraryItem] = []
   @State private var videosTotal: Int?
@@ -396,7 +397,7 @@ struct HomeView: View {
             ForEach(upNext) { item in
               Button { open(item, from: .upNext) } label: {
                 VStack(alignment: .leading, spacing: 8) {
-                  CoverImage(url: item.imageURL)
+                  ItemCover(item: item)
                     .frame(width: 240, height: 130)
                     .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
@@ -489,11 +490,23 @@ struct HomeView: View {
   }
 
   private var feedsHeading: some View {
+    feedsHeadingContent
+      .sortSheet(isPresented: $sorting, scope: "in:following use:folders -type:video") {
+        Task { await feeds.reload(feedsQuery) }
+      }
+  }
+
+  private var feedsHeadingContent: some View {
     SectionHeading(title: "New from your feeds", detail: feeds.total.map { "\($0) unseen" }) {
       StashSegmented(selection: $tab, [
         .init("Read", Tab.read, count: tab == .read ? feeds.total : otherCount),
         .init("Watch", Tab.watch, count: tab == .watch ? feeds.total : otherCount),
       ])
+      if tab == .read, let unseen = feeds.total, unseen >= 3 {
+        Button { sorting = true } label: { Label("Sort them", systemImage: "rectangle.stack") }
+          .buttonStyle(.text)
+          .help("Go through them one card at a time")
+      }
       Button { markAllSeen() } label: {
         #if os(macOS)
         Label("Mark all seen", systemImage: "checkmark")

@@ -207,11 +207,9 @@ struct EditionView: View {
   private func leadStory(_ item: LibraryItem, why: String?) -> some View {
     NavigationLink(value: item) {
       VStack(alignment: .leading, spacing: 10) {
-        if item.imageURL != nil {
-          CoverImage(url: item.imageURL)
-            .aspectRatio(16 / 9, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
+        ItemCover(item: item)
+          .aspectRatio(16 / 9, contentMode: .fit)
+          .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         Kicker("The week's best you missed", accent: true)
         Text(item.title)
           .font(.reading(30, .medium, relativeTo: .largeTitle))
@@ -256,11 +254,9 @@ struct EditionView: View {
                 storyMeta(item, why: entry.why)
               }
               Spacer(minLength: 0)
-              if item.imageURL != nil {
-                CoverImage(url: item.imageURL)
-                  .frame(width: 96, height: 72)
-                  .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-              }
+              ItemCover(item: item)
+                .frame(width: 96, height: 72)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
             .padding(.vertical, 12)
             .opacity(isDone(item) ? 0.5 : 1)

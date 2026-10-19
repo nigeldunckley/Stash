@@ -22,6 +22,8 @@ struct ItemListView<Tools: View>: View {
   var countLabel: String?
   /// Bands for Today, Yesterday and so on, for lists in date order.
   var groupsByDay = false
+  /// The Wire: dense rows by the hour, and new posts typed in as they arrive.
+  var wire = false
   /// Called when a search is submitted.
   var onSearch: () -> Void = {}
   /// The mono line above the title.
@@ -55,6 +57,7 @@ struct ItemListView<Tools: View>: View {
     .toolbar(removing: .title)
     .toasts(toaster)
     .task(id: query) { await list.load(query) }
+    .task(id: wire ? query : nil) { await watchWire() }
     #else
     if embedded {
       pushingList
@@ -166,6 +169,7 @@ struct ItemListView<Tools: View>: View {
       .modifier(Searchable(text: search, onSearch: onSearch))
       .refreshable { await list.reload(query) }
       .task(id: query) { await list.load(query) }
+      .task(id: wire ? query : nil) { await watchWire() }
       .navigationDestination(item: $selection) { item in
         ReaderScreen(item: item, actions: readerActions(for: item), perform: perform)
           .unfoldDestination(item, in: unfold)
@@ -177,7 +181,12 @@ struct ItemListView<Tools: View>: View {
 
   @ViewBuilder
   private var rows: some View {
-    if groupsByDay {
+    if wire {
+      ForEach(hourGroups(list.visibleItems), id: \.label) { group in
+        HourMark(label: group.label).stashListRow()
+        ForEach(group.items) { item in row(item) }
+      }
+    } else if groupsByDay {
       ForEach(groups(list.visibleItems), id: \.label) { group in
         DayBand(label: group.label)
           .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
@@ -208,6 +217,34 @@ struct ItemListView<Tools: View>: View {
 
   @ViewBuilder
   private func rowBase(_ item: LibraryItem) -> some View {
+    if wire {
+      #if os(macOS)
+      WireRow(
+        item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item),
+        arrived: list.arrivals[item.id], selected: selection?.id == item.id
+      )
+      .contentShape(Rectangle())
+      .onTapGesture {
+        listFocused = true
+        selection = item
+      }
+      #else
+      Button { selection = item; open(item) } label: {
+        WireRow(
+          item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item),
+          arrived: list.arrivals[item.id]
+        )
+      }
+      .buttonStyle(.plain)
+      .unfoldSource(item, in: unfold)
+      #endif
+    } else {
+      cardRow(item)
+    }
+  }
+
+  @ViewBuilder
+  private func cardRow(_ item: LibraryItem) -> some View {
     #if os(macOS)
     ItemRow(
       item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item),
@@ -239,6 +276,20 @@ struct ItemListView<Tools: View>: View {
     }
   }
 
+  /// "15:00" for each hour today; earlier days say which day too.
+  private func hourGroups(_ items: [LibraryItem]) -> [(label: String, items: [LibraryItem])] {
+    var result: [(label: String, items: [LibraryItem])] = []
+    for item in items {
+      let label = hourMark(item.date)
+      if let index = result.firstIndex(where: { $0.label == label }) {
+        result[index].items.append(item)
+      } else {
+        result.append((label, [item]))
+      }
+    }
+    return result
+  }
+
   private func groups(_ items: [LibraryItem]) -> [(label: String, items: [LibraryItem])] {
     var result: [(label: String, items: [LibraryItem])] = []
     for item in items {
@@ -256,6 +307,16 @@ struct ItemListView<Tools: View>: View {
 
   private func readerActions(for item: LibraryItem) -> [ItemAction] {
     [leading].compactMap { $0 } + trailing
+  }
+
+  /// On the Wire, checks for new posts every minute while the list is open.
+  private func watchWire() async {
+    guard wire else { return }
+    while !Task.isCancelled {
+      try? await Task.sleep(for: .seconds(60))
+      guard !Task.isCancelled else { return }
+      await list.pullNew(query)
+    }
   }
 
   private func open(_ item: LibraryItem) {

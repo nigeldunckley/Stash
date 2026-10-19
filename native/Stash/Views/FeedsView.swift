@@ -6,6 +6,9 @@ struct FeedsView: View {
   @State private var subscriptions: [Subscription] = []
   @State private var source: Subscription?
   @AppStorage("feedsShowAll") private var showAll = false
+  @State private var sorting = false
+  /// Cards (the usual rows) or the Wire.
+  @AppStorage("feedsWire") private var wire = false
 
   private var scope: String {
     [
@@ -36,6 +39,7 @@ struct FeedsView: View {
       emptyMessage: showAll ? "Posts from the feeds you follow appear here." : "Nothing new from your feeds.",
       countLabel: showAll ? "posts" : "unseen",
       groupsByDay: true,
+      wire: wire,
       folio: FolioContent(
         items: [FolioContent.today, "\(FolioData.shared.feeds) FEEDS"],
         checked: true,
@@ -43,6 +47,12 @@ struct FeedsView: View {
       )
     ) {
       StashSegmented(selection: $showAll, [.init("Unseen", false), .init("All", true)])
+      StashSegmented(selection: $wire, [.init("Cards", false), .init("Wire", true)])
+      if !showAll, let unseen = list.total, unseen >= 3 {
+        Button { sorting = true } label: { Label("Sort \(unseen)", systemImage: "rectangle.stack") }
+          .buttonStyle(.text)
+          .help("Go through them one card at a time")
+      }
       Button { markAllSeen() } label: { Label("Mark all seen", systemImage: "checkmark") }
         .buttonStyle(.text)
 
@@ -63,6 +73,7 @@ struct FeedsView: View {
       .help("Choose a feed")
     }
     .task { subscriptions = (try? await Library.subscriptions()) ?? subscriptions }
+    .sortSheet(isPresented: $sorting, scope: scope) { Task { await list.reload(query) } }
   }
 
   private func name(for item: LibraryItem) -> String? {

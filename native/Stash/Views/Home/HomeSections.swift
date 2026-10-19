@@ -127,13 +127,7 @@ struct UpNextColumn: View {
 
   private func featured(_ item: LibraryItem) -> some View {
     VStack(alignment: .leading, spacing: 8) {
-      Group {
-        if item.imageURL != nil {
-          CoverImage(url: item.imageURL)
-        } else {
-          Color.stSunken.overlay { SiteIcon(url: item.iconURL, size: 36) }
-        }
-      }
+      ItemCover(item: item)
       .aspectRatio(16 / 10, contentMode: .fit)
       .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
       .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
@@ -194,13 +188,7 @@ struct UpNextColumn: View {
           .lineLimit(1)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      Group {
-        if item.imageURL != nil {
-          CoverImage(url: item.imageURL)
-        } else {
-          Color.stSunken.overlay { SiteIcon(url: item.iconURL, size: 22) }
-        }
-      }
+      ItemCover(item: item)
       .frame(width: 56, height: 56)
       .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
     }

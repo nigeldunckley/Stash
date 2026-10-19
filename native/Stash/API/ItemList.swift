@@ -17,6 +17,8 @@ final class ItemList {
   private var removed: Set<String> = []
   /// Items marked seen while this list is open.
   private(set) var seen: Set<String> = []
+  /// When items that turned up while the list was open arrived, for the Wire's typing-in.
+  private(set) var arrivals: [String: Date] = [:]
 
   var visibleItems: [LibraryItem] { items.filter { !removed.contains($0.id) } }
 
@@ -55,6 +57,17 @@ final class ItemList {
       cursor = page.pageInfo.endCursor
       hasMore = page.pageInfo.hasNextPage
     }
+  }
+
+  /// Checks for newer items and adds them to the top, keeping everything already loaded.
+  func pullNew(_ query: String) async {
+    guard query == loadedQuery, !isLoading, let page = try? await Library.search(query, first: 20) else { return }
+    let known = Set(items.map(\.id))
+    let fresh = page.items.filter { !known.contains($0.id) }
+    guard !fresh.isEmpty else { return }
+    for item in fresh { arrivals[item.id] = .now }
+    items = fresh + items
+    total = page.pageInfo.totalCount
   }
 
   func remove(_ item: LibraryItem) { removed.insert(item.id) }

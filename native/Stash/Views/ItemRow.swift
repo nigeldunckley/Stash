@@ -12,7 +12,7 @@ struct ItemRow: View {
   var divider = true
 
   var body: some View {
-    StashRow(selected: selected, hasThumbnail: item.imageURL != nil, divider: divider) {
+    StashRow(selected: selected, hasThumbnail: true, divider: divider) {
       HStack(alignment: .center, spacing: 12) {
         SiteIcon(url: item.iconURL, size: 18)
           .frame(width: 18)
@@ -49,17 +49,20 @@ struct ItemRow: View {
         meta
         #endif
 
-        if let imageURL = item.imageURL {
-          FadeImage(url: imageURL)
-          .frame(width: summary == nil ? 72 : 88, height: summary == nil ? 48 : 60)
-          .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-          .overlay(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
-          // Your place, on something you're part way through.
-          .placeRibbon(item.isPartRead, inset: 6)
+        Group {
+          if let imageURL = item.imageURL {
+            FadeImage(url: imageURL)
+          } else {
+            TypeCover(item: item)
+          }
         }
+        .frame(width: summary == nil ? 72 : 88, height: summary == nil ? 48 : 60)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
+        // Your place, on something you're part way through.
+        .placeRibbon(item.isPartRead, inset: 6)
       }
     }
-    .placeRibbon(item.isPartRead && item.imageURL == nil)
     .momentSource(item)
   }
 

@@ -146,7 +146,7 @@ enum Tracking {
 
 /// The PostScript names of the bundled faces. Each weight is its own file, so text never
 /// falls back to a synthesised bold.
-private enum StashFace {
+enum StashFace {
   static func geist(_ weight: Font.Weight) -> String {
     switch weight {
     case .bold, .heavy, .black: return "Geist-Bold"
