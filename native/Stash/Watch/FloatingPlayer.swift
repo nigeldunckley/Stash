@@ -25,7 +25,7 @@ final class FloatingPlayer {
   }
 
   deinit {
-    observers.forEach(NotificationCenter.default.removeObserver)
+    observers.forEach { NotificationCenter.default.removeObserver($0) }
   }
 
   /// "float", "ask" or "sound", from Settings › Watch.
