@@ -111,6 +111,27 @@ enum Watch {
     }
   }
 
+  /// The channel behind a channel link, @handle or video link; nil if YouTube has no such channel.
+  static func lookupChannel(_ url: String) async throws -> ChannelMatch? {
+    struct Response: Decodable {
+      let youtubeChannel: Result
+      struct Result: Decodable { let channel: ChannelMatch?; let errorCodes: [String]? }
+    }
+    let data: Response = try await StashAPI.shared.graphQL("""
+      query YouTubeChannel($url: String!) {
+        youtubeChannel(url: $url) {
+          ... on YouTubeChannelSuccess { channel { channelId feedUrl title handle avatar } }
+          ... on YouTubeChannelError { errorCodes }
+        }
+      }
+      """, variables: ["url": url])
+    if let code = data.youtubeChannel.errorCodes?.first {
+      if code == "NOT_FOUND" { return nil }
+      throw StashError.server(code)
+    }
+    return data.youtubeChannel.channel
+  }
+
   /// Channels on YouTube whose name matches what was typed.
   static func searchChannels(_ query: String) async throws -> [ChannelMatch] {
     struct Response: Decodable {

@@ -128,7 +128,7 @@ struct ChannelStrip: View {
   }
 }
 
-/// Every channel you follow, grouped by collection, with a search to add more.
+/// Every channel you follow, grouped by collection, with the add box to follow more.
 struct AllChannelsView: View {
   let onPick: (Subscription) -> Void
 
@@ -136,11 +136,6 @@ struct AllChannelsView: View {
   @State private var collections: [WatchCollection] = []
   @State private var unseen: [String: Int] = [:]
   @State private var loaded = false
-  @State private var searchText = ""
-  @State private var results: [ChannelMatch] = []
-  @State private var searching = false
-  @State private var followed: Set<String> = []
-  @State private var toaster = Toaster()
 
   private var groups: [(name: String, channels: [Subscription])] {
     var result = collections.map { collection in
@@ -154,26 +149,11 @@ struct AllChannelsView: View {
   var body: some View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 26) {
-        if !results.isEmpty || searching {
-          VStack(alignment: .leading, spacing: 12) {
-            WatchBand("On YouTube") {
-              Button("Clear") { searchText = ""; results = [] }
-                .buttonStyle(.text)
-            }
-            if searching {
-              SkeletonRows(count: 2)
-            }
-            grid {
-              ForEach(results) { match in
-                matchCard(match)
-              }
-            }
-          }
-        }
+        WatchAddBox { Task { await load() } }
         if !loaded {
           SkeletonCards(count: 8, minWidth: 220, height: 68)
         } else if channels.isEmpty {
-          EmptyBox(title: "No channels yet", message: "Search for a channel above to follow it.", systemImage: "play.rectangle", boxed: false)
+          EmptyBox(title: "No channels yet", message: "Paste a channel link or search for one above to follow it.", systemImage: "play.rectangle", boxed: false)
         }
         ForEach(groups, id: \.name) { group in
           VStack(alignment: .leading, spacing: 12) {
@@ -191,16 +171,7 @@ struct AllChannelsView: View {
       .padding(.bottom, 40)
     }
     .background(Color.stPage)
-    .toasts(toaster)
-    .stashPage("All channels", detail: loaded ? "\(channels.count) channels" : nil) {
-      #if os(macOS)
-      PageSearchField(text: $searchText, prompt: "Find a channel to add", onSubmit: search)
-      #endif
-    }
-    #if os(iOS)
-    .searchable(text: $searchText, prompt: "Find a channel to add")
-    .onSubmit(of: .search, search)
-    #endif
+    .stashPage("All channels", detail: loaded ? "\(channels.count) channels" : nil)
     .task { await load() }
   }
 
@@ -233,37 +204,6 @@ struct AllChannelsView: View {
     .contentShape(Rectangle())
   }
 
-  private func matchCard(_ match: ChannelMatch) -> some View {
-    let following = followed.contains(match.feedUrl) || channels.contains { $0.url == match.feedUrl }
-    return HStack(spacing: 12) {
-      FadeImage(url: match.avatar.flatMap(URL.init(string:)))
-        .frame(width: 40, height: 40)
-        .clipShape(Circle())
-      VStack(alignment: .leading, spacing: 2) {
-        Text(match.title)
-          .font(.ui(14, .medium))
-          .foregroundStyle(Color.stInk)
-          .lineLimit(1)
-        Text([match.handle, match.subscribers].compactMap { $0 }.joined(separator: " · "))
-          .font(.mono(11))
-          .foregroundStyle(Color.stMuted)
-          .lineLimit(1)
-      }
-      Spacer(minLength: 0)
-      if following {
-        Label("Following", systemImage: "checkmark")
-          .labelStyle(.iconOnly)
-          .foregroundStyle(Color.stMuted)
-          .help("Following")
-      } else {
-        Button("Follow") { follow(match) }.buttonStyle(.textProminent)
-      }
-    }
-    .padding(14)
-    .background(Color.stSurface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-    .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
-  }
-
   private func load() async {
     async let subscriptions = Library.subscriptions()
     async let labels = Watch.collections()
@@ -272,34 +212,5 @@ struct AllChannelsView: View {
     collections = (try? await labels) ?? []
     unseen = await counts
     loaded = true
-  }
-
-  private func search() {
-    let query = searchText.trimmingCharacters(in: .whitespaces)
-    guard !query.isEmpty else { results = []; return }
-    searching = true
-    Task {
-      do {
-        results = try await Watch.searchChannels(query)
-        if results.isEmpty { toaster.show("No channels called “\(query)”") }
-      } catch {
-        toaster.show(error.localizedDescription)
-      }
-      searching = false
-    }
-  }
-
-  private func follow(_ match: ChannelMatch) {
-    followed.insert(match.feedUrl)
-    Task {
-      do {
-        try await Watch.follow(match)
-        toaster.show("Following \(match.title)")
-        await load()
-      } catch {
-        followed.remove(match.feedUrl)
-        toaster.show("Couldn't follow \(match.title)")
-      }
-    }
   }
 }

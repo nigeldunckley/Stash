@@ -110,6 +110,12 @@ struct WatchView: View {
   private var videoList: some View {
     #if os(iOS)
     List {
+      if channel == nil {
+        WatchAddBox { Task { await reload() } }
+          .listRowSeparator(.hidden)
+          .listRowBackground(Color.clear)
+          .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
+      }
       if isFront {
         Group { frontSections }
           .listRowSeparator(.hidden)
@@ -138,6 +144,7 @@ struct WatchView: View {
     // for new videos.
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 26) {
+        if channel == nil { WatchAddBox { Task { await reload() } } }
         if isFront { frontSections }
         ForEach(dayGroups, id: \.label) { group in
           VStack(alignment: .leading, spacing: 14) {
