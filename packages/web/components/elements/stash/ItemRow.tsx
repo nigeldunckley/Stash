@@ -2,6 +2,7 @@ import { forwardRef, HTMLAttributes, ReactNode } from 'react'
 import { styled } from '../../tokens/stitches.config'
 import { CoverImage } from './CoverImage'
 import { motion } from './motion'
+import { Ribbon } from './Ribbon'
 
 const Actions = styled('div', {
   display: 'none',
@@ -42,6 +43,22 @@ const Thumb = styled(CoverImage, {
   height: '48px',
   borderRadius: '$sm',
   '@smDown': { width: '56px', height: '42px' },
+})
+
+// A part-read item keeps its place: a ribbon hangs from the top of its
+// picture, or from the row's top edge when there isn't one.
+const ThumbWrap = styled('div', {
+  position: 'relative',
+  lineHeight: 0,
+  '& > svg': { position: 'absolute', top: 0, right: '6px' },
+})
+
+const RowRibbon = styled('span', {
+  position: 'absolute',
+  top: 0,
+  right: '14px',
+  lineHeight: 0,
+  pointerEvents: 'none',
 })
 
 const Root = styled('div', {
@@ -183,6 +200,8 @@ type ItemRowProps = {
   actions?: ReactNode
   selected?: boolean
   muted?: boolean
+  // Reading progress, 0–100. Part-read rows get a ribbon.
+  progress?: number
   onOpen?: () => void
   onFocus?: () => void
   onMouseEnter?: () => void
@@ -212,11 +231,13 @@ export const ItemRow = forwardRef<
     actions,
     selected,
     muted,
+    progress,
     onOpen,
     onFocus,
     onMouseEnter,
     ...rest
   } = allProps
+  const partRead = progress !== undefined && progress >= 3 && progress <= 97
   const props = {
     leading,
     title,
@@ -236,6 +257,7 @@ export const ItemRow = forwardRef<
     <Root
       {...rest}
       ref={ref}
+      data-stash-row=""
       role="link"
       tabIndex={0}
       selected={props.selected}
@@ -268,7 +290,18 @@ export const ItemRow = forwardRef<
         {props.meta && <Meta>{props.meta}</Meta>}
         {props.actions && <Actions>{props.actions}</Actions>}
       </Trailing>
-      {props.image && <Thumb src={props.image} />}
+      {props.image ? (
+        <ThumbWrap>
+          <Thumb src={props.image} />
+          {partRead && <Ribbon width={8} height={18} />}
+        </ThumbWrap>
+      ) : (
+        partRead && (
+          <RowRibbon>
+            <Ribbon width={7} height={15} />
+          </RowRibbon>
+        )
+      )}
     </Root>
   )
 })

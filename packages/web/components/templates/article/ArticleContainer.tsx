@@ -529,6 +529,7 @@ export function ArticleContainer(props: ArticleContainerProps): JSX.Element {
           highlightHref={highlightHref}
           initialAnchorIndex={props.article.readingProgressAnchorIndex}
           initialReadingProgressTop={props.article.readingProgressTopPercent}
+          resumeProgress={props.article.readingProgressPercent}
           articleMutations={props.articleMutations}
           isAppleAppEmbed={props.isAppleAppEmbed}
           pageUrls={[props.article.originalArticleUrl, props.article.url]}

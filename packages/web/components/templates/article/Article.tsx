@@ -8,6 +8,7 @@ import {
   useScrollWatcher,
 } from '../../../lib/hooks/useScrollWatcher'
 import { MarginNotes } from '../reader/MarginNotes'
+import { PlaceMarker } from '../reader/PlaceMarker'
 import {
   MutableRefObject,
   useCallback,
@@ -34,6 +35,8 @@ export type ArticleProps = {
   initialAnchorIndex: number
   initialReadingProgress?: number
   initialReadingProgressTop?: number
+  // How far you'd read when the article opened, for the place marker.
+  resumeProgress?: number
   highlightHref: MutableRefObject<string | null>
   articleMutations: ArticleMutations
   isAppleAppEmbed: boolean
@@ -60,6 +63,9 @@ export function Article(props: ArticleProps): JSX.Element {
 
   const [shouldScrollToInitialPosition, setShouldScrollToInitialPosition] =
     useState(true)
+
+  // Opening on a highlight skips the place marker, as it skips your place.
+  const [openedOnHighlight] = useState(() => !!props.highlightHref.current)
 
   const articleContentRef = useRef<HTMLDivElement | null>(null)
 
@@ -415,6 +421,12 @@ export function Article(props: ArticleProps): JSX.Element {
         contentRef={articleContentRef}
         contentKey={props.content}
         pageUrls={props.pageUrls ?? []}
+      />
+      <PlaceMarker
+        contentRef={articleContentRef}
+        anchorIndex={props.initialAnchorIndex}
+        progress={props.resumeProgress}
+        enabled={!openedOnHighlight}
       />
       <SpanBox
         onClick={(event) => {

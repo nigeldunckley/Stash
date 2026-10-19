@@ -177,6 +177,7 @@ const AddFromURL = (props: AddFromURLProps): JSX.Element => {
   return (
     <VStack css={{ width: '100%', height: '180px' }}>
       <form
+        data-moment-source=""
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -549,7 +550,7 @@ const UploadPad = (props: UploadPadProps): JSX.Element => {
               withCredentials: false,
               headers: {
                 'Content-Type': file.file.type,
-                'origin': 'http://localhost:3000'
+                origin: 'http://localhost:3000',
               },
               onUploadProgress: (p) => {
                 if (!p.total) {
