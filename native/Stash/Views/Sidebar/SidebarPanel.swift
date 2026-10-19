@@ -54,7 +54,10 @@ struct SidebarPanel: View {
             row("Latest", "play.rectangle", .channels) {
               if let channelsCount, channelsCount > 0 { Count(channelsCount, style: .badge) }
             }
-            SidebarRow(title: "Saved", ribbon: .saved, selected: section == .savedVideos) { section = .savedVideos }
+            SidebarRow(title: "Saved", ribbon: .savedVideo, selected: section == .savedVideos, action: { section = .savedVideos }) {
+              LandingCount(kind: .savedVideo)
+            }
+            .momentTarget(.savedVideo)
             ForEach(collections) { collection in
               SidebarRow(
                 title: collection.name,

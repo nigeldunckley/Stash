@@ -57,6 +57,7 @@ struct MainView: View {
   @State private var watchPage: AppSection = .channels
   #if os(iOS)
   @Environment(PlayerController.self) private var player
+  @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   /// The full player, opened from the mini player.
   @State private var showingPlayer = false
   #endif
@@ -84,6 +85,27 @@ struct MainView: View {
     MacShell(section: $section, collections: collections)
   }
   #else
+  private var flightLayer: some View {
+    GeometryReader { geometry in
+      // iPad shows its tabs at the top or in a sidebar, so only iPhone's bottom bar is aimed at.
+      if horizontalSizeClass == .compact, let moment = Moments.shared.current {
+        let frame = geometry.frame(in: .global)
+        MomentFlight(moment: moment, target: tabTarget(moment.kind, in: frame), origin: frame.origin)
+          .id(moment.id)
+      }
+    }
+    .allowsHitTesting(false)
+  }
+
+  /// Where a tab's icon sits in the tab bar: Read for articles, Watch for videos.
+  private func tabTarget(_ kind: MomentKind, in frame: CGRect) -> CGRect {
+    let tabs = edition.isOut ? 5 : 4
+    let read = edition.isOut ? 2 : 1
+    let index = kind == .savedVideo ? read + 1 : read
+    let x = frame.minX + frame.width * (CGFloat(index) + 0.5) / CGFloat(tabs)
+    return CGRect(x: x - 12, y: frame.maxY - 42, width: 24, height: 24)
+  }
+
   private var shell: some View {
     TabView(selection: $section) {
       Tab("Home", systemImage: "house", value: AppSection.home) {
@@ -136,6 +158,8 @@ struct MainView: View {
       }
     }
     .animation(.snappy(duration: 0.25), value: player.host == .mini)
+    // A saved or archived row swooshing down into its tab.
+    .overlay { flightLayer }
     .sheet(isPresented: $showingPlayer) {
       if let item = player.item {
         NavigationStack {
