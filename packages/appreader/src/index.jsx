@@ -6,6 +6,7 @@ import { applyStoredTheme } from '@omnivore/web/lib/themeUpdater'
 import '@omnivore/web/styles/globals.css'
 import '@omnivore/web/styles/articleInnerStyling.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Colophon } from './Colophon.jsx'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -159,6 +160,11 @@ const App = () => {
             highlightOnRelease={window.highlightOnRelease}
             highContrastText={window.prefersHighContrastFont ?? true}
             justifyText={window.justifyText}
+            footer={
+              window.stashColophon ? (
+                <Colophon data={window.stashColophon} />
+              ) : undefined
+            }
             articleMutations={{
               createHighlightMutation: (input) =>
                 mutation('createHighlight', input),

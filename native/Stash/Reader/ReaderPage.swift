@@ -17,7 +17,8 @@ enum ReaderPage {
     return source
   }()
 
-  static func html(for content: ArticleContent, viewer: Viewer, settings: Settings) -> String {
+  /// `colophon` is what the end of the article shows (see `Colophon`); nil leaves it out.
+  static func html(for content: ArticleContent, viewer: Viewer, settings: Settings, colophon: [String: Any]? = nil) -> String {
     var article = content.json
     article["content"] = content.html
     article["recommendations"] = [Any]()
@@ -31,6 +32,7 @@ enum ReaderPage {
     // JSONSerialization escapes "/" as "\/", so "</script>" in an article can't end this script early.
     let json = encode(article)
     let viewerJSON = encode(viewer.readerJSON)
+    let colophonJSON = colophon.map(encode) ?? "null"
 
     return """
     <!DOCTYPE html>
@@ -56,6 +58,7 @@ enum ReaderPage {
           window.omnivoreArticle = \(json)
           window.omnivoreViewer = \(viewerJSON)
           window.stashApp = true
+          window.stashColophon = \(colophonJSON)
           window.themeKey = "System"
           window.fontSize = \(settings.fontSize)
           window.fontFamily = "\(settings.fontFamily)"

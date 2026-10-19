@@ -20,8 +20,16 @@ struct MacShell: View {
   /// The full player, opened from the mini player over whatever page you're on.
   @State private var showingPlayer = false
   @State private var floating: FloatingPlayer?
-  @AppStorage("miniPlayerCorner") private var miniCorner = MiniCorner.bottomTrailing
-  @State private var miniDrag: CGSize = .zero
+  /// Where the mini player sits, from 0 (left or top) to 1 (right or bottom) of the room it
+  /// has, so it keeps its place as the window changes size; and how wide it is.
+  @AppStorage("miniPlayerX") private var miniX = 1.0
+  @AppStorage("miniPlayerY") private var miniY = 1.0
+  @AppStorage("miniPlayerWidth") private var miniWidth = 340.0
+  /// The card's size as laid out (video plus title and controls).
+  @State private var miniSize = CGSize(width: 340, height: 300)
+  /// The card's frame while it's being moved or resized, and where it started.
+  @State private var miniLive: CGRect?
+  @State private var miniStart: CGRect?
 
   /// How many pages stay alive at once.
   private static let keepAlive = 6
@@ -135,30 +143,108 @@ struct MacShell: View {
     .allowsHitTesting(false)
   }
 
-  /// The video you left, in a corner of the page. Drag it to another corner.
+  /// The video you left, over the page. Drag it anywhere (it snaps to nearby edges) and drag a
+  /// corner to resize it; it remembers both.
   @ViewBuilder
   private var miniPlayer: some View {
     if player.host == .mini {
       GeometryReader { geometry in
-        MiniPlayer(onExpand: { showingPlayer = true })
-          .offset(miniDrag)
-          .gesture(
-            DragGesture(coordinateSpace: .named("page"))
-              .onChanged { miniDrag = $0.translation }
-              .onEnded { value in
-                let left = value.location.x < geometry.size.width / 2
-                let top = value.location.y < geometry.size.height / 2
-                withAnimation(.snappy(duration: 0.25)) {
-                  miniCorner = top ? (left ? .topLeading : .topTrailing) : (left ? .bottomLeading : .bottomTrailing)
-                  miniDrag = .zero
-                }
-              }
-          )
-          .padding(22)
-          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: miniCorner.alignment)
+        let rect = miniLive ?? miniRest(in: geometry.size)
+        MiniPlayer(
+          onExpand: { showingPlayer = true },
+          width: rect.width,
+          onMove: { value in miniMove(value, in: geometry.size) },
+          onResize: { corner, value in miniResize(corner, value, in: geometry.size) }
+        )
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { miniSize = $0 }
+        .position(x: rect.midX, y: rect.midY)
       }
-      .coordinateSpace(.named("page"))
       .transition(.scale(scale: 0.9).combined(with: .opacity))
+    }
+  }
+
+  private static let miniInset: CGFloat = 16
+  private static let miniWidths: ClosedRange<CGFloat> = 260...760
+
+  /// The card's height for a width: the video grows, the title and controls don't.
+  private func cardHeight(for width: CGFloat) -> CGFloat {
+    miniSize.height - videoHeight(miniSize.width) + videoHeight(width)
+  }
+
+  private func clampWidth(_ width: CGFloat) -> CGFloat {
+    min(max(width, Self.miniWidths.lowerBound), Self.miniWidths.upperBound)
+  }
+
+  /// The room the card can move in.
+  private func miniBounds(_ size: CGSize) -> CGRect {
+    CGRect(origin: .zero, size: size).insetBy(dx: Self.miniInset, dy: Self.miniInset)
+  }
+
+  /// Where the card sits when nothing is dragging it.
+  private func miniRest(in size: CGSize) -> CGRect {
+    let bounds = miniBounds(size)
+    let width = min(clampWidth(CGFloat(miniWidth)), max(Self.miniWidths.lowerBound, bounds.width))
+    let height = cardHeight(for: width)
+    return CGRect(
+      x: bounds.minX + CGFloat(miniX) * max(0, bounds.width - width),
+      y: bounds.minY + CGFloat(miniY) * max(0, bounds.height - height),
+      width: width,
+      height: height
+    )
+  }
+
+  /// Keeps a frame inside the page.
+  private func clamp(_ rect: CGRect, in size: CGSize) -> CGRect {
+    let bounds = miniBounds(size)
+    var rect = rect
+    rect.origin.x = min(max(rect.minX, bounds.minX), max(bounds.minX, bounds.maxX - rect.width))
+    rect.origin.y = min(max(rect.minY, bounds.minY), max(bounds.minY, bounds.maxY - rect.height))
+    return rect
+  }
+
+  private func miniMove(_ value: DragGesture.Value?, in size: CGSize) {
+    guard let value else { return miniSettle(in: size, snap: true) }
+    let start = miniStart ?? miniRest(in: size)
+    miniStart = start
+    miniLive = clamp(start.offsetBy(dx: value.translation.width, dy: value.translation.height), in: size)
+  }
+
+  private func miniResize(_ corner: ResizeCorner, _ value: DragGesture.Value?, in size: CGSize) {
+    guard let value else { return miniSettle(in: size, snap: false) }
+    let start = miniStart ?? miniRest(in: size)
+    miniStart = start
+    let grow = corner.isLeading ? -value.translation.width : value.translation.width
+    let room = miniBounds(size).width
+    let width = min(max(start.width + grow, Self.miniWidths.lowerBound), min(Self.miniWidths.upperBound, room))
+    let height = cardHeight(for: width)
+    // The opposite corner stays put.
+    let rect = CGRect(
+      x: corner.isLeading ? start.maxX - width : start.minX,
+      y: corner.isTop ? start.maxY - height : start.minY,
+      width: width,
+      height: height
+    )
+    miniLive = clamp(rect, in: size)
+  }
+
+  /// Saves where the card ended up, snapping to an edge it was dropped near.
+  private func miniSettle(in size: CGSize, snap: Bool) {
+    defer { miniStart = nil }
+    guard let rect = miniLive else { return }
+    let bounds = miniBounds(size)
+    let spareX = bounds.width - rect.width, spareY = bounds.height - rect.height
+    var x = spareX > 0 ? Double((rect.minX - bounds.minX) / spareX) : 1
+    var y = spareY > 0 ? Double((rect.minY - bounds.minY) / spareY) : 1
+    if snap {
+      let near: CGFloat = 28
+      if rect.minX - bounds.minX < near { x = 0 } else if bounds.maxX - rect.maxX < near { x = 1 }
+      if rect.minY - bounds.minY < near { y = 0 } else if bounds.maxY - rect.maxY < near { y = 1 }
+    }
+    withAnimation(.snappy(duration: 0.22)) {
+      miniX = min(max(x, 0), 1)
+      miniY = min(max(y, 0), 1)
+      miniWidth = Double(rect.width)
+      miniLive = nil
     }
   }
 
@@ -197,21 +283,5 @@ extension Notification.Name {
   static let stashCapture = Notification.Name("stashCapture")
   /// ⌘,: open Settings.
   static let stashOpenSettings = Notification.Name("stashOpenSettings")
-}
-#endif
-
-#if os(macOS)
-/// Which corner of the page the mini player sits in.
-enum MiniCorner: String {
-  case topLeading, topTrailing, bottomLeading, bottomTrailing
-
-  var alignment: Alignment {
-    switch self {
-    case .topLeading: return .topLeading
-    case .topTrailing: return .topTrailing
-    case .bottomLeading: return .bottomLeading
-    case .bottomTrailing: return .bottomTrailing
-    }
-  }
 }
 #endif

@@ -5,6 +5,13 @@ import SwiftUI
 struct MiniPlayer: View {
   /// Opens the full player again.
   let onExpand: () -> Void
+  #if os(macOS)
+  var width: CGFloat = 340
+  /// Dragging the card to move it: the drag as it goes, then nil when it ends.
+  var onMove: (DragGesture.Value?) -> Void = { _ in }
+  /// Dragging a corner to resize it.
+  var onResize: (ResizeCorner, DragGesture.Value?) -> Void = { _, _ in }
+  #endif
 
   @Environment(PlayerController.self) private var player
   @State private var hovering = false
@@ -45,6 +52,12 @@ struct MiniPlayer: View {
     VStack(alignment: .leading, spacing: 0) {
       PlayerWebView(webView: player.webView, active: player.host == .mini)
         .aspectRatio(16 / 9, contentMode: .fit)
+        // Sits over the video so a drag anywhere moves the card and a click plays or pauses.
+        .overlay {
+          Color.clear
+            .contentShape(Rectangle())
+            .onTapGesture { player.toggle() }
+        }
         .overlay(alignment: .topTrailing) {
           if hovering {
             HStack(spacing: 6) {
@@ -92,11 +105,17 @@ struct MiniPlayer: View {
       .padding(.top, 10)
       .padding(.bottom, 12)
     }
-    .frame(width: 340)
+    .frame(width: width)
     .background(Color.stPanel)
     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
+    .overlay { ResizeHandles(onResize: onResize) }
     .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
+    .gesture(
+      DragGesture(minimumDistance: 3, coordinateSpace: .global)
+        .onChanged { onMove($0) }
+        .onEnded { _ in onMove(nil) }
+    )
     .onHover { hovering in withAnimation(.easeOut(duration: 0.15)) { self.hovering = hovering } }
   }
   #endif

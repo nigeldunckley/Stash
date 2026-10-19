@@ -11,6 +11,8 @@ final class ReaderController: NSObject {
   private(set) var isReady = false
   private(set) var progress: Double = 0
   @ObservationIgnored private var html: String?
+  /// What the reader picked in the colophon: "next", "archiveNext", "archive" or "close".
+  @ObservationIgnored var onColophon: ((String) -> Void)?
 
   override init() {
     let config = WKWebViewConfiguration()
@@ -33,6 +35,7 @@ final class ReaderController: NSObject {
     let proxy = MessageProxy(self)
     controller.add(proxy, name: "stashAction")
     controller.add(proxy, name: "readingProgressUpdate")
+    controller.add(proxy, name: "stashColophon")
     webView.navigationDelegate = self
     webView.isInspectable = true
     #if os(iOS)
@@ -58,6 +61,12 @@ final class ReaderController: NSObject {
       await webView.configuration.websiteDataStore.httpCookieStore.setCookie(cookie)
     }
     webView.loadHTMLString(html, baseURL: StashConfig.server)
+  }
+
+  /// Clears the page ready for a different article.
+  func reset() {
+    isReady = false
+    progress = 0
   }
 
   /// Fires one of the reader's settings events, such as a new font size.
@@ -132,6 +141,8 @@ private final class MessageProxy: NSObject, WKScriptMessageHandler {
   func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
     switch message.name {
     case "stashAction": owner?.handleAction(message.body)
+    case "stashColophon":
+      if let choice = (message.body as? [String: Any])?["choice"] as? String { owner?.onColophon?(choice) }
     default: owner?.handleProgress(message.body)
     }
   }
