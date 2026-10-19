@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// One article in a list, as on the web: favicon, a two-line Newsreader title with its source
-/// underneath, the age and length in mono, and a 72 × 48 thumbnail when there's an image.
+/// underneath, up to two lines of summary, the age and length in mono, and a thumbnail when
+/// there's an image (88 × 60 beside a summary, 72 × 48 without).
 struct ItemRow: View {
   let item: LibraryItem
   var subscriptionName: String?
@@ -32,6 +33,15 @@ struct ItemRow: View {
             #endif
           }
           .foregroundStyle(Color.stMuted)
+          if let summary {
+            Text(summary)
+              .font(.stExcerpt)
+              .lineSpacing(2)
+              .foregroundStyle(Color.stMuted)
+              .lineLimit(2)
+              .multilineTextAlignment(.leading)
+              .padding(.top, 2)
+          }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -41,12 +51,20 @@ struct ItemRow: View {
 
         if let imageURL = item.imageURL {
           FadeImage(url: imageURL)
-          .frame(width: 72, height: 48)
+          .frame(width: summary == nil ? 72 : 88, height: summary == nil ? 48 : 60)
           .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
           .overlay(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
         }
       }
     }
+  }
+
+  /// The feed's summary of the article, as the web shows under each row; videos have none.
+  private var summary: String? {
+    guard !Watch.isVideo(item), let text = item.description?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+      return nil
+    }
+    return text
   }
 
   /// Age, length, highlights and progress in Geist Mono, with an orange dot while unseen.

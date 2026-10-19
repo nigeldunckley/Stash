@@ -126,6 +126,8 @@ extension Font {
   static let stSmall = Font.ui(12, relativeTo: .footnote)
   /// Ages, counts and lengths: mono 11.
   static let stDetail = Font.mono(11)
+  /// The summary under a row's title: 12, as the web's caption.
+  static let stExcerpt = Font.ui(12, relativeTo: .footnote)
   /// Caps labels such as "TODAY": mono 10.5 / 500, tracked +0.9.
   static let stLabel = Font.mono(10.5, .medium)
   /// Article titles in lists: Newsreader 17 / 500.
