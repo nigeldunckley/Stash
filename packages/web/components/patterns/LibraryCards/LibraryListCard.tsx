@@ -29,6 +29,7 @@ import {
   SiteIcon,
   SwipeAction,
 } from '../../elements/stash'
+import { Ribbon } from '../../elements/stash/Ribbon'
 import { motion } from '../../elements/stash/motion'
 import { styled, theme } from '../../tokens/stitches.config'
 import { CardMenu } from '../CardMenu'
@@ -96,6 +97,13 @@ const Thumb = styled(CoverImage, {
     width: `${THUMB.phoneWidth}px`,
     height: `${THUMB.phoneHeight}px`,
   },
+})
+
+// A part-read item keeps its place: a ribbon hangs from the picture's top.
+const ThumbWrap = styled('div', {
+  position: 'relative',
+  lineHeight: 0,
+  '& > svg': { position: 'absolute', top: 0, right: '6px' },
 })
 
 // Stands in for a missing image: the publication's icon over its name, set
@@ -265,7 +273,11 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
     item.folder == 'following'
       ? { label: 'Save', icon: <Bookmark size={16} />, action: 'move-to-inbox' }
       : item.state === State.ARCHIVED
-      ? { label: 'Unarchive', icon: <Archive size={16} />, action: 'unarchive' }
+      ? {
+          label: 'Unarchive',
+          icon: <Archive size={16} />,
+          action: 'unarchive',
+        }
       : { label: 'Archive', icon: <Archive size={16} />, action: 'archive' }
 
   const open = (newTab = false) => {
@@ -337,6 +349,7 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
         onOpenChange={setMenuOpen}
       >
         <Row
+          data-stash-row=""
           data-menu-open={menuOpen}
           data-selecting={selecting}
           onClick={(event) => {
@@ -356,7 +369,9 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
             </Leading>
           )}
           <Body>
-            <Title data-morph-title={item.id}>{item.title}</Title>
+            <Title className="row-title" data-morph-title={item.id}>
+              {item.title}
+            </Title>
             {summary && <Summary>{summary}</Summary>}
             <Meta>
               <SiteIcon
@@ -395,20 +410,25 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
               ))}
             </Meta>
           </Body>
-          <Thumb
-            src={item.image}
-            fallback={
-              <PublicationTile>
-                <SiteIcon
-                  src={item.siteIcon}
-                  fallbackSrc={faviconFor(item.originalArticleUrl, item.url)}
-                  name={source || item.title}
-                  size={18}
-                />
-                {source && <span>{source}</span>}
-              </PublicationTile>
-            }
-          />
+          <ThumbWrap>
+            <Thumb
+              src={item.image}
+              fallback={
+                <PublicationTile>
+                  <SiteIcon
+                    src={item.siteIcon}
+                    fallbackSrc={faviconFor(item.originalArticleUrl, item.url)}
+                    name={source || item.title}
+                    size={18}
+                  />
+                  {source && <span>{source}</span>}
+                </PublicationTile>
+              }
+            />
+            {progress >= 3 && progress <= 97 && (
+              <Ribbon width={8} height={18} />
+            )}
+          </ThumbWrap>
           {!selecting && (
             <Actions onClick={stop}>
               {item.folder == 'following' ? (

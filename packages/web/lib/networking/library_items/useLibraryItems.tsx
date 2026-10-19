@@ -23,6 +23,7 @@ import {
   GQL_SET_LINK_ARCHIVED,
   GQL_UPDATE_LIBRARY_ITEM,
 } from './gql'
+import { announceMoment } from '../../moments'
 
 const updateItemStateInCache = (
   queryClient: QueryClient,
@@ -395,6 +396,9 @@ export const useArchiveItem = () => {
       slug: string
       input: SetLinkArchivedInput
     }) => {
+      if (variables.input.archived) {
+        announceMoment('archived')
+      }
       await queryClient.cancelQueries({ queryKey: ['libraryItems'] })
       const previousState = {
         previousDetail: queryClient.getQueryData([
@@ -787,6 +791,9 @@ export const useMoveItemToFolder = () => {
       slug: string | undefined
       folder: string
     }) => {
+      if (variables.folder == 'inbox') {
+        announceMoment('saved')
+      }
       await queryClient.cancelQueries({ queryKey: ['libraryItems'] })
       const previousState = {
         previousDetail: queryClient.getQueryData([
@@ -886,6 +893,14 @@ export const useSetItemLabels = () => {
   })
 }
 
+const hostOf = (url: string): string => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
+}
+
 export const useAddItem = () => {
   const queryClient = useQueryClient()
   const addItem = async (variables: {
@@ -916,6 +931,7 @@ export const useAddItem = () => {
       timezone: string | undefined
       locale: string | undefined
     }) => {
+      announceMoment('saved', hostOf(variables.url))
       await queryClient.cancelQueries({ queryKey: ['libraryItems'] })
       const previousState = {
         previousItems: queryClient.getQueryData(['libraryItems']),

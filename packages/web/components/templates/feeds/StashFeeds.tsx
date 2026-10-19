@@ -60,6 +60,7 @@ import {
   SwipeAction,
   UnseenDot,
 } from '../../elements/stash'
+import { Folio, useFeedsFolio } from '../../elements/stash/Folio'
 import { ease, motion } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
 import {
@@ -459,6 +460,15 @@ function SourceCount(props: {
 }
 
 // The page's title (Feeds or Watch) with its unseen count.
+const FolioRow = styled('div', {
+  maxWidth: '1180px',
+  margin: '0 auto 18px',
+  '@mdDown': { marginBottom: '12px' },
+  variants: {
+    wide: { true: { maxWidth: '1680px' } },
+  },
+})
+
 const Tabs = styled('div', {
   display: 'flex',
   alignItems: 'baseline',
@@ -1461,6 +1471,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     selected?.name ??
     collection?.name ??
     (tab == 'watch' ? 'All channels' : 'All feeds')
+  const folio = useFeedsFolio(watching ? 'channels' : 'feeds')
   const meta =
     total === undefined
       ? undefined
@@ -1775,6 +1786,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
                   : item.description
               }
               muted={itemSeen}
+              progress={item.readingProgressPercent}
               selected={peekItem ? item.id == peekItem.id : item.id == focusId}
               onOpen={() =>
                 watching
@@ -1845,6 +1857,9 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
 
   return (
     <Page>
+      <FolioRow wide={!!peekItem && peekInline}>
+        <Folio parts={folio.parts} live={folio.live} />
+      </FolioRow>
       <Tabs wide={!!peekItem && peekInline}>
         <TabLabel tab={tab} label={watching ? 'Watch' : 'Feeds'} />
         {watching ? (

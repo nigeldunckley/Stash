@@ -25,6 +25,9 @@ import {
 import { shortTimeAgo } from '../../lib/textFormatting'
 import { applyStoredTheme } from '../../lib/themeUpdater'
 import { showErrorToast, showSuccessToast } from '../../lib/toastHelpers'
+import { Switch } from '../../components/elements/stash/Switch'
+import { usePersistedState } from '../../lib/hooks/usePersistedState'
+import { playMomentSound, SOUNDS_KEY } from '../../lib/moments'
 
 const ACCOUNT_LIMIT = 50_000
 
@@ -176,6 +179,8 @@ export default function Account(): JSX.Element {
 
       <ExportGroup />
 
+      <DeviceGroup />
+
       <SettingsGroup footer="Deletes your account, saved items, highlights and notes.">
         <SettingsRowButton
           destructive
@@ -283,6 +288,31 @@ function ExportGroup(): JSX.Element {
           </SettingsRow>
         )
       })}
+    </SettingsGroup>
+  )
+}
+
+// Settings kept on this device only.
+function DeviceGroup(): JSX.Element {
+  const [sounds, setSounds] = usePersistedState<boolean>({
+    key: SOUNDS_KEY,
+    initialValue: false,
+  })
+  return (
+    <SettingsGroup
+      title="This device"
+      footer="A soft paper sound when you save, and a drawer closing when you archive."
+    >
+      <SettingsRow label="Sounds">
+        <Switch
+          label="Sounds"
+          checked={sounds}
+          onChange={(on) => {
+            setSounds(on)
+            if (on) playMomentSound('saved', true)
+          }}
+        />
+      </SettingsRow>
     </SettingsGroup>
   )
 }

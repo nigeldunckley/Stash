@@ -22,6 +22,8 @@ import { LayoutType } from '../homeFeed/HomeFeedContainer'
 import type { MultiSelectMode } from '../homeFeed/LibraryHeader'
 import { ConfirmationModal } from '../../patterns/ConfirmationModal'
 import { AddBulkLabelsModal } from '../article/AddBulkLabelsModal'
+import { Folio } from '../../elements/stash/Folio'
+import { useNavCount } from '../navMenu/sections'
 
 export type LibraryHeaderProps = {
   viewer: UserBasicData | undefined
@@ -184,9 +186,16 @@ export function LibraryHeader(props: LibraryHeaderProps): JSX.Element {
   const selecting = props.multiSelectMode !== 'off'
   const search = (props.searchTerm ?? '').trim()
   const filter = FILTERS.find((f) => f.query === search)?.value
+  // The same count as Saved in the sidebar.
+  const unread = useNavCount(
+    props.folder == 'inbox'
+      ? { kind: 'items', folder: 'inbox', query: 'is:unread -type:video' }
+      : undefined
+  )
 
   return (
     <Header layout={props.layout == 'GRID_LAYOUT' ? 'grid' : 'list'}>
+      <Folio parts={[unread > 0 && { text: `${unread} unread` }]} />
       <TitleRow>
         <Title>{title}</Title>
         <Trailing>

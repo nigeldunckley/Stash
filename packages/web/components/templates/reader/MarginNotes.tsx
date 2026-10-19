@@ -212,6 +212,20 @@ const markLede = (root: HTMLElement) => {
   first?.classList.add('st-lede')
 }
 
+// The last real paragraph of prose gets the end mark. Anything after it
+// that isn't prose (a bio in a list, a caption, a share box) is skipped.
+const markEnd = (root: HTMLElement) => {
+  root.querySelector('p.st-end')?.classList.remove('st-end')
+  const last = Array.from(root.querySelectorAll('p'))
+    .reverse()
+    .find(
+      (p) =>
+        (p.textContent ?? '').trim().length >= 40 &&
+        !p.closest('blockquote, figure, figcaption, li, table, aside, pre')
+    )
+  last?.classList.add('st-end')
+}
+
 type MarginNotesProps = {
   contentRef: MutableRefObject<HTMLDivElement | null>
   // Changes when the article's HTML is replaced.
@@ -235,6 +249,7 @@ export function MarginNotes(props: MarginNotesProps): JSX.Element | null {
       return
     }
     markLede(root)
+    markEnd(root)
     setNotes(collectNotes(root, props.pageUrls))
     setOpen(undefined)
     // eslint-disable-next-line react-hooks/exhaustive-deps
