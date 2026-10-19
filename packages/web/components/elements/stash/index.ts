@@ -1,7 +1,7 @@
 export { BottomSheet } from './BottomSheet'
 export { CoverImage } from './CoverImage'
 export { IconButton } from './IconButton'
-export { ItemList, ItemRow } from './ItemRow'
+export { ItemList, ItemRow, WireHour, WireRow } from './ItemRow'
 export { Kbd } from './Kbd'
 export { motion, pressable, reducedMotion, spring } from './motion'
 export { floatingShadow, glass, glassStrong, hairlineEdge } from './material'

@@ -1,8 +1,8 @@
 import { TypeCover, TypeCoverProps } from './TypeCover'
-import { forwardRef, HTMLAttributes, ReactNode } from 'react'
-import { styled } from '../../tokens/stitches.config'
+import { CSSProperties, forwardRef, HTMLAttributes, ReactNode } from 'react'
+import { keyframes, styled } from '../../tokens/stitches.config'
 import { CoverImage } from './CoverImage'
-import { motion } from './motion'
+import { motion, reducedMotion as reducedMotionQuery } from './motion'
 import { Ribbon } from './Ribbon'
 
 const Actions = styled('div', {
@@ -322,4 +322,202 @@ export const ItemList = styled('div', {
   overflow: 'hidden',
   // Rows may be wrapped (for example in SwipeAction), so divide the children.
   '& > * + *': { borderTop: '1px solid $stLine' },
+})
+
+// The Wire: the same row set as a newsroom wire. Time to the minute, the
+// source in mono, the headline on one line and its length, so forty items
+// fit on a screen. A row that has just arrived types its headline in
+// behind an orange cursor and stays warm for a minute.
+
+const typeIn = keyframes({
+  from: { clipPath: 'inset(0 100% 0 0)' },
+  to: { clipPath: 'inset(0 0 0 0)' },
+})
+
+const caret = keyframes({
+  '0%, 49%': { opacity: 1 },
+  '50%, 100%': { opacity: 0 },
+})
+
+const warm = keyframes({
+  from: {
+    background:
+      'color-mix(in srgb, var(--colors-stAccent) 9%, var(--colors-stSurface))',
+  },
+  to: { background: '$stSurface' },
+})
+
+const WireRoot = styled(Root, {
+  gridTemplateColumns: '18px 44px 150px minmax(0, 1fr) auto',
+  gap: '14px',
+  minHeight: '40px',
+  padding: '7px 12px',
+  alignItems: 'baseline',
+  [`& ${Leading}`]: { alignSelf: 'center' },
+  '@smDown': {
+    gridTemplateColumns: '18px auto minmax(0, 1fr) auto',
+    gridTemplateAreas: '"dot time source trail" "dot title title title"',
+    rowGap: '2px',
+    columnGap: '8px',
+    padding: '9px 12px',
+  },
+  '&[data-fresh]': {
+    animation: `${warm} 60s linear both`,
+    '& .row-title > span': {
+      animation: `${typeIn} var(--type-for) steps(var(--chars)) both`,
+    },
+    '& .row-title::after': {
+      content: '""',
+      display: 'inline-block',
+      width: '0.5em',
+      height: '1em',
+      marginLeft: '1px',
+      verticalAlign: '-0.12em',
+      background: '$stAccent',
+      animation: `${caret} 0.9s steps(1) var(--type-for) 3 both`,
+    },
+    [reducedMotionQuery]: {
+      animation: 'none',
+      '& .row-title > span': { animation: 'none' },
+      '& .row-title::after': { display: 'none' },
+    },
+  },
+})
+
+const WireTime = styled('time', {
+  fontFamily: '$mono',
+  fontSize: '12px',
+  color: '$stMuted',
+  fontVariantNumeric: 'tabular-nums',
+  '@smDown': { gridArea: 'time', fontSize: '11px' },
+  '[data-fresh] &': { color: '$stAccentText' },
+})
+
+const WireSource = styled('span', {
+  fontFamily: '$mono',
+  fontSize: '11px',
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+  color: '$stMuted',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  '@smDown': { gridArea: 'source', fontSize: '10px' },
+  '[data-fresh] &': { color: '$stAccentText' },
+})
+
+const WireTitle = styled('div', {
+  fontFamily: '$serif',
+  fontSize: '16px',
+  fontWeight: 500,
+  lineHeight: 1.3,
+  color: '$stInk',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  '& > span': { display: 'inline' },
+  '@smDown': { gridArea: 'title', whiteSpace: 'normal', fontSize: '15.5px' },
+})
+
+const WireTrail = styled(Trailing, {
+  '@smDown': { gridArea: 'trail' },
+})
+
+type WireRowProps = {
+  leading: ReactNode
+  title: string
+  morphId?: string
+  time: string
+  dateTime?: string
+  source?: string
+  length?: string
+  // Arrived since the wire was opened: types itself in.
+  fresh?: boolean
+  actions?: ReactNode
+  selected?: boolean
+  muted?: boolean
+  onOpen?: () => void
+  onFocus?: () => void
+}
+
+export const WireRow = forwardRef<
+  HTMLDivElement,
+  WireRowProps &
+    Omit<
+      HTMLAttributes<HTMLDivElement>,
+      keyof WireRowProps | 'onClick' | 'onKeyDown'
+    >
+>(function WireRow(allProps, ref) {
+  const {
+    leading,
+    title,
+    morphId,
+    time,
+    dateTime,
+    source,
+    length,
+    fresh,
+    actions,
+    selected,
+    muted,
+    onOpen,
+    onFocus,
+    ...rest
+  } = allProps
+  const chars = Math.min(80, title.length)
+  return (
+    <WireRoot
+      {...rest}
+      ref={ref}
+      data-stash-row=""
+      data-fresh={fresh ? '' : undefined}
+      role="link"
+      tabIndex={0}
+      selected={selected}
+      muted={muted}
+      style={
+        fresh
+          ? ({
+              '--chars': chars,
+              '--type-for': `${Math.min(1400, chars * 22)}ms`,
+            } as CSSProperties)
+          : undefined
+      }
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest('button, a')) {
+          return
+        }
+        onOpen?.()
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' && event.target === event.currentTarget) {
+          onOpen?.()
+        }
+      }}
+      onFocus={onFocus}
+    >
+      <Leading>{leading}</Leading>
+      <WireTime dateTime={dateTime}>{time}</WireTime>
+      <WireSource>{source}</WireSource>
+      <WireTitle className="row-title" data-morph-title={morphId}>
+        <span>{title}</span>
+      </WireTitle>
+      <WireTrail>
+        {length && <Meta>{length}</Meta>}
+        {actions && <Actions>{actions}</Actions>}
+      </WireTrail>
+    </WireRoot>
+  )
+})
+
+// An hour mark between runs of wire rows.
+export const WireHour = styled('div', {
+  padding: '14px 12px 5px 44px',
+  fontFamily: '$mono',
+  fontSize: '10px',
+  letterSpacing: '0.1em',
+  textTransform: 'uppercase',
+  color: '$stMuted',
+  background: '$stSurface',
+  borderBottom: '1px solid $stInk',
 })

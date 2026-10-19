@@ -6,6 +6,7 @@ import {
   Bookmark,
   CaretRight,
   Checks,
+  Stack,
   Plus,
   SidebarSimple,
 } from '@phosphor-icons/react'
@@ -1547,6 +1548,16 @@ export function StashHome(): JSX.Element {
                     },
                   ]}
                 />
+                {tab == 'read' && (total ?? 0) >= 3 && (
+                  <TextButton
+                    aria-label="Sort them one at a time"
+                    title="Sort them one at a time"
+                    onClick={() => router.push('/l/subscriptions?sort=1')}
+                  >
+                    <Stack size={14} />
+                    <span>Sort them</span>
+                  </TextButton>
+                )}
                 <TextButton
                   aria-label="Mark all seen"
                   title="Mark all seen"
