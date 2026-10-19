@@ -7,6 +7,8 @@ struct PageHeader<Trailing: View>: View {
   let title: String
   var detail: String?
   var accentDetail = false
+  /// The mono line and double rule above the title.
+  var folio: FolioContent?
   @ViewBuilder var trailing: () -> Trailing
 
   #if os(macOS)
@@ -14,6 +16,20 @@ struct PageHeader<Trailing: View>: View {
   #endif
 
   var body: some View {
+    VStack(alignment: .leading, spacing: 18) {
+      if let folio { FolioView(content: folio) }
+      titleRow
+    }
+    .padding(.horizontal, PageLayout.gutter)
+    #if os(macOS)
+    // With the sidebar hidden, keep clear of the window buttons and the sidebar button.
+    .padding(.leading, sidebarHidden ? PageLayout.windowButtons : 0)
+    #endif
+    .padding(.top, 2)
+    .padding(.bottom, 20)
+  }
+
+  private var titleRow: some View {
     HStack(alignment: .center, spacing: 14) {
       Text(title)
         .font(.stPageTitle)
@@ -33,13 +49,6 @@ struct PageHeader<Trailing: View>: View {
       HStack(spacing: 8) { trailing() }
     }
     .frame(height: 38)
-    .padding(.horizontal, PageLayout.gutter)
-    #if os(macOS)
-    // With the sidebar hidden, keep clear of the window buttons and the sidebar button.
-    .padding(.leading, sidebarHidden ? PageLayout.windowButtons : 0)
-    #endif
-    .padding(.top, 2)
-    .padding(.bottom, 20)
   }
 }
 
@@ -60,12 +69,13 @@ struct StashPage<Trailing: View>: ViewModifier {
   let title: String
   var detail: String?
   var accentDetail = false
+  var folio: FolioContent?
   @ViewBuilder var trailing: () -> Trailing
 
   func body(content: Content) -> some View {
     #if os(macOS)
     VStack(spacing: 0) {
-      PageHeader(title: title, detail: detail, accentDetail: accentDetail, trailing: trailing)
+      PageHeader(title: title, detail: detail, accentDetail: accentDetail, folio: folio, trailing: trailing)
       content.frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .background(Color.stPage)
@@ -73,6 +83,14 @@ struct StashPage<Trailing: View>: ViewModifier {
     .toolbar(removing: .title)
     #else
     content
+      .safeAreaInset(edge: .top, spacing: 0) {
+        if let folio {
+          FolioView(content: folio)
+            .padding(.horizontal, PageLayout.gutter)
+            .padding(.vertical, 6)
+            .background(Color.stPage)
+        }
+      }
       .background(Color.stPage)
       .navigationTitle(title)
       .toolbar { ToolbarItemGroup(placement: .primaryAction) { trailing() } }
@@ -82,14 +100,14 @@ struct StashPage<Trailing: View>: ViewModifier {
 
 extension View {
   func stashPage<Trailing: View>(
-    _ title: String, detail: String? = nil, accentDetail: Bool = false,
+    _ title: String, detail: String? = nil, accentDetail: Bool = false, folio: FolioContent? = nil,
     @ViewBuilder trailing: @escaping () -> Trailing
   ) -> some View {
-    modifier(StashPage(title: title, detail: detail, accentDetail: accentDetail, trailing: trailing))
+    modifier(StashPage(title: title, detail: detail, accentDetail: accentDetail, folio: folio, trailing: trailing))
   }
 
-  func stashPage(_ title: String, detail: String? = nil, accentDetail: Bool = false) -> some View {
-    modifier(StashPage(title: title, detail: detail, accentDetail: accentDetail) { EmptyView() })
+  func stashPage(_ title: String, detail: String? = nil, accentDetail: Bool = false, folio: FolioContent? = nil) -> some View {
+    modifier(StashPage(title: title, detail: detail, accentDetail: accentDetail, folio: folio) { EmptyView() })
   }
 
   /// Centres content at the page's maximum width, 40pt from the edges on Mac.

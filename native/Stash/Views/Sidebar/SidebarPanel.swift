@@ -35,14 +35,18 @@ struct SidebarPanel: View {
           SidebarGroupLabel(title: "Read", isOpen: $readOpen)
           if readOpen {
             row("Feeds", "dot.radiowaves.up.forward", .feeds)
-            row("Saved", "bookmark", .saved)
+            SidebarRow(title: "Saved", ribbon: .saved, selected: section == .saved, action: { section = .saved }) {
+              LandingCount(kind: .saved)
+            }
+            .momentTarget(.saved)
             row("Highlights", "highlighter", .highlights)
             row("Discover", "safari", .discover) {
               if let discoverCount, discoverCount > 0 {
                 Text("\(discoverCount) new").font(.mono(11)).monospacedDigit().foregroundStyle(Color.stAccentText)
               }
             }
-            row("Archive", "archivebox", .archive)
+            row("Archive", "archivebox", .archive) { LandingCount(kind: .archived) }
+              .momentTarget(.archived)
           }
 
           SidebarGroupLabel(title: "Watch", isOpen: $watchOpen)
@@ -50,7 +54,7 @@ struct SidebarPanel: View {
             row("Latest", "play.rectangle", .channels) {
               if let channelsCount, channelsCount > 0 { Count(channelsCount, style: .badge) }
             }
-            row("Saved", "bookmark", .savedVideos)
+            SidebarRow(title: "Saved", ribbon: .saved, selected: section == .savedVideos) { section = .savedVideos }
             ForEach(collections) { collection in
               SidebarRow(
                 title: collection.name,
@@ -170,6 +174,7 @@ private struct CapturePopover: View {
     Task {
       do {
         try await Library.save(url: url)
+        Moments.shared.saved(title: url)
         status = "Saved. It's on its way to Saved."
         try? await Task.sleep(for: .seconds(1))
         done()

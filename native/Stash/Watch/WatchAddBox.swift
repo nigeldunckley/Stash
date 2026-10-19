@@ -173,6 +173,7 @@ struct WatchAddBox: View {
     Task {
       do {
         try await Library.save(url: url)
+        Moments.shared.saved(title: url)
         done.insert(url)
         onAdded()
       } catch {

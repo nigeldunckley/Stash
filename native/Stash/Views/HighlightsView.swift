@@ -28,7 +28,11 @@ struct HighlightsView: View {
       }
       .stashList()
       .overlay { emptyState }
-      .stashPage("Highlights", detail: highlights.isEmpty ? nil : "\(highlights.count)\(hasMore ? "+" : "")") {
+      .stashPage(
+        "Highlights",
+        detail: highlights.isEmpty ? nil : "\(highlights.count)\(hasMore ? "+" : "")",
+        folio: FolioContent(items: [FolioContent.today, "\(highlights.count)\(hasMore ? "+" : "") HIGHLIGHTS"])
+      ) {
         #if os(macOS)
         PageSearchField(text: $searchText, prompt: "Search highlights") { submittedSearch = searchText }
         #endif

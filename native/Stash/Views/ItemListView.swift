@@ -24,9 +24,12 @@ struct ItemListView<Tools: View>: View {
   var groupsByDay = false
   /// Called when a search is submitted.
   var onSearch: () -> Void = {}
+  /// The mono line above the title.
+  var folio: FolioContent?
   /// Controls for this list's header (or toolbar on iPhone).
   @ViewBuilder var tools: () -> Tools
 
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var selection: LibraryItem?
   @State private var toaster = Toaster()
   #if os(macOS)
@@ -65,7 +68,7 @@ struct ItemListView<Tools: View>: View {
   #if os(macOS)
   private var macList: some View {
     VStack(spacing: 0) {
-      PageHeader(title: title, detail: detail, accentDetail: showsUnseen) {
+      PageHeader(title: title, detail: detail, accentDetail: showsUnseen, folio: folio) {
         tools()
         if let search {
           PageSearchField(text: search, onSubmit: onSearch)
@@ -157,7 +160,7 @@ struct ItemListView<Tools: View>: View {
       .stashList()
       .overlay { if list.visibleItems.isEmpty { emptyState } }
       .toasts(toaster)
-      .stashPage(title, detail: detail, accentDetail: showsUnseen) { tools() }
+      .stashPage(title, detail: detail, accentDetail: showsUnseen, folio: folio) { tools() }
       .modifier(Searchable(text: search, onSearch: onSearch))
       .refreshable { await list.reload(query) }
       .task(id: query) { await list.load(query) }
@@ -191,6 +194,9 @@ struct ItemListView<Tools: View>: View {
   private func row(_ item: LibraryItem) -> some View {
     rowBase(item)
       .id(item.id)
+      #if os(macOS)
+      .transition(.fold(reduceMotion: reduceMotion))
+      #endif
       .stashListRow()
       .itemSwipes(item, unseen: showsUnseen && list.isUnseen(item), perform: perform)
       .itemMenu(item, unseen: showsUnseen && list.isUnseen(item), perform: perform)

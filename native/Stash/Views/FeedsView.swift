@@ -35,7 +35,12 @@ struct FeedsView: View {
       emptyTitle: showAll ? "No posts" : "All caught up",
       emptyMessage: showAll ? "Posts from the feeds you follow appear here." : "Nothing new from your feeds.",
       countLabel: showAll ? "posts" : "unseen",
-      groupsByDay: true
+      groupsByDay: true,
+      folio: FolioContent(
+        items: [FolioContent.today, "\(FolioData.shared.feeds) FEEDS"],
+        checked: true,
+        right: showAll ? nil : list.total.map { "\($0) UNSEEN" }
+      )
     ) {
       StashSegmented(selection: $showAll, [.init("Unseen", false), .init("All", true)])
       Button { markAllSeen() } label: { Label("Mark all seen", systemImage: "checkmark") }

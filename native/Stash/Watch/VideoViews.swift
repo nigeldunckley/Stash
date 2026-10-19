@@ -11,6 +11,7 @@ struct VideoCard: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 9) {
       VideoThumbnail(item: item)
+        .placeRibbon(item.isPartRead, inset: 6)
       VStack(alignment: .leading, spacing: 6) {
         Text(item.title)
           .font(.stVideoTitle)
@@ -45,6 +46,7 @@ struct VideoCard: View {
       .padding(.horizontal, 2)
     }
     .contentShape(Rectangle())
+    .momentSource(item)
   }
 }
 

@@ -54,9 +54,13 @@ struct ItemRow: View {
           .frame(width: summary == nil ? 72 : 88, height: summary == nil ? 48 : 60)
           .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
           .overlay(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
+          // Your place, on something you're part way through.
+          .placeRibbon(item.isPartRead, inset: 6)
         }
       }
     }
+    .placeRibbon(item.isPartRead && item.imageURL == nil)
+    .momentSource(item)
   }
 
   /// The feed's summary of the article, as the web shows under each row; videos have none.

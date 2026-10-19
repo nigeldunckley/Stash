@@ -6,6 +6,7 @@ struct SettingsView: View {
   @AppStorage("readerFontSize") private var fontSize = 20
   @AppStorage("readerFont") private var fontFamily = "Newsreader"
   @State private var confirmSignOut = false
+  @AppStorage("sounds") private var sounds = false
   @AppStorage("watchOnLeave") private var onLeave = "mini"
   @AppStorage("watchOnSwitch") private var onSwitch = "float"
   @Environment(\.openURL) private var openURL
@@ -46,6 +47,16 @@ struct SettingsView: View {
                   .accessibilityLabel("Larger text")
               }
               .buttonStyle(.text)
+            }
+          }
+
+          SettingsGroup("This device", footer: "A soft paper slip when you save and a drawer closing when you archive.") {
+            SettingsRow("Sounds", divider: false) {
+              Toggle("Sounds", isOn: $sounds)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .tint(Color.stAccent)
+                .controlSize(.small)
             }
           }
 

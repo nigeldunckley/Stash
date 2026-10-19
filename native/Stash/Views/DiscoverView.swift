@@ -61,7 +61,8 @@ struct DiscoverView: View {
         .padding(.bottom, 40)
       }
       .background(Color.stPage)
-      .stashPage("Discover", detail: fresh.isEmpty ? nil : "\(fresh.filter { $0.status == "NEW" }.count) new", accentDetail: true)
+      .stashPage("Discover", detail: fresh.isEmpty ? nil : "\(fresh.filter { $0.status == "NEW" }.count) new", accentDetail: true,
+        folio: FolioContent(items: [FolioContent.today, "UPDATED EACH NIGHT AT 03:00"]))
       .refreshable { await load() }
       .task { if result == nil { await load() } }
       .toasts(toaster)

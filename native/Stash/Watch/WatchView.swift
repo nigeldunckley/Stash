@@ -88,7 +88,7 @@ struct WatchView: View {
       videoList
       .overlay { emptyState }
       .toasts(toaster)
-      .stashPage(title, detail: detail, accentDetail: kind != .saved && !showAll) { tools }
+      .stashPage(title, detail: detail, accentDetail: kind != .saved && !showAll, folio: folio) { tools }
       .navigationDestination(for: LibraryItem.self) { item in
         PlayerScreen(item: item, queue: videos, actions: actions, perform: perform)
           .onAppear { list.markSeen(item) }
@@ -221,6 +221,16 @@ struct WatchView: View {
 
   private func continueCard(_ item: LibraryItem) -> some View {
     VideoCard(item: item, channelName: channelName(item), timeLeft: videoTimeLeft(item))
+  }
+
+  /// Latest's folio line: the date, your channels and when they were checked.
+  private var folio: FolioContent? {
+    guard isFront else { return nil }
+    return FolioContent(
+      items: [FolioContent.today, "\(FolioData.shared.channels) CHANNELS"],
+      checked: true,
+      right: showAll ? nil : list.total.map { "\($0) NEW" }
+    )
   }
 
   /// "12 new", "40 videos" or "8 saved" beside the title.

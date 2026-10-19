@@ -66,6 +66,8 @@ struct Subscription: Decodable, Identifiable, Hashable {
   /// The Watch collection a channel files its videos under.
   let collectionId: String?
   let includeShorts: Bool?
+  /// When Stash last checked the feed for new posts.
+  let lastFetchedAt: Date?
 
   /// Feed items record their feed by address and newsletter items by name,
   /// so that's what a `subscription:` search has to match.

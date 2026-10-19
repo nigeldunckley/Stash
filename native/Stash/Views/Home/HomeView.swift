@@ -45,6 +45,15 @@ struct HomeView: View {
     "in:following use:folders \(tab == .watch ? "type:video" : "-type:video") -is:seen sort:published-desc"
   }
 
+  /// "MONDAY 19 OCTOBER · 64 FEEDS · CHECKED 2 MIN AGO", and the day of Stash on the right.
+  private static var folio: FolioContent {
+    FolioContent(
+      items: [FolioContent.today, "\(FolioData.shared.feeds) FEEDS"],
+      checked: true,
+      right: FolioContent.volumeAndDay
+    )
+  }
+
   private static let videosQuery = "in:following use:folders type:video -is:seen sort:published-desc"
 
   var body: some View {
@@ -161,7 +170,10 @@ struct HomeView: View {
   private var content: some View {
     ZStack {
       VStack(spacing: 0) {
-        HomeHeader(capture: $capture, focus: $captureFocused, onSubmit: submitCapture)
+        VStack(alignment: .leading, spacing: 18) {
+          FolioView(content: Self.folio)
+          HomeHeader(capture: $capture, focus: $captureFocused, onSubmit: submitCapture)
+        }
           .padding(.horizontal, 40)
           // With the sidebar hidden, keep clear of the window buttons and sidebar button.
           .padding(.leading, sidebarHidden ? 84 : 0)
@@ -298,7 +310,8 @@ struct HomeView: View {
   /// A List, so rows swipe: right to save, left to archive.
   private var content: some View {
     List {
-      iPhoneHeader.plainListRow(top: 8)
+      FolioView(content: Self.folio).plainListRow(top: 8)
+      iPhoneHeader.plainListRow(top: 12)
       if showsEditionStrip {
         editionStrip.plainListRow()
       }
@@ -602,6 +615,7 @@ struct HomeView: View {
       Task {
         do {
           try await Library.save(url: url)
+          Moments.shared.saved(title: url)
           toaster.show("Saved")
           try? await Task.sleep(for: .seconds(2))
           await loadUpNext()

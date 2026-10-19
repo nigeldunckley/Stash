@@ -60,6 +60,8 @@ struct MacShell: View {
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .overlay { miniPlayer }
     }
+    // A saved card flying to Saved, or a hairline to Archive.
+    .overlay { flightLayer }
     .animation(.snappy(duration: 0.25), value: sidebarHidden)
     .animation(.snappy(duration: 0.25), value: player.host == .mini)
     .animation(.snappy(duration: 0.3), value: showingPlayer)
@@ -120,6 +122,17 @@ struct MacShell: View {
       }
     case .settings: SettingsView()
     }
+  }
+
+  @ViewBuilder
+  private var flightLayer: some View {
+    GeometryReader { geometry in
+      if !sidebarHidden, let moment = Moments.shared.current, let target = Moments.shared.targets[moment.kind] {
+        MomentFlight(moment: moment, target: target, origin: geometry.frame(in: .global).origin)
+          .id(moment.id)
+      }
+    }
+    .allowsHitTesting(false)
   }
 
   /// The video you left, in a corner of the page. Drag it to another corner.

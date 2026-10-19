@@ -8,6 +8,8 @@ struct SidebarRow<Trailing: View>: View {
   var symbol: String?
   /// A collection's colour, drawn as a dot in place of an icon.
   var dot: Color?
+  /// Saved rows show the ribbon, which lights up as saves land.
+  var ribbon: MomentKind?
   var selected = false
   var child = false
   let action: () -> Void
@@ -20,6 +22,8 @@ struct SidebarRow<Trailing: View>: View {
       HStack(spacing: 10) {
         if let dot {
           Circle().fill(dot).frame(width: 7, height: 7)
+        } else if let ribbon {
+          LandingRibbon(kind: ribbon).frame(width: 18)
         } else if let symbol {
           Image(systemName: symbol)
             .font(.system(size: 15, weight: .light))
@@ -48,8 +52,8 @@ struct SidebarRow<Trailing: View>: View {
 }
 
 extension SidebarRow where Trailing == EmptyView {
-  init(title: String, symbol: String? = nil, dot: Color? = nil, selected: Bool = false, child: Bool = false, action: @escaping () -> Void) {
-    self.init(title: title, symbol: symbol, dot: dot, selected: selected, child: child, action: action) { EmptyView() }
+  init(title: String, symbol: String? = nil, dot: Color? = nil, ribbon: MomentKind? = nil, selected: Bool = false, child: Bool = false, action: @escaping () -> Void) {
+    self.init(title: title, symbol: symbol, dot: dot, ribbon: ribbon, selected: selected, child: child, action: action) { EmptyView() }
   }
 }
 

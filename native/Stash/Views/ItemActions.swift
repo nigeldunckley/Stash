@@ -204,7 +204,12 @@ func runItemAction(
   restore: @escaping () -> Void,
   refresh: @escaping () async -> Void = {}
 ) {
-  if action.removesItem { withAnimation { remove() } }
+  switch action {
+  case .save: Moments.shared.saved(item)
+  case .archive: Moments.shared.archived(item)
+  default: break
+  }
+  if action.removesItem { withAnimation(.snappy(duration: 0.22)) { remove() } }
   Task {
     do {
       try await action.run(on: item)

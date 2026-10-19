@@ -25,6 +25,14 @@ struct SavedView: View {
     return [base, state, submittedSearch].filter { !$0.isEmpty }.joined(separator: " ")
   }
 
+  /// "MONDAY 19 OCTOBER · 42 SAVED · 6H 20M OF READING", or the archived count.
+  private var folio: FolioContent {
+    let count = list.total ?? list.visibleItems.count
+    if isArchive { return FolioContent(items: [FolioContent.today, "\(count) ARCHIVED"]) }
+    let minutes = list.visibleItems.filter { $0.progress < 0.03 }.compactMap(\.readingMinutes).reduce(0, +)
+    return FolioContent(items: [FolioContent.today, "\(count) SAVED", FolioContent.readingTime(minutes: minutes)])
+  }
+
   var body: some View {
     ItemListView(
       title: isArchive ? "Archive" : "Saved",
@@ -38,7 +46,8 @@ struct SavedView: View {
         : "Save from Feeds, or add a link with the + button.",
       search: $searchText,
       countLabel: isArchive ? "archived" : "saved",
-      onSearch: { submittedSearch = searchText }
+      onSearch: { submittedSearch = searchText },
+      folio: folio
     ) {
       #if os(iOS)
       if !archive {
@@ -83,6 +92,7 @@ struct SavedView: View {
     Task {
       do {
         try await Library.save(url: link)
+        Moments.shared.saved(title: link)
         // The server fetches the article in the background; give it a moment.
         try? await Task.sleep(for: .seconds(2))
         await list.reload(query)
