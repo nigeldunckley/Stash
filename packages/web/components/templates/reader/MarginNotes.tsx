@@ -210,6 +210,24 @@ const markLede = (root: HTMLElement) => {
         !p.closest('blockquote, figure, li, table, aside, pre')
     )
   first?.classList.add('st-lede')
+  // A drop cap needs a letter to start on and three lines to sit in.
+  root.querySelector('p.st-drop')?.classList.remove('st-drop')
+  const text = (first?.textContent ?? '').trim()
+  if (first && text.length >= 220 && /^["“‘']?\p{L}/u.test(text)) {
+    first.classList.add('st-drop')
+  }
+}
+
+// Rows of asterisks, dots or the like between sections become the same
+// orange square as a real section break.
+const BREAK = /^[\s*•·⁂∗✻★☆◆◇~#=_\-–—]{1,24}$/
+const markBreaks = (root: HTMLElement) => {
+  root.querySelectorAll('p').forEach((p) => {
+    const text = (p.textContent ?? '').trim()
+    if (text && BREAK.test(text) && /[*•·⁂∗✻★☆◆◇~#]/.test(text)) {
+      p.classList.add('st-break')
+    }
+  })
 }
 
 // The last real paragraph of prose gets the end mark. Anything after it
@@ -249,6 +267,7 @@ export function MarginNotes(props: MarginNotesProps): JSX.Element | null {
       return
     }
     markLede(root)
+    markBreaks(root)
     markEnd(root)
     setNotes(collectNotes(root, props.pageUrls))
     setOpen(undefined)

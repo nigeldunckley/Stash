@@ -9,6 +9,7 @@ import {
 } from '../../../lib/hooks/useScrollWatcher'
 import { MarginNotes } from '../reader/MarginNotes'
 import { PlaceMarker } from '../reader/PlaceMarker'
+import { PullQuote } from '../reader/PullQuote'
 import {
   MutableRefObject,
   useCallback,
@@ -42,6 +43,8 @@ export type ArticleProps = {
   isAppleAppEmbed: boolean
   // The article's own addresses, for telling same-page links apart.
   pageUrls?: string[]
+  // Your highlights' text, for the pull quote.
+  highlightQuotes?: string[]
 }
 
 type PageCoordinates = {
@@ -421,6 +424,11 @@ export function Article(props: ArticleProps): JSX.Element {
         contentRef={articleContentRef}
         contentKey={props.content}
         pageUrls={props.pageUrls ?? []}
+      />
+      <PullQuote
+        contentRef={articleContentRef}
+        contentKey={props.content}
+        highlights={props.highlightQuotes ?? []}
       />
       <PlaceMarker
         contentRef={articleContentRef}

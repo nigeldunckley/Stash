@@ -258,13 +258,30 @@
   align-items: center;
 }
 
-/* A section break: a short centred rule. */
+/* A section break: a small orange square, as the end mark is. Rows of
+   asterisks and the like that articles use as breaks get the same. */
 .article-inner-css hr {
-  width: 3em;
-  height: 1px;
-  margin: 2.2em auto;
+  width: 7px;
+  height: 7px;
+  margin: 2.4em auto;
   border: none;
-  background: var(--font-color-muted);
+  background: var(--colors-stAccent);
+}
+.article-inner-css p.st-break {
+  height: 7px;
+  /* In px: with the text hidden at size 0, em margins would vanish. */
+  margin: 40px auto;
+  font-size: 0;
+  line-height: 0;
+  color: transparent;
+  text-align: center;
+}
+.article-inner-css p.st-break::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  background: var(--colors-stAccent);
 }
 
 .article-inner-css table {
@@ -787,6 +804,48 @@
 .article-inner-css p.st-lede::first-line {
   font-variant-caps: all-small-caps;
   letter-spacing: 0.05em;
+}
+
+/* A drop cap three lines deep on the opening paragraph, set by the reader
+   when it starts with a letter and runs long enough to hold one. */
+.article-inner-css p.st-drop::first-letter {
+  -webkit-initial-letter: 3;
+  initial-letter: 3;
+  margin-right: 0.12em;
+  font-weight: 500;
+  font-variant-caps: normal;
+  letter-spacing: 0;
+  color: var(--font-color);
+}
+@supports not ((initial-letter: 3) or (-webkit-initial-letter: 3)) {
+  .article-inner-css p.st-drop::first-letter {
+    float: left;
+    font-size: 3.7em;
+    line-height: 0.8;
+    padding: 0.08em 0.1em 0 0;
+  }
+}
+
+/* Prose wraps without a lonely last word, and quotes hang. */
+.article-inner-css p {
+  text-wrap: pretty;
+  hanging-punctuation: first;
+}
+
+/* A pull quote set between paragraphs, where there's no margin to hang it
+   in. It lives in an attribute, so the article's own text is unchanged. */
+.article-inner-css p[data-st-pull]::after {
+  content: attr(data-st-pull);
+  display: block;
+  margin: 1.5em 0 0.4em;
+  padding-top: 16px;
+  font-size: 1.3em;
+  font-style: italic;
+  line-height: 1.32;
+  text-align: left;
+  color: var(--font-color);
+  background: linear-gradient(var(--colors-stAccent), var(--colors-stAccent))
+    no-repeat 0 0 / 22px 2px;
 }
 
 /* The end mark: a small orange square after the article's last word, as

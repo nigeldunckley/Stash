@@ -17,6 +17,8 @@ import { QueryClient } from '@tanstack/react-query'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
 import React from 'react'
+import Router from 'next/router'
+import { installFoldOnBack } from '../lib/viewTransition'
 import { Toaster } from 'react-hot-toast'
 import { syncThemeColor } from '../lib/themeUpdater'
 
@@ -79,6 +81,7 @@ const useThemeColor = () => {
 
 export function OmnivoreApp({ Component, pageProps }: AppProps): JSX.Element {
   useThemeColor()
+  useEffect(() => installFoldOnBack(Router), [])
 
   return (
     <ConditionalCaptchaProvider>

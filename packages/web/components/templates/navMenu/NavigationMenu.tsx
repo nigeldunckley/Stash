@@ -70,6 +70,8 @@ export function NavigationMenu(props: NavigationMenuProps): JSX.Element {
           border: '1px solid $thBorderColor',
           borderRadius: '14px',
           boxShadow: '$cardBoxShadow',
+          // Stays put while pages change beneath it.
+          viewTransitionName: 'stash-sidebar',
           overflowY: 'auto',
           overflowX: 'hidden',
           '&::-webkit-scrollbar': {
