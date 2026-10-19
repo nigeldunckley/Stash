@@ -12,6 +12,7 @@ struct WireRow: View {
   var selected = false
 
   @State private var typed: Int?
+  @State private var width: CGFloat = 600
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private var source: String { (subscriptionName ?? item.source).uppercased() }
@@ -35,12 +36,21 @@ struct WireRow: View {
     .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
     .contentShape(Rectangle())
     .momentSource(item)
+    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     .task(id: arrived) { await typeIn() }
   }
 
   @ViewBuilder
   private var content: some View {
     #if os(macOS)
+    if width < 520 { stacked } else { wide }
+    #else
+    stacked
+    #endif
+  }
+
+  /// Time, source and title in a row, on a wide Mac list.
+  private var wide: some View {
     HStack(alignment: .firstTextBaseline, spacing: 12) {
       Circle()
         .fill(unseen ? Color.stAccent : Color.clear)
@@ -64,7 +74,10 @@ struct WireRow: View {
     }
     .padding(.horizontal, 14)
     .padding(.vertical, 8)
-    #else
+  }
+
+  /// Time and source above the headline: iPhone, and narrow Mac lists.
+  private var stacked: some View {
     VStack(alignment: .leading, spacing: 3) {
       HStack(spacing: 8) {
         if unseen { Circle().fill(Color.stAccent).frame(width: 6, height: 6) }
@@ -79,7 +92,6 @@ struct WireRow: View {
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 9)
-    #endif
   }
 
   private var headline: some View {

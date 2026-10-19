@@ -2,7 +2,9 @@ import SwiftUI
 
 /// One article in a list, as on the web: favicon, a two-line Newsreader title with its source
 /// underneath, up to two lines of summary, the age and length in mono, and a thumbnail when
-/// there's an image (88 × 60 beside a summary, 72 × 48 without).
+/// there's an image (88 × 60 beside a summary, 72 × 48 without). In a narrow list (Mac, beside the
+/// reader) it goes compact: three lines of title, then the source, age and length on one line,
+/// a smaller cover and no summary, rather than squeezing everything onto one line.
 struct ItemRow: View {
   let item: LibraryItem
   var subscriptionName: String?
@@ -10,6 +12,17 @@ struct ItemRow: View {
   var selected = false
   /// The 1pt line under the row; off for the last row in a bordered box.
   var divider = true
+
+  @State private var width: CGFloat = 600
+
+  /// Narrow enough that the side-by-side layout would cut everything off.
+  private var compact: Bool {
+    #if os(macOS)
+    width < 520
+    #else
+    false
+    #endif
+  }
 
   var body: some View {
     StashRow(selected: selected, hasThumbnail: true, divider: divider) {
@@ -22,18 +35,22 @@ struct ItemRow: View {
             .font(.stRowTitle)
             .tracking(Tracking.rowTitle)
             .foregroundStyle(Color.stInk)
-            .lineLimit(2)
+            .lineLimit(compact ? 3 : 2)
             .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
           HStack(spacing: 6) {
             Text(subscriptionName ?? item.source)
               .font(.stSmall)
               .lineLimit(1)
+              .layoutPriority(-1)
             #if os(iOS)
             meta
+            #else
+            if compact { meta }
             #endif
           }
           .foregroundStyle(Color.stMuted)
-          if let summary {
+          if let summary, !compact {
             Text(summary)
               .font(.stExcerpt)
               .lineSpacing(2)
@@ -46,7 +63,7 @@ struct ItemRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
 
         #if os(macOS)
-        meta
+        if !compact { meta }
         #endif
 
         Group {
@@ -56,7 +73,7 @@ struct ItemRow: View {
             TypeCover(item: item)
           }
         }
-        .frame(width: summary == nil ? 72 : 88, height: summary == nil ? 48 : 60)
+        .frame(width: compact ? 60 : summary == nil ? 72 : 88, height: compact ? 44 : summary == nil ? 48 : 60)
         .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
         // Your place, on something you're part way through.
@@ -64,6 +81,7 @@ struct ItemRow: View {
       }
     }
     .momentSource(item)
+    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
   }
 
   /// The feed's summary of the article, as the web shows under each row; videos have none.

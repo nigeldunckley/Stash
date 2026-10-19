@@ -48,7 +48,7 @@ struct ItemListView<Tools: View>: View {
     #if os(macOS)
     HSplitView {
       macList
-        .frame(minWidth: 380, maxWidth: .infinity)
+        .frame(minWidth: 400, maxWidth: .infinity)
       readerPane
         .frame(minWidth: 420, idealWidth: 520, maxWidth: 860, maxHeight: .infinity)
     }
