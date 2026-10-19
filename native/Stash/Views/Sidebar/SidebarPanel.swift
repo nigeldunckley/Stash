@@ -17,6 +17,7 @@ struct SidebarPanel: View {
   @Environment(\.colorScheme) private var colorScheme
   @AppStorage("sidebarReadOpen") private var readOpen = true
   @AppStorage("sidebarWatchOpen") private var watchOpen = true
+  @AppStorage("sidebarHidden") private var sidebarHidden = false
   /// The + button's save box, also opened by ⌘N.
   @Binding var capturing: Bool
 
@@ -95,6 +96,9 @@ struct SidebarPanel: View {
         .tracking(-0.34)
         .foregroundStyle(Color.stInk)
       Spacer(minLength: 0)
+      SidebarIconButton(symbol: "sidebar.left", help: "Hide the sidebar (⌃⌘S)") {
+        withAnimation(.snappy(duration: 0.25)) { sidebarHidden = true }
+      }
       SidebarIconButton(symbol: "plus", help: "Save a link (⌘N)") { capturing = true }
         .popover(isPresented: $capturing, arrowEdge: .bottom) {
           CapturePopover { capturing = false }

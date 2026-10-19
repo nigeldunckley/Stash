@@ -65,14 +65,19 @@ struct FolioView: View {
   var body: some View {
     TimelineView(.periodic(from: .now, by: 30)) { context in
       VStack(alignment: .leading, spacing: 10) {
-        HStack(spacing: 0) {
-          line(now: context.date)
-          Spacer(minLength: 12)
-          #if os(macOS)
-          if let right = content.right {
-            Text(right).foregroundStyle(Color.stMuted)
+        // As much as fits: everything, then without the right-hand count, then fewer details.
+        ViewThatFits(in: .horizontal) {
+          ForEach(variants, id: \.self) { variant in
+            HStack(spacing: 0) {
+              line(now: context.date, parts: Array(parts.prefix(variant.parts)), checked: variant.checked)
+              Spacer(minLength: 12)
+              #if os(macOS)
+              if variant.right, let right = content.right {
+                Text(right).foregroundStyle(Color.stMuted)
+              }
+              #endif
+            }
           }
-          #endif
         }
         .font(.mono(10.5, .medium))
         .tracking(0.9)
@@ -99,14 +104,31 @@ struct FolioView: View {
     #endif
   }
 
-  private func line(now: Date) -> some View {
+  private struct Variant: Hashable {
+    let parts: Int
+    let checked: Bool
+    let right: Bool
+  }
+
+  /// From the full line down to just the date.
+  private var variants: [Variant] {
+    var result = [Variant(parts: parts.count, checked: true, right: true),
+                  Variant(parts: parts.count, checked: true, right: false)]
+    for count in stride(from: parts.count, through: 1, by: -1) {
+      result.append(Variant(parts: count, checked: false, right: false))
+    }
+    return result
+  }
+
+  private func line(now: Date, parts: [String], checked showChecked: Bool) -> some View {
     HStack(spacing: 0) {
       ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
         Text(index == 0 ? part : " · \(part)")
           .foregroundStyle(index == 0 ? Color.stInk : Color.stMuted)
+          .fixedSize()
       }
-      if content.checked, let checked = data.checked {
-        Text(" · \(checkedText(checked, now: now))").foregroundStyle(Color.stMuted)
+      if showChecked, content.checked, let checked = data.checked {
+        Text(" · \(checkedText(checked, now: now))").foregroundStyle(Color.stMuted).fixedSize()
         if now.timeIntervalSince(checked) < 600 {
           Circle().fill(Color.stAccent).frame(width: 6, height: 6).padding(.leading, 6)
         }

@@ -65,9 +65,14 @@ struct MacShell: View {
           expandedPlayer(item).zIndex(2)
         }
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+      // A page too wide for the space never slides under the sidebar or off the window.
+      // Clips the sides only, so Home's dimming can still reach up under the title bar.
+      .mask { Rectangle().ignoresSafeArea(edges: .top) }
       .overlay { miniPlayer }
     }
+    // The window can't shrink below what a list and its reader need beside the sidebar.
+    .frame(minWidth: 1000, minHeight: 560)
     // A saved card flying to Saved, or a hairline to Archive.
     .overlay { flightLayer }
     .animation(.snappy(duration: 0.25), value: sidebarHidden)
@@ -76,12 +81,15 @@ struct MacShell: View {
     .background(Color.stPage)
     .containerBackground(Color.stPage, for: .window)
     .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+    // With the sidebar open its own button hides it; this one only brings it back.
     .toolbar {
-      ToolbarItem(placement: .navigation) {
-        Button { sidebarHidden.toggle() } label: {
-          Label(sidebarHidden ? "Show Sidebar" : "Hide Sidebar", systemImage: "sidebar.left")
+      if sidebarHidden {
+        ToolbarItem(placement: .navigation) {
+          Button { sidebarHidden = false } label: {
+            Label("Show Sidebar", systemImage: "sidebar.left")
+          }
+          .help("Show the sidebar (⌃⌘S)")
         }
-        .help(sidebarHidden ? "Show the sidebar (⌃⌘S)" : "Hide the sidebar (⌃⌘S)")
       }
     }
     .onReceive(NotificationCenter.default.publisher(for: .stashCapture)) { _ in

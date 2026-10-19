@@ -29,7 +29,30 @@ struct PageHeader<Trailing: View>: View {
     .padding(.bottom, 20)
   }
 
+  /// Title and tools on one line when they fit; otherwise the tools go on their own line
+  /// underneath, scrolling sideways if even that is too narrow, so nothing spills off the page.
   private var titleRow: some View {
+    ViewThatFits(in: .horizontal) {
+      HStack(alignment: .center, spacing: 14) {
+        titleText
+        Spacer(minLength: 16)
+        tools
+      }
+      .frame(height: 38)
+
+      VStack(alignment: .leading, spacing: 12) {
+        titleText.frame(height: 38)
+        ScrollView(.horizontal, showsIndicators: false) { tools }
+          .scrollBounceBehavior(.basedOnSize)
+      }
+    }
+  }
+
+  private var tools: some View {
+    HStack(spacing: 8) { trailing() }.fixedSize()
+  }
+
+  private var titleText: some View {
     HStack(alignment: .center, spacing: 14) {
       Text(title)
         .font(.stPageTitle)
@@ -45,10 +68,8 @@ struct PageHeader<Trailing: View>: View {
           .padding(.top, 6)
           .lineLimit(1)
       }
-      Spacer(minLength: 16)
-      HStack(spacing: 8) { trailing() }
     }
-    .frame(height: 38)
+    .fixedSize()
   }
 }
 
