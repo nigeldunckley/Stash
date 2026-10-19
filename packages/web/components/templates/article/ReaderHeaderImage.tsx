@@ -8,6 +8,8 @@ const Figure = styled('figure', {
   overflow: 'hidden',
   borderRadius: '$md',
   background: 'color-mix(in srgb, var(--font-color) 6%, transparent)',
+  backgroundSize: 'cover',
+  backgroundPosition: 'center',
   img: {
     display: 'block',
     width: '100%',
@@ -18,6 +20,9 @@ const Figure = styled('figure', {
     transition: `opacity ${motion.slow}`,
   },
   '&[data-loaded="true"] img': { opacity: 1 },
+  // Until the picture arrives, hold a wide space for it.
+  '&:not([data-loaded="true"])': { aspectRatio: '16 / 9', maxHeight: '62vh' },
+  '&[data-loaded="true"]': { backgroundImage: 'none !important' },
   '@mdDown': { margin: '4px 0 22px', borderRadius: '$sm' },
   '@media print': { display: 'none' },
 })
@@ -114,7 +119,20 @@ export function ReaderHeaderImage(
   }
 
   return (
-    <Figure data-loaded={loadedSrc === props.src} aria-hidden="true">
+    <Figure
+      data-loaded={loadedSrc === props.src}
+      data-unfold-hero=""
+      aria-hidden="true"
+      // The list's thumbnail is already loaded, so it holds the place (and
+      // gives the Unfold something to grow into) until the full picture is in.
+      style={
+        props.thumbnail
+          ? {
+              backgroundImage: `url("${props.thumbnail.replace(/"/g, '%22')}")`,
+            }
+          : undefined
+      }
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={props.src}

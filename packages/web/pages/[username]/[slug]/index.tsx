@@ -45,6 +45,7 @@ import {
   useUpdateHighlight,
 } from '../../../lib/networking/highlights/useItemHighlights'
 import { useGetViewer } from '../../../lib/networking/viewer/useGetViewer'
+import { foldBackTo } from '../../../lib/viewTransition'
 
 const PdfArticleContainerNoSSR = dynamic<PdfArticleContainerProps>(
   () =>
@@ -131,7 +132,7 @@ export default function Reader(): JSX.Element {
 
   const goBack = useCallback(() => {
     const navReturn = window.localStorage.getItem('nav-return')
-    router.push(navReturn ?? '/l/home', undefined, { scroll: false })
+    foldBackTo(router, navReturn ?? '/l/home', { scroll: false })
   }, [router])
 
   const actionHandler = useCallback(
@@ -344,7 +345,7 @@ export default function Reader(): JSX.Element {
         perform: () => {
           const navReturn = window.localStorage.getItem('nav-return')
           if (navReturn) {
-            router.push(navReturn, navReturn, { scroll: false })
+            foldBackTo(router, navReturn, { scroll: false })
             return
           }
           const query = window.sessionStorage.getItem('q')
@@ -370,6 +371,12 @@ export default function Reader(): JSX.Element {
           }
           if (showHighlightsModal) {
             setShowHighlightsModal(false)
+            return
+          }
+          // Escape folds the article back into the list it came from.
+          const navReturn = window.localStorage.getItem('nav-return')
+          if (navReturn) {
+            foldBackTo(router, navReturn, { scroll: false })
             return
           }
           const query = window.sessionStorage.getItem('q')

@@ -16,10 +16,8 @@ const Head = styled('header', {
   display: 'grid',
   width: '100%',
   marginBottom: '28px',
-  paddingBottom: '22px',
-  borderBottom: '1px solid $stLine',
   color: 'var(--font-color)',
-  '@smDown': { marginBottom: '20px', paddingBottom: '16px' },
+  '@smDown': { marginBottom: '20px' },
 })
 
 const Meta = styled('div', {
@@ -28,14 +26,15 @@ const Meta = styled('div', {
   alignItems: 'center',
   gap: '4px 10px',
   fontFamily: '$mono',
-  fontSize: '11.5px',
-  letterSpacing: '0.01em',
+  fontSize: '10.5px',
+  letterSpacing: '0.09em',
+  textTransform: 'uppercase',
   color: 'var(--font-color-muted)',
   '& > span + span::before': {
     content: '"·"',
     marginRight: '10px',
   },
-  '@smDown': { fontSize: '10.5px' },
+  '@smDown': { fontSize: '10px' },
 })
 
 const Source = styled('span', {
@@ -43,27 +42,30 @@ const Source = styled('span', {
   alignItems: 'center',
   gap: '8px',
   minWidth: 0,
+  // The kicker: where it's from, in the accent, as a magazine names its
+  // section.
+  color: '$stAccentText',
 })
 
 // The title uses the reading face, so it always matches the text below.
 const Title = styled('h1', {
-  margin: '16px 0 0',
+  margin: '18px 0 0',
   fontFamily: 'var(--text-font-family)',
   fontWeight: 500,
-  fontSize: 'clamp(32px, 4.2vw, 46px)',
-  lineHeight: 1.08,
-  letterSpacing: '-0.018em',
+  fontSize: 'clamp(34px, 5vw, 54px)',
+  lineHeight: 1.02,
+  letterSpacing: '-0.024em',
   textWrap: 'balance',
   overflowWrap: 'break-word',
   color: 'var(--font-color)',
-  '@smDown': { fontSize: '29px', lineHeight: 1.1, marginTop: '12px' },
+  '@smDown': { fontSize: '31px', lineHeight: 1.06, marginTop: '14px' },
 })
 
 const Dek = styled('p', {
-  margin: '14px 0 0',
+  margin: '16px 0 0',
   fontFamily: 'var(--text-font-family)',
   fontStyle: 'italic',
-  fontSize: 'calc(var(--text-font-size) * 1.05)',
+  fontSize: 'calc(var(--text-font-size) * 1.12)',
   lineHeight: 1.42,
   color: 'var(--font-color-muted)',
   textWrap: 'pretty',
@@ -74,7 +76,11 @@ const Byline = styled('div', {
   flexWrap: 'wrap',
   alignItems: 'center',
   gap: '4px 8px',
-  marginTop: '18px',
+  marginTop: '22px',
+  // Set over a double rule, ink over a hairline, as the folios are.
+  padding: '10px 0',
+  borderTop: '1px solid var(--font-color)',
+  borderBottom: '1px solid $stLine',
   fontFamily: '$inter',
   fontSize: '13px',
   color: 'var(--font-color-muted)',
@@ -83,7 +89,8 @@ const Byline = styled('div', {
     content: '"·"',
     marginRight: '8px',
   },
-  '@smDown': { fontSize: '12px', marginTop: '14px' },
+  '&:empty': { padding: 0, height: '1px' },
+  '@smDown': { fontSize: '12px', marginTop: '16px' },
 })
 
 const Original = styled('a', {
@@ -171,7 +178,8 @@ export function ReaderArticleHead(props: ReaderArticleHeadProps): JSX.Element {
       </Meta>
       <Title data-testid="article-headline">{props.title}</Title>
       {dek && <Dek>{dek}</Dek>}
-      {(author || article.publishedAt || showOriginal) && (
+      {/* Always drawn: with nothing to say, it is just the rule. */}
+      {
         <Byline>
           {author && (
             <span>
@@ -194,7 +202,7 @@ export function ReaderArticleHead(props: ReaderArticleHeadProps): JSX.Element {
             </span>
           )}
         </Byline>
-      )}
+      }
     </Head>
   )
 }
