@@ -64,6 +64,23 @@ const originRow = (): HTMLElement | undefined => {
   return undefined
 }
 
+// Whether a scrolling container (the sidebar, when it holds many
+// collections) has scrolled the entry out of view.
+const clipped = (element: HTMLElement, rect: DOMRect): boolean => {
+  const middle = rect.top + rect.height / 2
+  for (
+    let parent = element.parentElement;
+    parent;
+    parent = parent.parentElement
+  ) {
+    const overflow = getComputedStyle(parent).overflowY
+    if (overflow == 'visible') continue
+    const box = parent.getBoundingClientRect()
+    if (middle < box.top || middle > box.bottom) return true
+  }
+  return false
+}
+
 // A navigation entry counts only while it is on screen (the sidebar on Mac,
 // the top bar on iPhone, which hides as you scroll).
 const visibleTarget = (name: string): HTMLElement | undefined => {
@@ -76,6 +93,8 @@ const visibleTarget = (name: string): HTMLElement | undefined => {
       rect.right <= 0 ||
       rect.bottom <= 0 ||
       rect.left >= window.innerWidth ||
+      rect.top >= window.innerHeight ||
+      clipped(element, rect) ||
       getComputedStyle(element).visibility == 'hidden'
     ) {
       continue
@@ -229,7 +248,11 @@ const sweep = async (
       { transform: 'scale(1)', boxShadow: '0 0 0 rgba(9, 9, 11, 0)' },
       { transform: 'scale(1.025) translateY(-3px)', boxShadow: raised },
     ],
-    { duration: LIFT_MS, easing: 'cubic-bezier(0.2, 0, 0, 1)', fill: 'forwards' }
+    {
+      duration: LIFT_MS,
+      easing: 'cubic-bezier(0.2, 0, 0, 1)',
+      fill: 'forwards',
+    }
   )
   await lift.finished.catch(() => undefined)
 
