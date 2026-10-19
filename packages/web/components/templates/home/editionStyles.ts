@@ -237,13 +237,6 @@ export const LeadCover = styled(CoverImage, {
   },
 })
 
-export const Fallback = styled('span', {
-  display: 'grid',
-  placeItems: 'center',
-  width: '100%',
-  height: '100%',
-})
-
 export const LeadCopy = styled('div', {
   display: 'grid',
   gap: '12px',

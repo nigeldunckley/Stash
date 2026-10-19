@@ -682,6 +682,54 @@ input[type='radio'] {
   object-fit: contain;
   object-position: left top;
 }
+/* The Unfold: the row's picture grows into the Reader's header image. */
+::view-transition-old(reader-hero),
+::view-transition-new(reader-hero) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+::view-transition-group(reader-hero) {
+  border-radius: 8px;
+  overflow: clip;
+}
+/* Opening, the list sinks away beneath the article; closing, it rises back. */
+html[data-unfold='open']::view-transition-old(root) {
+  animation: 300ms cubic-bezier(0.2, 0, 0, 1) both st-unfold-sink;
+}
+html[data-unfold='open']::view-transition-new(root) {
+  animation: 280ms 60ms cubic-bezier(0.2, 0, 0, 1) both st-unfold-arrive;
+}
+html[data-unfold='close']::view-transition-old(root) {
+  animation: 220ms cubic-bezier(0.2, 0, 0, 1) both st-unfold-leave;
+}
+html[data-unfold='close']::view-transition-new(root) {
+  animation: 340ms cubic-bezier(0.32, 0.72, 0, 1) both st-unfold-rise;
+}
+@keyframes st-unfold-sink {
+  to {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+}
+@keyframes st-unfold-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes st-unfold-leave {
+  to {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes st-unfold-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(*),
   ::view-transition-old(*),
