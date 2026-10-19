@@ -108,6 +108,7 @@ import {
 } from './feedRowParts'
 import { DiscoverPill } from '../discover/DiscoverPill'
 import { navigateWithMorph } from '../../../lib/viewTransition'
+import { typeCoverFor } from '../../elements/stash/TypeCover'
 
 const Page = styled('main', {
   width: '100%',
@@ -1744,6 +1745,9 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
               title={item.title}
               morphId={item.id}
               image={item.image}
+              cover={
+                watching ? undefined : typeCoverFor(item, sourceName(item))
+              }
               subtitle={
                 <RowSource>
                   {!selected && (

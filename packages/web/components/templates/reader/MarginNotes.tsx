@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { MAP_ROOM, marginMapShown } from './MarginMap'
 import { styled } from '../../tokens/stitches.config'
 import { motion } from '../../elements/stash/motion'
 
@@ -291,7 +292,9 @@ export function MarginNotes(props: MarginNotesProps): JSX.Element | null {
       right =
         wrapperRect.right - parseFloat(getComputedStyle(wrapper).paddingRight)
     }
-    const room = right - containerRect.right - GAP - 24
+    // The margin map takes the outer edge when it's showing.
+    const room =
+      right - containerRect.right - GAP - 24 - (marginMapShown() ? MAP_ROOM : 0)
     const fits = room >= MIN_NOTE_WIDTH
     setInMargin(fits)
     setWidth(Math.min(NOTE_WIDTH, Math.max(MIN_NOTE_WIDTH, room)))

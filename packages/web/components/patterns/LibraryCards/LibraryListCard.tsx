@@ -11,11 +11,8 @@ import { State } from '../../../lib/networking/fragments/articleFragment'
 import { useRestoreItem } from '../../../lib/networking/library_items/useLibraryItems'
 import { formatMinutes, minutesLeft } from '../../../lib/readingTime'
 import { navigateWithMorph } from '../../../lib/viewTransition'
-import {
-  faviconFor,
-  siteName,
-  timeAgoInSentence,
-} from '../../../lib/textFormatting'
+import { TypeCover, typeCoverFor } from '../../elements/stash/TypeCover'
+import { siteName, timeAgoInSentence } from '../../../lib/textFormatting'
 import { sortedLabels } from '../../../lib/labelsSort'
 import { Box } from '../../elements/LayoutPrimitives'
 import { LoadingBar } from '../../elements/LoadingBar'
@@ -104,35 +101,6 @@ const ThumbWrap = styled('div', {
   position: 'relative',
   lineHeight: 0,
   '& > svg': { position: 'absolute', top: 0, right: '6px' },
-})
-
-// Stands in for a missing image: the publication's icon over its name, set
-// like a masthead in the reading face, so rows without pictures still look
-// finished.
-const PublicationTile = styled('span', {
-  display: 'grid',
-  placeItems: 'center',
-  alignContent: 'center',
-  gap: '6px',
-  width: '100%',
-  height: '100%',
-  padding: '8px',
-  boxSizing: 'border-box',
-  fontFamily: '$serif',
-  fontSize: '13px',
-  fontWeight: 500,
-  lineHeight: 1.15,
-  letterSpacing: '-0.005em',
-  color: '$stInk2',
-  textAlign: 'center',
-  '& > span:last-child': {
-    display: '-webkit-box',
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: 'vertical',
-    overflow: 'hidden',
-    overflowWrap: 'anywhere',
-  },
-  '@smDown': { fontSize: '12px', gap: '4px', padding: '6px' },
 })
 
 const Row = styled('div', {
@@ -414,15 +382,7 @@ export function LibraryListCard(props: LinkedItemCardProps): JSX.Element {
             <Thumb
               src={item.image}
               fallback={
-                <PublicationTile>
-                  <SiteIcon
-                    src={item.siteIcon}
-                    fallbackSrc={faviconFor(item.originalArticleUrl, item.url)}
-                    name={source || item.title}
-                    size={18}
-                  />
-                  {source && <span>{source}</span>}
-                </PublicationTile>
+                <TypeCover {...typeCoverFor(item, source || undefined)} small />
               }
             />
             {progress >= 3 && progress <= 97 && (

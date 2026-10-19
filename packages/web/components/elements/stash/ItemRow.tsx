@@ -1,3 +1,4 @@
+import { TypeCover, TypeCoverProps } from './TypeCover'
 import { forwardRef, HTMLAttributes, ReactNode } from 'react'
 import { styled } from '../../tokens/stitches.config'
 import { CoverImage } from './CoverImage'
@@ -192,6 +193,8 @@ type ItemRowProps = {
   title: string
   // Lets the title grow into the Reader's headline when the row opens.
   morphId?: string
+  // A cover set from the words, shown when there is no picture.
+  cover?: TypeCoverProps
   // The item's picture, shown as a small thumbnail beside the text.
   image?: string
   subtitle?: ReactNode
@@ -224,6 +227,7 @@ export const ItemRow = forwardRef<
     leading,
     title,
     morphId,
+    cover,
     image,
     subtitle,
     excerpt,
@@ -242,6 +246,7 @@ export const ItemRow = forwardRef<
     leading,
     title,
     morphId,
+    cover,
     image,
     subtitle,
     excerpt,
@@ -263,7 +268,7 @@ export const ItemRow = forwardRef<
       selected={props.selected}
       muted={props.muted}
       tall={!!props.excerpt}
-      withImage={!!props.image}
+      withImage={!!props.image || !!props.cover}
       onClick={(event) => {
         if ((event.target as HTMLElement).closest('button, a')) {
           return
@@ -290,9 +295,12 @@ export const ItemRow = forwardRef<
         {props.meta && <Meta>{props.meta}</Meta>}
         {props.actions && <Actions>{props.actions}</Actions>}
       </Trailing>
-      {props.image ? (
+      {props.image || props.cover ? (
         <ThumbWrap>
-          <Thumb src={props.image} />
+          <Thumb
+            src={props.image ?? undefined}
+            fallback={props.cover && <TypeCover {...props.cover} small />}
+          />
           {partRead && <Ribbon width={8} height={18} />}
         </ThumbWrap>
       ) : (

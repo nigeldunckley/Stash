@@ -533,6 +533,7 @@ export function ArticleContainer(props: ArticleContainerProps): JSX.Element {
           articleMutations={props.articleMutations}
           isAppleAppEmbed={props.isAppleAppEmbed}
           pageUrls={[props.article.originalArticleUrl, props.article.url]}
+          wordsCount={props.article.wordsCount}
           highlightQuotes={(props.article.highlights ?? [])
             .map((highlight) => highlight.quote ?? '')
             .filter(Boolean)}

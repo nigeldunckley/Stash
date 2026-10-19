@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { MAP_ROOM, marginMapShown } from './MarginMap'
 import { styled } from '../../tokens/stitches.config'
 
 // A pull quote, as a magazine sets one: a line from the article, larger and
@@ -179,7 +180,9 @@ export function PullQuote(props: PullQuoteProps): JSX.Element | null {
         wrapper.getBoundingClientRect().right -
         parseFloat(getComputedStyle(wrapper).paddingRight)
     }
-    const room = right - containerRect.right - GAP - 24
+    // The margin map takes the outer edge when it's showing.
+    const room =
+      right - containerRect.right - GAP - 24 - (marginMapShown() ? MAP_ROOM : 0)
     // Footnotes already use the margin; then the quote goes inline.
     const fits = room >= MIN_WIDTH && !root.querySelector('.st-fnref')
     setInMargin(fits)

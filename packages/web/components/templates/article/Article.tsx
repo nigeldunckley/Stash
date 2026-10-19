@@ -10,6 +10,7 @@ import {
 import { MarginNotes } from '../reader/MarginNotes'
 import { PlaceMarker } from '../reader/PlaceMarker'
 import { PullQuote } from '../reader/PullQuote'
+import { MarginMap } from '../reader/MarginMap'
 import {
   MutableRefObject,
   useCallback,
@@ -45,6 +46,7 @@ export type ArticleProps = {
   pageUrls?: string[]
   // Your highlights' text, for the pull quote.
   highlightQuotes?: string[]
+  wordsCount?: number
 }
 
 type PageCoordinates = {
@@ -430,6 +432,14 @@ export function Article(props: ArticleProps): JSX.Element {
         contentKey={props.content}
         highlights={props.highlightQuotes ?? []}
       />
+      {!props.isAppleAppEmbed && (
+        <MarginMap
+          contentRef={articleContentRef}
+          contentKey={props.content}
+          wordsCount={props.wordsCount}
+          resumeProgress={props.resumeProgress}
+        />
+      )}
       <PlaceMarker
         contentRef={articleContentRef}
         anchorIndex={props.initialAnchorIndex}
