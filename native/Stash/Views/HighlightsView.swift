@@ -10,6 +10,7 @@ struct HighlightsView: View {
   @State private var searchText = ""
   @State private var submittedSearch = ""
   @State private var toaster = Toaster()
+  @Namespace private var unfold
   @State private var confirmDelete: Highlight?
   @Environment(\.openURL) private var openURL
 
@@ -38,7 +39,7 @@ struct HighlightsView: View {
         #endif
       }
       .navigationDestination(for: LibraryItem.self) { item in
-        ItemDestination(item: item, perform: perform)
+        ItemDestination(item: item, perform: perform).unfoldDestination(item, in: unfold)
       }
       #if os(iOS)
       .searchable(text: $searchText, prompt: "Search highlights")
@@ -115,7 +116,7 @@ struct HighlightsView: View {
 
     Group {
       if let item = highlight.libraryItem {
-        NavigationLink(value: item) { content }
+        NavigationLink(value: item) { content }.unfoldSource(item, in: unfold)
       } else {
         content
       }

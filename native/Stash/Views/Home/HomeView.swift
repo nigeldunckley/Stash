@@ -78,6 +78,9 @@ struct HomeView: View {
         }
         .navigationDestination(for: LibraryItem.self) { item in
           ItemDestination(item: item, queue: videoQueue, perform: perform)
+            #if os(macOS)
+            .modifier(UnfoldIn())
+            #endif
         }
         .navigationDestination(for: HomeSearch.self) { search in
           HomeSearchResults(search: search)

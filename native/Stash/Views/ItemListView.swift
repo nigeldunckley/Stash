@@ -31,6 +31,7 @@ struct ItemListView<Tools: View>: View {
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var selection: LibraryItem?
+  @Namespace private var unfold
   @State private var toaster = Toaster()
   #if os(macOS)
   @FocusState private var listFocused: Bool
@@ -141,6 +142,7 @@ struct ItemListView<Tools: View>: View {
         .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
 
         ReaderScreen(item: selection, actions: readerActions(for: selection), perform: perform, embedded: true)
+          .modifier(UnfoldIn())
           .id(selection.id)
       }
       .background(Color.stSurface)
@@ -166,6 +168,7 @@ struct ItemListView<Tools: View>: View {
       .task(id: query) { await list.load(query) }
       .navigationDestination(item: $selection) { item in
         ReaderScreen(item: item, actions: readerActions(for: item), perform: perform)
+          .unfoldDestination(item, in: unfold)
       }
   }
   #endif
@@ -219,6 +222,7 @@ struct ItemListView<Tools: View>: View {
       ItemRow(item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item))
     }
     .buttonStyle(.plain)
+    .unfoldSource(item, in: unfold)
     #endif
   }
 

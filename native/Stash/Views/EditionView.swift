@@ -88,6 +88,7 @@ struct EditionView: View {
   @State private var actedOn: [String: String] = [:]
   @State private var path = NavigationPath()
   @State private var toaster = Toaster()
+  @Namespace private var unfold
 
   var body: some View {
     NavigationStack(path: $path) {
@@ -125,7 +126,7 @@ struct EditionView: View {
       .toolbar(removing: .title)
       #endif
       .navigationDestination(for: LibraryItem.self) { item in
-        ItemDestination(item: item, perform: perform)
+        ItemDestination(item: item, perform: perform).unfoldDestination(item, in: unfold)
       }
       .refreshable { await load(force: true) }
       .task { await load(force: false) }
@@ -228,6 +229,7 @@ struct EditionView: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    .unfoldSource(item, in: unfold)
     .contextMenu { storyMenu(item) }
   }
 
@@ -265,6 +267,7 @@ struct EditionView: View {
             .contentShape(Rectangle())
           }
           .buttonStyle(.plain)
+          .unfoldSource(item, in: unfold)
           .contextMenu { storyMenu(item) }
         }
       }
