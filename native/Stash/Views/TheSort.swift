@@ -55,10 +55,13 @@ struct TheSort: View {
           Task { try? await action.run(on: item) }
         })
           .unfoldDestination(item, in: unfold)
+          .pageBack(["The Sort"], escape: true)
       }
       #if os(iOS)
       .toolbar(.hidden, for: .navigationBar)
       #endif
+      // ⌘[ at the top closes the Sort, rather than reaching the page behind it.
+      .pageBack([], action: onDone)
     }
     .focusable()
     .focused($focused)
@@ -377,6 +380,7 @@ extension View {
     #else
     sheet(isPresented: isPresented, onDismiss: onDone) {
       TheSort(scope: scope) { isPresented.wrappedValue = false }
+        .environment(\.inSheet, true)
         .frame(minWidth: 680, idealWidth: 760, minHeight: 720, idealHeight: 820)
     }
     #endif

@@ -17,6 +17,8 @@ struct MacShell: View {
   /// Pages you've visited, newest last. They stay alive behind the current one, so each keeps
   /// its scroll position and anything it has open.
   @State private var visited: [AppSection] = []
+  /// Back and Forward: where each page has drilled in, and the sidebar pages you've been to.
+  @State private var navigator = Navigator()
   /// The full player, opened from the mini player over whatever page you're on.
   @State private var showingPlayer = false
   @State private var floating: FloatingPlayer?
@@ -59,6 +61,8 @@ struct MacShell: View {
             .disabled(!active)
             .accessibilityHidden(!active)
             .environment(\.isActivePage, active)
+            .environment(\.pageSection, visitedSection)
+            .environment(navigator)
             .zIndex(active ? 1 : 0)
         }
         if showingPlayer, let item = player.item {
@@ -66,6 +70,9 @@ struct MacShell: View {
         }
       }
       .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+      // Esc goes back out of whatever you've opened (or closes the full player). It comes
+      // after text fields and preview cards have had their turn.
+      .onExitCommand { goBack(escape: true) }
       // A page too wide for the space never slides under the sidebar or off the window.
       // Clips the sides only, so Home's dimming can still reach up under the title bar.
       .mask { Rectangle().ignoresSafeArea(edges: .top) }
@@ -75,6 +82,7 @@ struct MacShell: View {
     .frame(minWidth: 1000, minHeight: 560)
     // A saved card flying to Saved, or a hairline to Archive.
     .overlay { flightLayer }
+
     .animation(.snappy(duration: 0.25), value: sidebarHidden)
     .animation(.snappy(duration: 0.25), value: player.host == .mini)
     .animation(.snappy(duration: 0.3), value: showingPlayer)
@@ -98,19 +106,31 @@ struct MacShell: View {
     }
     .onReceive(NotificationCenter.default.publisher(for: .stashOpenSettings)) { _ in section = .settings }
     .onReceive(NotificationCenter.default.publisher(for: .stashPopOut)) { _ in floating?.toggle() }
+    .onReceive(NotificationCenter.default.publisher(for: .stashBack)) { _ in goBack(escape: false) }
+    .onReceive(NotificationCenter.default.publisher(for: .stashForward)) { _ in
+      guard !sheetOpen, let next = navigator.travel(1, from: section) else { return }
+      section = next
+    }
+    .onReceive(NotificationCenter.default.publisher(for: .stashPageTop)) { _ in
+      showingPlayer = false
+      navigator.goToTop(in: section)
+    }
     .onChange(of: player.host) { _, _ in floating?.sync() }
     .onAppear { if floating == nil { floating = FloatingPlayer(player: player) } }
-    .onAppear { visit(section) }
+    .onAppear { visit(section); navigator.record(section) }
     .onChange(of: section) { _, value in
       showingPlayer = false
       visit(value)
+      navigator.record(value)
     }
     .onChange(of: collections) { _, current in
       // A collection that's gone shouldn't linger as a hidden page.
-      visited.removeAll { page in
+      let gone: (AppSection) -> Bool = { page in
         if case .collection(let id) = page { return !current.contains { $0.id == id } }
         return false
       }
+      visited.removeAll(where: gone)
+      navigator.forget(where: gone)
     }
     .task(id: section) { await loadCounts() }
     .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await loadCounts() } } }
@@ -262,15 +282,30 @@ struct MacShell: View {
       PlayerScreen(item: item, queue: player.queue, actions: [], perform: { _, _ in })
         .toolbar {
           ToolbarItem(placement: .navigation) {
+            // Esc closes it too (see goBack).
             Button { showingPlayer = false } label: { Label("Close the player", systemImage: "chevron.down") }
-              .help("Close the player; the video keeps playing in the corner")
-              .keyboardShortcut(.escape, modifiers: [])
+              .help("Close the player; the video keeps playing in the corner (Esc)")
           }
         }
     }
     .background(Color.stPage)
     .transition(.move(edge: .bottom))
   }
+
+  /// Back: closes the full player, then goes up out of whatever the page has open, then (for
+  /// ⌘[, not Esc) back to the sidebar page you were on before.
+  private func goBack(escape: Bool) {
+    if showingPlayer {
+      showingPlayer = false
+    } else if navigator.goUp(in: section) {
+      return
+    } else if !escape, !sheetOpen, let previous = navigator.travel(-1, from: section) {
+      section = previous
+    }
+  }
+
+  /// A sheet such as the Sort is in front, so the page behind shouldn't change.
+  private var sheetOpen: Bool { NSApp.keyWindow?.sheetParent != nil }
 
   private func visit(_ page: AppSection) {
     visited.removeAll { $0 == page }

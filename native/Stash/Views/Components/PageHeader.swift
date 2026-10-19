@@ -14,9 +14,14 @@ struct PageHeader<Trailing: View>: View {
   #if os(macOS)
   @AppStorage("sidebarHidden") private var sidebarHidden = false
   #endif
+  /// The way back out, for a page you've drilled into.
+  @Environment(\.pageBack) private var back
 
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
+      if let back {
+        BackBar(back: back).padding(.bottom, folio == nil ? -6 : -8)
+      }
       if let folio { FolioView(content: folio) }
       titleRow
     }

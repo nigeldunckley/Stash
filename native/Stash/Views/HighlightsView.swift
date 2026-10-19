@@ -40,6 +40,7 @@ struct HighlightsView: View {
       }
       .navigationDestination(for: LibraryItem.self) { item in
         ItemDestination(item: item, perform: perform).unfoldDestination(item, in: unfold)
+          .pageBack(["Highlights"])
       }
       #if os(iOS)
       .searchable(text: $searchText, prompt: "Search highlights")

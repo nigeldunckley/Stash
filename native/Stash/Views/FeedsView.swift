@@ -72,6 +72,7 @@ struct FeedsView: View {
       .fixedSize()
       .help("Choose a feed")
     }
+    .pageBack(["Feeds"], enabled: source != nil) { source = nil }
     .task { subscriptions = (try? await Library.subscriptions()) ?? subscriptions }
     .sortSheet(isPresented: $sorting, scope: scope) { Task { await list.reload(query) } }
   }

@@ -43,6 +43,12 @@ struct StashApp: App {
         Button("Float Video on Top") { NotificationCenter.default.post(name: .stashPopOut, object: nil) }
           .keyboardShortcut("p", modifiers: [.option, .command])
       }
+      CommandMenu("Go") {
+        Button("Back") { NotificationCenter.default.post(name: .stashBack, object: nil) }
+          .keyboardShortcut("[", modifiers: .command)
+        Button("Forward") { NotificationCenter.default.post(name: .stashForward, object: nil) }
+          .keyboardShortcut("]", modifiers: .command)
+      }
       CommandGroup(replacing: .sidebar) {
         Button(sidebarHidden ? "Show Sidebar" : "Hide Sidebar") { sidebarHidden.toggle() }
           .keyboardShortcut("s", modifiers: [.control, .command])

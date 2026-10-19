@@ -26,12 +26,31 @@ struct ScreenChrome<Bar: ToolbarContent>: ViewModifier {
 
   /// Pages kept alive behind the current one on Mac leave the toolbar to it.
   @Environment(\.isActivePage) private var isActive
+  @Environment(\.pageBack) private var back
+  @Environment(\.inSheet) private var inSheet
+  #if os(macOS)
+  @AppStorage("sidebarHidden") private var sidebarHidden = false
+  #endif
 
   func body(content: Content) -> some View {
     if embedded {
       content
     } else {
       content
+        #if os(macOS)
+        // On Mac the way back sits over the screen, as it does over every other page.
+        .safeAreaInset(edge: .top, spacing: 0) {
+          if let back {
+            BackBar(back: back)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.horizontal, PageLayout.gutter)
+              .padding(.leading, sidebarHidden && !inSheet ? PageLayout.windowButtons : 0)
+              .frame(height: 34)
+              .background(Color.stPage)
+              .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
+          }
+        }
+        #endif
         .navigationTitle(title)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

@@ -82,9 +82,11 @@ struct HomeView: View {
             #if os(macOS)
             .modifier(UnfoldIn())
             #endif
+            .pageBack(["Home"])
         }
+        .pageTop { path = NavigationPath() }
         .navigationDestination(for: HomeSearch.self) { search in
-          HomeSearchResults(search: search)
+          HomeSearchResults(search: search).pageBack(["Home"])
         }
         .toasts(toaster)
     }

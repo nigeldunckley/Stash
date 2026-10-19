@@ -57,7 +57,7 @@ struct WatchView: View {
   private var title: String {
     switch kind {
     case .saved: return "Saved videos"
-    case .collection(let fixed): return fixed.name
+    case .collection(let fixed): return channel?.name ?? fixed.name
     case .channels: return channel?.name ?? collection?.name ?? "Latest"
     }
   }
@@ -89,15 +89,23 @@ struct WatchView: View {
       .overlay { emptyState }
       .toasts(toaster)
       .stashPage(title, detail: detail, accentDetail: kind != .saved && !showAll, folio: folio) { tools }
+      .pageBack(above, enabled: !above.isEmpty) { goUp() }
+      .pageTop {
+        path = NavigationPath()
+        channel = nil
+        collection = nil
+      }
       .navigationDestination(for: LibraryItem.self) { item in
         PlayerScreen(item: item, queue: videos, actions: actions, perform: perform)
           .onAppear { list.markSeen(item) }
+          .pageBack(above + [title])
       }
       .navigationDestination(for: Route.self) { _ in
         AllChannelsView { picked in
           channel = picked
           path = NavigationPath()
         }
+        .pageBack([title])
       }
       .refreshable { await reload() }
       .task(id: query) { await list.load(query) }
@@ -231,6 +239,28 @@ struct WatchView: View {
       checked: true,
       right: showAll ? nil : list.total.map { "\($0) NEW" }
     )
+  }
+
+  /// The pages above this one when you've narrowed it to a channel or collection, outermost
+  /// first: "Latest", or "Latest / Talks" for a channel picked inside a collection.
+  private var above: [String] {
+    let top: String
+    switch kind {
+    case .saved: return []
+    case .collection(let fixed): top = fixed.name
+    case .channels: top = "Latest"
+    }
+    if channel != nil {
+      if case .channels = kind, let collection { return [top, collection.name] }
+      return [top]
+    }
+    if case .channels = kind, collection != nil { return [top] }
+    return []
+  }
+
+  /// Back out of a channel, then out of a collection.
+  private func goUp() {
+    if channel != nil { channel = nil } else { collection = nil }
   }
 
   /// "12 new", "40 videos" or "8 saved" beside the title.

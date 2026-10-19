@@ -125,8 +125,10 @@ struct EditionView: View {
       #else
       .toolbar(removing: .title)
       #endif
+      .pageTop { path = NavigationPath() }
       .navigationDestination(for: LibraryItem.self) { item in
         ItemDestination(item: item, perform: perform).unfoldDestination(item, in: unfold)
+          .pageBack(["The Edition"])
       }
       .refreshable { await load(force: true) }
       .task { await load(force: false) }

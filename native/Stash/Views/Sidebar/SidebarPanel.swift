@@ -36,7 +36,7 @@ struct SidebarPanel: View {
           SidebarGroupLabel(title: "Read", isOpen: $readOpen)
           if readOpen {
             row("Feeds", "dot.radiowaves.up.forward", .feeds)
-            SidebarRow(title: "Saved", ribbon: .saved, selected: section == .saved, action: { section = .saved }) {
+            SidebarRow(title: "Saved", ribbon: .saved, selected: section == .saved, action: { go(.saved) }) {
               LandingCount(kind: .saved)
             }
             .momentTarget(.saved)
@@ -55,7 +55,7 @@ struct SidebarPanel: View {
             row("Latest", "play.rectangle", .channels) {
               if let channelsCount, channelsCount > 0 { Count(channelsCount, style: .badge) }
             }
-            SidebarRow(title: "Saved", ribbon: .savedVideo, selected: section == .savedVideos, action: { section = .savedVideos }) {
+            SidebarRow(title: "Saved", ribbon: .savedVideo, selected: section == .savedVideos, action: { go(.savedVideos) }) {
               LandingCount(kind: .savedVideo)
             }
             .momentTarget(.savedVideo)
@@ -65,7 +65,7 @@ struct SidebarPanel: View {
                 dot: Color(hexString: collection.color) ?? .stMuted,
                 selected: section == .collection(collection.id),
                 child: true
-              ) { section = .collection(collection.id) }
+              ) { go(.collection(collection.id)) }
             }
           }
         }
@@ -121,7 +121,7 @@ struct SidebarPanel: View {
         .foregroundStyle(Color.stInk)
         .lineLimit(1)
       Spacer(minLength: 0)
-      SidebarIconButton(symbol: "gearshape", help: "Settings (⌘,)") { section = .settings }
+      SidebarIconButton(symbol: "gearshape", help: "Settings (⌘,)") { go(.settings) }
     }
     .padding(.horizontal, 14)
     .padding(.vertical, 12)
@@ -129,16 +129,25 @@ struct SidebarPanel: View {
     .overlay(alignment: .top) { Rectangle().fill(Color.stLine).frame(height: 1) }
   }
 
+  /// Opens a page; clicking the one you're on takes it back to its top.
+  private func go(_ target: AppSection) {
+    if section == target {
+      NotificationCenter.default.post(name: .stashPageTop, object: nil)
+    } else {
+      section = target
+    }
+  }
+
   private var initial: String {
     String((session.viewer?.name ?? "S").prefix(1)).uppercased()
   }
 
   private func row<Trailing: View>(_ title: String, _ symbol: String, _ target: AppSection, @ViewBuilder trailing: @escaping () -> Trailing) -> some View {
-    SidebarRow(title: title, symbol: symbol, selected: section == target, action: { section = target }, trailing: trailing)
+    SidebarRow(title: title, symbol: symbol, selected: section == target, action: { go(target) }, trailing: trailing)
   }
 
   private func row(_ title: String, _ symbol: String, _ target: AppSection) -> some View {
-    SidebarRow(title: title, symbol: symbol, selected: section == target) { section = target }
+    SidebarRow(title: title, symbol: symbol, selected: section == target) { go(target) }
   }
 }
 
