@@ -10,6 +10,7 @@ import {
   Subscription,
   SubscriptionType,
 } from '../queries/useGetSubscriptionsQuery'
+import { announceMoment } from '../../moments'
 
 export type ScannedFeed = {
   url: string
@@ -73,6 +74,9 @@ export async function moveItemToFolder(
   id: string,
   folder: 'inbox' | 'following'
 ): Promise<void> {
+  if (folder == 'inbox') {
+    announceMoment('saved')
+  }
   const data = (await gqlFetcher(GQL_MOVE_ITEM_TO_FOLDER, { id, folder })) as {
     moveToFolder: { success?: boolean; errorCodes?: string[] }
   }
@@ -86,6 +90,9 @@ export async function setItemArchived(
   id: string,
   archived: boolean
 ): Promise<void> {
+  if (archived) {
+    announceMoment('archived')
+  }
   const data = (await gqlFetcher(GQL_SET_LINK_ARCHIVED, {
     input: { linkId: id, archived },
   })) as { setLinkArchived: { errorCodes?: string[] } }

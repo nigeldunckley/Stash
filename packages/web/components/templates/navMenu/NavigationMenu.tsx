@@ -1,10 +1,9 @@
-import { ReactNode, useCallback, useRef, useState } from 'react'
+import { ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { StyledText } from '../../elements/StyledText'
 import { Box, HStack, SpanBox, VStack } from '../../elements/LayoutPrimitives'
 import { Button } from '../../elements/Button'
 import {
   Archive,
-  BookmarkSimple,
   CaretDown,
   Compass,
   DotsThree,
@@ -18,7 +17,10 @@ import {
 } from '@phosphor-icons/react'
 import { IconButton } from '../../elements/stash'
 import { useGetShortcuts } from '../../../lib/networking/shortcuts/useShortcuts'
-import { styled, theme } from '../../tokens/stitches.config'
+import { keyframes, styled, theme } from '../../tokens/stitches.config'
+import { RibbonIcon } from '../../elements/stash/Ribbon'
+import { reducedMotion, spring } from '../../elements/stash/motion'
+import { MOMENT_LANDED, MomentLanded } from '../../../lib/moments'
 import { usePersistedState } from '../../../lib/hooks/usePersistedState'
 import { NavMenuFooter } from './Footer'
 import { ServerVersionChip } from '../settings/ServerVersionChip'
@@ -201,6 +203,7 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         {...props}
         text="Archive"
         section="archive"
+        momentTarget="archived"
         isSelected={props.section == 'archive'}
         icon={<Archive size={18} />}
       />
@@ -217,11 +220,11 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
 
 const PAGE_ICONS: Record<string, ReactNode> = {
   feeds: <Rss size={18} />,
-  'read-saved': <BookmarkSimple size={18} />,
+  'read-saved': <RibbonIcon size={18} />,
   highlights: <Highlighter size={18} />,
   discover: <Compass size={18} />,
   channels: <MonitorPlay size={18} />,
-  'watch-saved': <BookmarkSimple size={18} />,
+  'watch-saved': <RibbonIcon size={18} />,
 }
 
 const GroupLabel = styled('button', {
@@ -306,6 +309,13 @@ function NavGroupSection(
             href={page.href}
             isSelected={page.selected}
             child={!!page.color}
+            momentTarget={
+              page.key == 'saved'
+                ? group.id == 'watch'
+                  ? 'watch-saved'
+                  : 'saved'
+                : undefined
+            }
             icon={
               page.color ? (
                 <SpanBox
@@ -349,6 +359,7 @@ function FoldedNewDot(props: { group: NavGroup }): JSX.Element | null {
 // miss, and Discover's new suggestions in the accent colour.
 function NavCount(props: { source: NavCountSource }): JSX.Element | null {
   const count = useNavCount(props.source)
+  const rolled = useRoll(count)
   if (!count) return null
   const discover = props.source.kind == 'discover'
   const accent = props.source.kind == 'items' && props.source.accent
@@ -371,9 +382,124 @@ function NavCount(props: { source: NavCountSource }): JSX.Element | null {
         }),
       }}
     >
-      {discover ? `${count} new` : count > 999 ? '999+' : count}
+      {discover ? (
+        `${count} new`
+      ) : rolled.from !== undefined && !accent ? (
+        <Roll key={rolled.key}>
+          <span>{label(rolled.from)}</span>
+          <span>{label(count)}</span>
+        </Roll>
+      ) : (
+        label(count)
+      )}
     </SpanBox>
   )
+}
+
+const label = (count: number) => (count > 999 ? '999+' : count)
+
+const rollUp = keyframes({
+  from: { transform: 'translateY(0)' },
+  to: { transform: 'translateY(-50%)' },
+})
+
+const settle = keyframes({
+  '0%, 70%': { color: '$stAccentText' },
+  '100%': { color: '$stMuted' },
+})
+
+// A count that goes up rolls like an odometer and stays orange for a beat.
+const Roll = styled('span', {
+  display: 'inline-flex',
+  flexDirection: 'column',
+  height: '1.3em',
+  lineHeight: '1.3em',
+  overflow: 'hidden',
+  verticalAlign: 'bottom',
+  animation: `${settle} 1600ms ease forwards`,
+  '& > span': {
+    animation: `${rollUp} 240ms ${spring} forwards`,
+  },
+  '& > span:first-child': { opacity: 0.35 },
+  [reducedMotion]: { '& > span': { animation: 'none' } },
+})
+
+// Remembers the last count, so a rise can be shown as a roll.
+function useRoll(count: number | undefined): {
+  from?: number
+  key: number
+} {
+  const previous = useRef(count)
+  const [rolled, setRolled] = useState<{ from?: number; key: number }>({
+    key: 0,
+  })
+  useEffect(() => {
+    const before = previous.current
+    previous.current = count
+    if (before !== undefined && count !== undefined && count > before) {
+      setRolled((current) => ({ from: before, key: current.key + 1 }))
+      const timer = setTimeout(
+        () => setRolled((current) => ({ key: current.key })),
+        1600
+      )
+      return () => clearTimeout(timer)
+    }
+  }, [count])
+  return rolled
+}
+
+const dip = keyframes({
+  '0%': { transform: 'translateY(0)' },
+  '35%': { transform: 'translateY(3px)' },
+  '100%': { transform: 'translateY(0)' },
+})
+
+const plusOne = keyframes({
+  '0%': { opacity: 0, transform: 'translateY(4px)' },
+  '20%, 70%': { opacity: 1, transform: 'translateY(0)' },
+  '100%': { opacity: 0, transform: 'translateY(-4px)' },
+})
+
+const NavIcon = styled('span', {
+  display: 'grid',
+  placeItems: 'center',
+  flex: 'none',
+  transition: 'color 200ms',
+  '[data-landed] > &': {
+    color: '$stAccent',
+    animation: `${dip} 320ms ${spring}`,
+  },
+  [reducedMotion]: { '[data-landed] > &': { animation: 'none' } },
+})
+
+const PlusOne = styled('span', {
+  marginLeft: 'auto',
+  fontFamily: '$mono',
+  fontSize: '11px',
+  color: '$stAccentText',
+  animation: `${plusOne} 1200ms ease forwards`,
+})
+
+// True for a moment after a saved or archived item lands on this row.
+function useLanded(target: string | undefined): boolean {
+  const [landed, setLanded] = useState(false)
+  useEffect(() => {
+    if (!target) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const onLanded = (event: Event) => {
+      if ((event as CustomEvent<MomentLanded>).detail.target != target) return
+      setLanded(false)
+      requestAnimationFrame(() => setLanded(true))
+      clearTimeout(timer)
+      timer = setTimeout(() => setLanded(false), 1200)
+    }
+    window.addEventListener(MOMENT_LANDED, onLanded)
+    return () => {
+      window.removeEventListener(MOMENT_LANDED, onLanded)
+      clearTimeout(timer)
+    }
+  }, [target])
+  return landed
 }
 
 // A new issue of The Edition that hasn't been opened yet.
@@ -499,6 +625,8 @@ type NavButtonProps = {
   count?: ReactNode
   // Where to go, when not the section's own page.
   href?: string
+  // Saved and Archive answer when an item is saved or archived.
+  momentTarget?: 'saved' | 'watch-saved' | 'archived'
 
   isSelected: boolean
   section: NavigationSection
@@ -508,6 +636,7 @@ type NavButtonProps = {
 
 function NavButton(props: NavButtonProps): JSX.Element {
   const router = useRouter()
+  const landed = useLanded(props.momentTarget)
 
   return (
     <HStack
@@ -552,13 +681,19 @@ function NavButton(props: NavButtonProps): JSX.Element {
       }}
       title={props.text}
       data-nav={props.section}
+      data-moment-target={props.momentTarget}
+      data-landed={landed ? '' : undefined}
       onClick={(e) => {
         router.push(props.href ?? `/` + props.section)
       }}
     >
-      {props.icon}
+      <NavIcon>{props.icon}</NavIcon>
       {props.text}
-      {props.count}
+      {landed && props.momentTarget == 'archived' && !props.count ? (
+        <PlusOne aria-hidden="true">+1</PlusOne>
+      ) : (
+        props.count
+      )}
     </HStack>
   )
 }

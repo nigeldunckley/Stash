@@ -67,6 +67,8 @@ import {
   SwipeAction,
   UnseenDot,
 } from '../../elements/stash'
+import { Ribbon } from '../../elements/stash/Ribbon'
+import { Folio, stashDay, useFeedsFolio } from '../../elements/stash/Folio'
 import { motion, pressable } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
 import {
@@ -102,13 +104,6 @@ const isUrl = (value: string) => {
     return false
   }
 }
-
-const todayLabel = (now: Date) =>
-  now.toLocaleDateString(undefined, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  })
 
 // ---------------------------------------------------------------------------
 // Layout
@@ -164,15 +159,6 @@ const Title = styled('h1', {
   letterSpacing: '-0.028em',
   color: '$stInk',
   '@mdDown': { fontSize: '30px' },
-})
-
-const Today = styled('span', {
-  fontFamily: '$mono',
-  fontSize: '$micro',
-  letterSpacing: '0.06em',
-  textTransform: 'uppercase',
-  color: '$stMuted',
-  whiteSpace: 'nowrap',
 })
 
 // While The Edition is out: a strip in its own masthead style.
@@ -413,6 +399,16 @@ const Featured = styled('article', {
   '@lgDown': { display: 'none' },
 })
 
+// Part-read items keep their place: a ribbon hangs from the picture's top.
+const Placed = styled('div', {
+  position: 'relative',
+  lineHeight: 0,
+  '& > svg': { position: 'absolute', top: 0, right: '8px' },
+})
+
+const partRead = (item: LibraryItemNode) =>
+  item.readingProgressPercent >= 3 && item.readingProgressPercent <= 97
+
 const FeaturedCover = styled(CoverImage, {
   aspectRatio: '16 / 10',
   borderRadius: '$md',
@@ -592,6 +588,7 @@ export function StashHome(): JSX.Element {
   const isPhone = useMediaQuery('(max-width: 768px)')
   const peekInline = useMediaQuery(PEEK_INLINE)
   const [now, setNow] = useState(() => new Date())
+  const folio = useFeedsFolio('feeds')
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60 * 1000)
     return () => clearInterval(timer)
@@ -1145,6 +1142,7 @@ export function StashHome(): JSX.Element {
             }
             excerpt={tab == 'watch' ? undefined : item.description}
             muted={itemSeen}
+            progress={item.readingProgressPercent}
             selected={peekItem ? item.id == peekItem.id : item.id == focusId}
             onOpen={() =>
               item.id == peekItem?.id ? closePeek() : openPeek(item)
@@ -1306,12 +1304,15 @@ export function StashHome(): JSX.Element {
         <Empty>Nothing waiting. Save an article and it shows up here.</Empty>
       )}
       {featured && (
-        <Featured>
-          <FeaturedCover
-            src={featured.headerImage ?? featured.image}
-            fallback={fallbackFor(featured, 36)}
-            onClick={() => open(featured)}
-          />
+        <Featured data-stash-row="">
+          <Placed>
+            <FeaturedCover
+              src={featured.headerImage ?? featured.image}
+              fallback={fallbackFor(featured, 36)}
+              onClick={() => open(featured)}
+            />
+            {partRead(featured) && <Ribbon width={12} height={34} />}
+          </Placed>
           <Kicker>
             <SiteIcon
               src={sourceIcon(featured)}
@@ -1324,6 +1325,7 @@ export function StashHome(): JSX.Element {
           </Kicker>
           <FeaturedTitle
             type="button"
+            className="row-title"
             data-morph-title={featured.id}
             onClick={() => open(featured)}
           >
@@ -1352,10 +1354,11 @@ export function StashHome(): JSX.Element {
       {rest.length > 0 && (
         <Rest>
           {rest.map((item) => (
-            <RestRow key={item.id}>
+            <RestRow key={item.id} data-stash-row="">
               <div style={{ minWidth: 0 }}>
                 <RestTitle
                   type="button"
+                  className="row-title"
                   data-morph-title={item.id}
                   onClick={() => open(item)}
                 >
@@ -1372,11 +1375,16 @@ export function StashHome(): JSX.Element {
                     .join(' · ')}
                 </RestMeta>
               </div>
-              <RestThumb
-                src={item.headerImage ?? item.image}
-                fallback={fallbackFor(item)}
-                onClick={() => open(item)}
-              />
+              <Placed>
+                <RestThumb
+                  src={item.headerImage ?? item.image}
+                  fallback={fallbackFor(item)}
+                  onClick={() => open(item)}
+                />
+                {partRead(item) && (
+                  <Ribbon width={7} height={15} style={{ right: '5px' }} />
+                )}
+              </Placed>
             </RestRow>
           ))}
         </Rest>
@@ -1428,10 +1436,14 @@ export function StashHome(): JSX.Element {
             : undefined
         }
       >
+        <Folio
+          parts={folio.parts}
+          live={folio.live}
+          end={`Vol. 1 · Day ${stashDay(now)}`}
+        />
         <Header>
           <TitleBlock>
             <Title>Home</Title>
-            <Today>{todayLabel(now)}</Today>
           </TitleBlock>
           <AddButton
             type="button"
@@ -1452,6 +1464,7 @@ export function StashHome(): JSX.Element {
             <Plus size={18} weight="bold" />
           </AddButton>
           <CaptureForm
+            data-moment-source=""
             onSubmit={submitCapture}
             role="search"
             data-open={captureOpen}

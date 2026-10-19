@@ -20,29 +20,63 @@
 }
 
 .highlight__orange {
-  background-color: rgba(var(--colors-highlight_background_orange), var(--colors-highlight_background_alpha));
-  border-bottom: 1.5px solid rgba(var(--colors-highlight_background_orange), var(--colors-highlight_underline_alpha));
+  background-color: rgba(
+    var(--colors-highlight_background_orange),
+    var(--colors-highlight_background_alpha)
+  );
+  border-bottom: 1.5px solid
+    rgba(
+      var(--colors-highlight_background_orange),
+      var(--colors-highlight_underline_alpha)
+    );
 }
 
-
 .highlight__green {
-  background-color: rgba(var(--colors-highlight_background_green), var(--colors-highlight_background_alpha));
-  border-bottom: 2px solid rgba(var(--colors-highlight_background_green), var(--colors-highlight_underline_alpha));
+  background-color: rgba(
+    var(--colors-highlight_background_green),
+    var(--colors-highlight_background_alpha)
+  );
+  border-bottom: 2px solid
+    rgba(
+      var(--colors-highlight_background_green),
+      var(--colors-highlight_underline_alpha)
+    );
 }
 
 .highlight__red {
-  background-color: rgba(var(--colors-highlight_background_red), var(--colors-highlight_background_alpha));
-  border-bottom: 2px solid rgba(var(--colors-highlight_background_red), var(--colors-highlight_underline_alpha));
+  background-color: rgba(
+    var(--colors-highlight_background_red),
+    var(--colors-highlight_background_alpha)
+  );
+  border-bottom: 2px solid
+    rgba(
+      var(--colors-highlight_background_red),
+      var(--colors-highlight_underline_alpha)
+    );
 }
 
 .highlight__blue {
-  background-color: rgba(var(--colors-highlight_background_blue), var(--colors-highlight_background_alpha));
-  border-bottom: 2px solid rgba(var(--colors-highlight_background_blue), var(--colors-highlight_underline_alpha));
+  background-color: rgba(
+    var(--colors-highlight_background_blue),
+    var(--colors-highlight_background_alpha)
+  );
+  border-bottom: 2px solid
+    rgba(
+      var(--colors-highlight_background_blue),
+      var(--colors-highlight_underline_alpha)
+    );
 }
 
 .highlight__yellow {
-  background-color: rgba(var(--colors-highlight_background_yellow), var(--colors-highlight_background_alpha));
-  border-bottom: 2px solid rgba(var(--colors-highlight_background_yellow), var(--colors-highlight_underline_alpha));
+  background-color: rgba(
+    var(--colors-highlight_background_yellow),
+    var(--colors-highlight_background_alpha)
+  );
+  border-bottom: 2px solid
+    rgba(
+      var(--colors-highlight_background_yellow),
+      var(--colors-highlight_underline_alpha)
+    );
 }
 
 .article-inner-css {
@@ -415,7 +449,7 @@
   max-width: 100% !important;
 }
 
-.article-inner-css .morning-brew-markets tbody{
+.article-inner-css .morning-brew-markets tbody {
   width: 100%;
   display: table;
 }
@@ -437,7 +471,7 @@
 }
 
 .article-inner-css ._omnivore-static-tweet {
-  color: #0F1419 !important;
+  color: #0f1419 !important;
   background: #ffffff !important;
   display: flex;
   flex-direction: column;
@@ -447,23 +481,25 @@
   border: 1px solid #e0e0e0;
   direction: ltr;
   border-radius: 8px;
-  padding: 16px 16px ;
+  padding: 16px 16px;
   box-sizing: border-box;
   -webkit-font-smoothing: subpixel-antialiased;
 }
 
 .article-inner-css ._omnivore-static-tweet ._omnivore-static-quote-tweet {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 12px;
-    font-size: 14px;
-    line-height: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 20px;
 }
 
-.article-inner-css ._omnivore-static-tweet ._omnivore-static-quote-tweet-header {
+.article-inner-css
+  ._omnivore-static-tweet
+  ._omnivore-static-quote-tweet-header {
   display: flex;
   flex-direction: row;
   gap: 9px;
@@ -471,14 +507,18 @@
   justify-content: flex-start;
 }
 
-.article-inner-css ._omnivore-static-tweet ._omnivore-static-quote-tweet-header-avatar {
+.article-inner-css
+  ._omnivore-static-tweet
+  ._omnivore-static-quote-tweet-header-avatar {
   width: 20px;
   height: 20px;
   border-radius: 50%;
   margin: unset !important;
 }
 
-.article-inner-css ._omnivore-static-tweet ._omnivore-static-quote-tweet-header-text {
+.article-inner-css
+  ._omnivore-static-tweet
+  ._omnivore-static-quote-tweet-header-text {
   display: flex;
   flex-direction: row;
   gap: 4px;
@@ -493,14 +533,13 @@
   gap: 12px;
   margin: unset;
   justify-content: flex-start;
-  color: #0F1419 !important;
+  color: #0f1419 !important;
 }
-
 
 ._omnivore-static-tweet-header ._omnivore-static-tweet-header-text {
   display: flex;
   flex-direction: column;
-  color: #0F1419 !important;
+  color: #0f1419 !important;
   font-size: 14px;
   line-height: 20px;
 }
@@ -513,7 +552,6 @@
   color: #808080;
 }
 
-
 ._omnivore-static-tweet ._omnivore-static-tweet-fake-link {
   color: #1da1f2;
 }
@@ -521,7 +559,7 @@
 ._omnivore-static-tweet ._omnivore-static-tweet-text {
   font-size: 14px;
   line-height: 20px;
-  color: #0F1419 !important;
+  color: #0f1419 !important;
 }
 
 ._omnivore-static-tweet ._omnivore-static-tweet-link-top {
@@ -529,7 +567,7 @@
 }
 
 ._omnivore-static-tweet ._omnivore-static-tweet-header-avatar {
-  -ms-interpolation-mode: bicubic; 
+  -ms-interpolation-mode: bicubic;
   border: none !important;
   border-radius: 50%;
   float: left;
@@ -564,7 +602,7 @@
   margin: 12px 0;
   padding: 0;
   width: 100%;
-  color: #496F72;
+  color: #496f72;
   font-size: 14px;
   line-height: 20px;
 }
@@ -579,7 +617,8 @@
   align-items: center;
 }
 
-._omnivore-static-tweet ._omnivore-static-tweet-ufi .likes, .retweets {
+._omnivore-static-tweet ._omnivore-static-tweet-ufi .likes,
+.retweets {
   display: flex;
   gap: 4px;
   text-decoration: none;
@@ -611,11 +650,11 @@
   max-height: 280px;
   max-width: 100%;
   object-fit: cover;
-  margin: 0px auto !important
+  margin: 0px auto !important;
 }
 
 ._omnivore-static-tweet .expanded-link img {
-  margin: 0px auto !important
+  margin: 0px auto !important;
 }
 
 ._omnivore-static-tweet .expanded-link-bottom {
@@ -635,7 +674,7 @@
 }
 
 .expanded-link-bottom .expanded-link-title {
-  color: #0F1419 !important;
+  color: #0f1419 !important;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -683,30 +722,29 @@
   }
 }
 
-
 @keyframes fadeInUp {
   0% {
-      opacity: 0;
-      -webkit-transform: translate3d(0, 100%, 0);
-      transform: translate3d(0, 100%, 0);
+    opacity: 0;
+    -webkit-transform: translate3d(0, 100%, 0);
+    transform: translate3d(0, 100%, 0);
   }
   100% {
-      opacity: 1;
-      -webkit-transform: none;
-      transform: none;
+    opacity: 1;
+    -webkit-transform: none;
+    transform: none;
   }
 }
 
 @-webkit-keyframes fadeInUp {
   0% {
-      opacity: 0;
-      -webkit-transform: translate3d(0, 100%, 0);
-      transform: translate3d(0, 100%, 0);
+    opacity: 0;
+    -webkit-transform: translate3d(0, 100%, 0);
+    transform: translate3d(0, 100%, 0);
   }
   100% {
-      opacity: 1;
-      -webkit-transform: none;
-      transform: none;
+    opacity: 1;
+    -webkit-transform: none;
+    transform: none;
   }
 }
 
@@ -714,7 +752,6 @@
   border: 2px dashed #aaa;
   box-sizing: border-box;
 }
-
 
 /* Inline code gets a quiet chip; blocks get a sunken panel. */
 .article-inner-css :not(pre) > code {
@@ -752,3 +789,14 @@
   letter-spacing: 0.05em;
 }
 
+/* The end mark: a small orange square after the article's last word, as
+   magazines close a story. Set by the reader on the last paragraph. */
+.article-inner-css p.st-end::after {
+  content: '';
+  display: inline-block;
+  width: 0.45em;
+  height: 0.45em;
+  margin-left: 0.4em;
+  vertical-align: 0.02em;
+  background: var(--colors-stAccent);
+}
