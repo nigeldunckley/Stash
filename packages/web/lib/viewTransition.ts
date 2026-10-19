@@ -60,8 +60,18 @@ const pictureFor = (title: Element | null): HTMLElement | null => {
   const card =
     title.closest('[data-stash-row], [data-story]') ??
     title.parentElement?.parentElement
-  const picture = card?.querySelector('img') ?? null
-  return onScreen(picture) ? picture : null
+  // The largest picture, so a row's site icon is never taken for its
+  // thumbnail.
+  let picture: HTMLImageElement | null = null
+  let area = 0
+  card?.querySelectorAll('img').forEach((image) => {
+    const box = image.getBoundingClientRect()
+    if (box.width * box.height > area) {
+      picture = image
+      area = box.width * box.height
+    }
+  })
+  return area >= 32 * 32 && onScreen(picture) ? picture : null
 }
 
 const name = ([element, value]: Named) => {
