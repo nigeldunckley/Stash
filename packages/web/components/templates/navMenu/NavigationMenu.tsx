@@ -213,6 +213,7 @@ const LibraryNav = (props: NavigationMenuProps): JSX.Element => {
         {...props}
         text="Trash"
         section="trash"
+        momentTarget="trash"
         isSelected={props.section == 'trash'}
         icon={<Trash size={18} />}
       />
@@ -316,6 +317,8 @@ function NavGroupSection(
                 ? group.id == 'watch'
                   ? 'watch-saved'
                   : 'saved'
+                : page.key.startsWith('collection-')
+                ? page.key
                 : undefined
             }
             icon={
@@ -450,10 +453,12 @@ function useRoll(count: number | undefined): {
   return rolled
 }
 
+// The icon swallows the item, then springs back.
 const dip = keyframes({
-  '0%': { transform: 'translateY(0)' },
-  '35%': { transform: 'translateY(3px)' },
-  '100%': { transform: 'translateY(0)' },
+  '0%': { transform: 'scale(1)' },
+  '30%': { transform: 'scale(0.78) translateY(1px)' },
+  '65%': { transform: 'scale(1.14)' },
+  '100%': { transform: 'scale(1)' },
 })
 
 const plusOne = keyframes({
@@ -469,7 +474,7 @@ const NavIcon = styled('span', {
   transition: 'color 200ms',
   '[data-landed] > &': {
     color: '$stAccent',
-    animation: `${dip} 320ms ${spring}`,
+    animation: `${dip} 420ms ${spring}`,
   },
   [reducedMotion]: { '[data-landed] > &': { animation: 'none' } },
 })
@@ -627,8 +632,8 @@ type NavButtonProps = {
   count?: ReactNode
   // Where to go, when not the section's own page.
   href?: string
-  // Saved and Archive answer when an item is saved or archived.
-  momentTarget?: 'saved' | 'watch-saved' | 'archived'
+  // Saved, Archive, Trash and collections take in items sent to them.
+  momentTarget?: string
 
   isSelected: boolean
   section: NavigationSection

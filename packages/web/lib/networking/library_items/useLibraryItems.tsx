@@ -450,6 +450,7 @@ export const useDeleteItem = () => {
   return useMutation({
     mutationFn: deleteItem,
     onMutate: async (variables: { itemId: string; slug: string }) => {
+      announceMoment('trashed')
       await queryClient.cancelQueries({ queryKey: ['libraryItems'] })
       const previousState = {
         previousDetail: queryClient.getQueryData([

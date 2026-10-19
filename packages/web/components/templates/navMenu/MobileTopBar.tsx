@@ -253,6 +253,7 @@ export function MobileTopBar(props: {
               key={item.key}
               href={item.href}
               data-nav={item.key}
+              data-moment-target={`tab-${item.key}`}
               aria-current={item.current ? 'page' : undefined}
             >
               {item.label}
@@ -264,7 +265,12 @@ export function MobileTopBar(props: {
         <More type="button" onClick={() => query.toggle()} aria-label="Search">
           <MagnifyingGlass size={20} />
         </More>
-        <More type="button" onClick={props.onMore} aria-label="More">
+        <More
+          type="button"
+          onClick={props.onMore}
+          aria-label="More"
+          data-moment-target="more"
+        >
           <DotsThree size={22} weight="bold" />
         </More>
       </Row>
@@ -277,6 +283,13 @@ export function MobileTopBar(props: {
               <Pill
                 key={page.key}
                 href={page.href}
+                data-moment-target={
+                  page.key == 'saved'
+                    ? open.id == 'watch'
+                      ? 'watch-saved'
+                      : 'saved'
+                    : undefined
+                }
                 aria-current={page.selected ? 'page' : undefined}
               >
                 {page.label}
