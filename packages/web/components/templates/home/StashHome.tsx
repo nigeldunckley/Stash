@@ -49,6 +49,7 @@ import {
 import { faviconFor, shortTimeAgo, siteName } from '../../../lib/textFormatting'
 import { showErrorToast, showSuccessToast } from '../../../lib/toastHelpers'
 import { navigateWithMorph } from '../../../lib/viewTransition'
+import { TypeCover, typeCoverFor } from '../../elements/stash/TypeCover'
 import { dayGroup, isVideoItem } from '../../../lib/youtube'
 import {
   ContextMenu,
@@ -85,7 +86,7 @@ import {
   RowSource,
   useMediaQuery,
 } from '../feeds/feedRowParts'
-import { AddButton, Btn, CaptureForm, Fallback } from './editionStyles'
+import { AddButton, Btn, CaptureForm } from './editionStyles'
 
 // Home: what's new in your feeds, and the few saves you're most likely to
 // read next. The Edition has its own page; while an issue is out a strip
@@ -1103,6 +1104,9 @@ export function StashHome(): JSX.Element {
             title={item.title}
             morphId={item.id}
             image={item.image}
+            cover={
+              tab == 'watch' ? undefined : typeCoverFor(item, sourceName(item))
+            }
             subtitle={
               <RowSource>
                 <SiteIcon
@@ -1268,15 +1272,9 @@ export function StashHome(): JSX.Element {
     [queryClient]
   )
 
-  const fallbackFor = (item: LibraryItemNode, size = 22) => (
-    <Fallback>
-      <SiteIcon
-        src={sourceIcon(item)}
-        fallbackSrc={sourceIconFallback(item)}
-        name={sourceName(item)}
-        size={size}
-      />
-    </Fallback>
+  // Items without a picture get a cover set from their title.
+  const fallbackFor = (item: LibraryItemNode) => (
+    <TypeCover {...typeCoverFor(item, sourceName(item))} />
   )
   const progressOf = (item: LibraryItemNode) => {
     if ((item.readingProgressPercent ?? 0) < 2) return undefined
@@ -1308,7 +1306,7 @@ export function StashHome(): JSX.Element {
           <Placed>
             <FeaturedCover
               src={featured.headerImage ?? featured.image}
-              fallback={fallbackFor(featured, 36)}
+              fallback={fallbackFor(featured)}
               onClick={() => open(featured)}
             />
             {partRead(featured) && <Ribbon width={12} height={34} />}
@@ -1395,7 +1393,7 @@ export function StashHome(): JSX.Element {
             <Card key={item.id} onClick={() => open(item)}>
               <CoverImage
                 src={item.headerImage ?? item.image}
-                fallback={fallbackFor(item, 28)}
+                fallback={fallbackFor(item)}
               />
               <Kicker>
                 <span>{sourceName(item)}</span>

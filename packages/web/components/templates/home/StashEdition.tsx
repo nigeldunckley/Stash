@@ -30,6 +30,7 @@ import { formatMinutes, readingMinutes } from '../../../lib/readingTime'
 import { faviconFor, siteName } from '../../../lib/textFormatting'
 import { showErrorToast } from '../../../lib/toastHelpers'
 import { navigateWithMorph } from '../../../lib/viewTransition'
+import { TypeCover, typeCoverFor } from '../../elements/stash/TypeCover'
 import {
   ContextMenu,
   Kbd,
@@ -45,7 +46,6 @@ import {
   Colophon,
   Column,
   Dek,
-  Fallback,
   Kicker,
   Lead,
   LeadCopy,
@@ -482,15 +482,9 @@ export function StashEdition(): JSX.Element {
   const doneMark = (item: LibraryItemNode) =>
     isDone(item) ? <Check size={13} weight="bold" aria-label="Done" /> : null
 
-  const fallbackFor = (item: LibraryItemNode, size = 28) => (
-    <Fallback>
-      <SiteIcon
-        src={iconOf(item)}
-        fallbackSrc={faviconFor(item.originalArticleUrl, item.url)}
-        name={sourceOf(item)}
-        size={size}
-      />
-    </Fallback>
+  // Items without a picture get a cover set from their title.
+  const fallbackFor = (item: LibraryItemNode) => (
+    <TypeCover {...typeCoverFor(item, sourceOf(item))} />
   )
 
   const lead = inSlot('lead')[0]
@@ -637,7 +631,7 @@ export function StashEdition(): JSX.Element {
             >
               <LeadCover
                 src={lead.item.headerImage ?? lead.item.image}
-                fallback={fallbackFor(lead.item, 40)}
+                fallback={fallbackFor(lead.item)}
                 onClick={() => open(lead.item)}
               />
               <LeadCopy>
@@ -743,7 +737,7 @@ export function StashEdition(): JSX.Element {
                         >
                           <ShelfThumb
                             src={entry.item.headerImage ?? entry.item.image}
-                            fallback={fallbackFor(entry.item, 22)}
+                            fallback={fallbackFor(entry.item)}
                             onClick={() => open(entry.item)}
                           />
                           <ShelfCopy>
