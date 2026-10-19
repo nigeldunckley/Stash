@@ -5,6 +5,15 @@ import Observation
 import AVFoundation
 #endif
 
+/// Where the one video player is showing: on a player screen, in the mini player in the
+/// corner, or (on Mac) in its own small window on top of other apps.
+enum PlayerHost: Equatable {
+  case none
+  case screen(UUID)
+  case mini
+  case floating
+}
+
 /// Plays YouTube videos through the same embedded player the web app uses, and
 /// keeps Stash up to date: where you got to, and when a video counts as watched.
 @MainActor
@@ -13,8 +22,10 @@ final class PlayerController: NSObject {
   let webView: WKWebView
 
   private(set) var item: LibraryItem?
-  /// The player screen showing the video now; an older screen leaving doesn't stop it.
-  var owner: UUID?
+  /// Where the video is showing now.
+  var host: PlayerHost = .none
+  /// The player screen in sight, if any, which the video goes back to from the floating window.
+  private(set) var screenID: UUID?
   private(set) var time: Double = 0
   private(set) var duration: Double = 0
   private(set) var isPlaying = false
@@ -29,6 +40,8 @@ final class PlayerController: NSObject {
   @ObservationIgnored private var savedTime: Double = 0
   @ObservationIgnored private var watched: Set<String> = []
   @ObservationIgnored private var pageLoaded = false
+  /// YouTube's own frame inside the player page, where picture in picture has to be asked for.
+  @ObservationIgnored private var videoFrame: WKFrameInfo?
 
   static let speeds: [Double] = [1, 1.25, 1.5, 1.75, 2]
   private static let origin = "https://www.youtube-nocookie.com"
@@ -42,6 +55,12 @@ final class PlayerController: NSObject {
     config.allowsPictureInPictureMediaPlayback = true
     #endif
     let controller = WKUserContentController()
+    // Lets the app find YouTube's frame, to ask its video for picture in picture.
+    controller.addUserScript(WKUserScript(
+      source: "if (location.hostname.endsWith('youtube-nocookie.com')) window.webkit.messageHandlers.player.postMessage({ event: 'frame' })",
+      injectionTime: .atDocumentEnd,
+      forMainFrameOnly: false
+    ))
     config.userContentController = controller
     webView = WKWebView(frame: .zero, configuration: config)
     super.init()
@@ -115,6 +134,55 @@ final class PlayerController: NSObject {
     pause()
   }
 
+  // MARK: Where it shows
+
+  /// A player screen came into sight: the video moves onto it.
+  func screenShown(_ id: UUID) {
+    screenID = id
+    host = .screen(id)
+  }
+
+  /// A player screen went out of sight. A playing video carries on in the mini player,
+  /// unless Settings says to pause.
+  func screenLeft(_ id: UUID) {
+    if screenID == id { screenID = nil }
+    guard host == .screen(id) else { return }
+    if isPlaying && UserDefaults.standard.string(forKey: "watchOnLeave") != "pause" {
+      host = .mini
+    } else {
+      stop()
+      host = .none
+    }
+  }
+
+  /// Closes the mini player or floating window: saves the place and stops.
+  func close() {
+    stop()
+    host = .none
+  }
+
+  /// Back from the floating window to the screen in sight, or the mini player.
+  func dock() {
+    guard host == .floating else { return }
+    host = screenID.map { .screen($0) } ?? .mini
+  }
+
+  /// Hands the video to Apple's picture-in-picture window. Apple only allows this from a click.
+  func pictureInPicture() {
+    guard let videoFrame else { return }
+    let script = """
+      const video = document.querySelector('video')
+      if (!video) return false
+      if (video.webkitSupportsPresentationMode && video.webkitSupportsPresentationMode('picture-in-picture')) {
+        video.webkitSetPresentationMode(video.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture')
+        return true
+      }
+      if (document.pictureInPictureEnabled) { await video.requestPictureInPicture(); return true }
+      return false
+      """
+    webView.callAsyncJavaScript(script, arguments: [:], in: videoFrame, in: .page, completionHandler: nil)
+  }
+
   var upNext: [LibraryItem] {
     guard let item, let index = queue.firstIndex(where: { $0.id == item.id }) else {
       return queue.filter { $0.id != self.item?.id }
@@ -124,9 +192,11 @@ final class PlayerController: NSObject {
 
   // MARK: Player messages
 
-  fileprivate func handle(_ body: Any) {
+  fileprivate func handle(_ body: Any, frame: WKFrameInfo) {
     guard let message = body as? [String: Any], let event = message["event"] as? String else { return }
     switch event {
+    case "frame":
+      videoFrame = frame
     case "ready":
       pageLoaded = true
       if let item { command("setPlaybackRate", [Self.rate(for: item)]) }
@@ -257,6 +327,7 @@ extension PlayerController: WKNavigationDelegate {
 
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
     pageLoaded = false
+    videoFrame = nil
     if let item {
       self.item = nil
       play(item)
@@ -272,6 +343,6 @@ private final class PlayerMessages: NSObject, WKScriptMessageHandler {
   init(_ owner: PlayerController) { self.owner = owner }
 
   func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-    owner?.handle(message.body)
+    owner?.handle(message.body, frame: message.frameInfo)
   }
 }

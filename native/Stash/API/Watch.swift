@@ -14,6 +14,17 @@ struct TranscriptLine: Decodable, Hashable {
   let text: String
 }
 
+/// A channel found on YouTube by name, to follow.
+struct ChannelMatch: Decodable, Identifiable, Hashable {
+  let channelId: String
+  let feedUrl: String
+  let title: String
+  let handle: String?
+  let avatar: String?
+  let subscribers: String?
+  var id: String { channelId }
+}
+
 struct Chapter: Hashable {
   let start: Double
   let title: String
@@ -86,6 +97,86 @@ enum Watch {
   }
 
   // MARK: Server
+
+  /// Videos you're part way through, most recent first.
+  static func continueWatching() async -> [LibraryItem] {
+    (try? await Library.search("use:folders type:video is:reading sort:updated-desc", first: 6).items) ?? []
+  }
+
+  /// How many unseen videos each channel has, keyed by the channel's feed address.
+  static func unseenByChannel() async -> [String: Int] {
+    let items = (try? await Library.search("in:following use:folders type:video -is:seen", first: 100).items) ?? []
+    return items.reduce(into: [:]) { counts, item in
+      if let channel = item.subscription { counts[channel, default: 0] += 1 }
+    }
+  }
+
+  /// Channels on YouTube whose name matches what was typed.
+  static func searchChannels(_ query: String) async throws -> [ChannelMatch] {
+    struct Response: Decodable {
+      let youtubeChannelSearch: Result
+      struct Result: Decodable { let channels: [ChannelMatch]?; let errorCodes: [String]? }
+    }
+    let data: Response = try await StashAPI.shared.graphQL("""
+      query YouTubeChannelSearch($query: String!) {
+        youtubeChannelSearch(query: $query) {
+          ... on YouTubeChannelSearchSuccess { channels { channelId feedUrl title handle avatar subscribers } }
+          ... on YouTubeChannelSearchError { errorCodes }
+        }
+      }
+      """, variables: ["query": query])
+    if let code = data.youtubeChannelSearch.errorCodes?.first {
+      if code == "BAD_REQUEST" { return [] }
+      throw StashError.server(code)
+    }
+    return data.youtubeChannelSearch.channels ?? []
+  }
+
+  /// Follows a channel's feed, without Shorts, as the web app does.
+  static func follow(_ channel: ChannelMatch) async throws {
+    let data = try await StashAPI.shared.graphQLJSON("""
+      mutation Subscribe($input: SubscribeInput!) {
+        subscribe(input: $input) {
+          ... on SubscribeSuccess { subscriptions { id } }
+          ... on SubscribeError { errorCodes }
+        }
+      }
+      """, variables: ["input": ["url": channel.feedUrl, "subscriptionType": "RSS", "includeShorts": false]])
+    let codes = (data["subscribe"] as? [String: Any])?["errorCodes"] as? [String] ?? []
+    if let code = codes.first, code != "ALREADY_SUBSCRIBED" { throw StashError.server(code) }
+  }
+
+  /// Changes a channel's collection (an empty id takes it out of one) or whether it brings in Shorts.
+  static func updateChannel(_ id: String, collectionId: String? = nil, includeShorts: Bool? = nil) async throws {
+    var input: [String: Any] = ["id": id]
+    if let collectionId { input["collectionId"] = collectionId }
+    if let includeShorts { input["includeShorts"] = includeShorts }
+    let data = try await StashAPI.shared.graphQLJSON("""
+      mutation UpdateSubscription($input: UpdateSubscriptionInput!) {
+        updateSubscription(input: $input) {
+          ... on UpdateSubscriptionSuccess { subscription { id } }
+          ... on UpdateSubscriptionError { errorCodes }
+        }
+      }
+      """, variables: ["input": input])
+    if let code = ((data["updateSubscription"] as? [String: Any])?["errorCodes"] as? [String])?.first {
+      throw StashError.server(code)
+    }
+  }
+
+  static func unfollow(_ channel: Subscription) async throws {
+    let data = try await StashAPI.shared.graphQLJSON("""
+      mutation Unsubscribe($name: String!, $subscriptionId: ID!) {
+        unsubscribe(name: $name, subscriptionId: $subscriptionId) {
+          ... on UnsubscribeSuccess { subscription { id } }
+          ... on UnsubscribeError { errorCodes }
+        }
+      }
+      """, variables: ["name": channel.name, "subscriptionId": channel.id])
+    if let code = ((data["unsubscribe"] as? [String: Any])?["errorCodes"] as? [String])?.first {
+      throw StashError.server(code)
+    }
+  }
 
   /// Remembers how far in you got: seconds in the anchor index, share watched as progress.
   static func savePosition(_ id: String, seconds: Double, duration: Double) async throws {

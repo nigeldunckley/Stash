@@ -55,7 +55,7 @@ enum Library {
     let gql = """
       query GetSubscriptions($sort: SortParams) {
         subscriptions(sort: $sort) {
-          ... on SubscriptionsSuccess { subscriptions { id name type url icon status } }
+          ... on SubscriptionsSuccess { subscriptions { id name type url icon status collectionId includeShorts } }
           ... on SubscriptionsError { errorCodes }
         }
       }

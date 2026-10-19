@@ -63,6 +63,9 @@ struct Subscription: Decodable, Identifiable, Hashable {
   let url: String?
   let icon: String?
   let status: String?
+  /// The Watch collection a channel files its videos under.
+  let collectionId: String?
+  let includeShorts: Bool?
 
   /// Feed items record their feed by address and newsletter items by name,
   /// so that's what a `subscription:` search has to match.

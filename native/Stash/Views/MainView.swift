@@ -55,6 +55,11 @@ struct MainView: View {
   /// Which page Read and Watch show on iPhone.
   @State private var readPage: AppSection = .feeds
   @State private var watchPage: AppSection = .channels
+  #if os(iOS)
+  @Environment(PlayerController.self) private var player
+  /// The full player, opened from the mini player.
+  @State private var showingPlayer = false
+  #endif
 
   var body: some View {
     shell
@@ -121,11 +126,33 @@ struct MainView: View {
       }
     }
     .tabViewStyle(.sidebarAdaptable)
+    // The video you left, just above the tab bar.
+    .overlay(alignment: .bottom) {
+      if player.host == .mini {
+        MiniPlayer(onExpand: { showingPlayer = true })
+          .padding(.horizontal, 10)
+          .padding(.bottom, 58)
+          .transition(.move(edge: .bottom).combined(with: .opacity))
+      }
+    }
+    .animation(.snappy(duration: 0.25), value: player.host == .mini)
+    .sheet(isPresented: $showingPlayer) {
+      if let item = player.item {
+        NavigationStack {
+          PlayerScreen(item: item, queue: player.queue, actions: [], perform: { _, _ in })
+            .toolbar {
+              ToolbarItem(placement: .cancellationAction) {
+                Button("Done") { showingPlayer = false }
+              }
+            }
+        }
+      }
+    }
   }
   #endif
 
   private var watchPages: [(AppSection, String)] {
-    [(AppSection.channels, "Channels"), (AppSection.savedVideos, "Saved")]
+    [(AppSection.channels, "Latest"), (AppSection.savedVideos, "Saved")]
       + collections.map { (AppSection.collection($0.id), $0.name) }
   }
 

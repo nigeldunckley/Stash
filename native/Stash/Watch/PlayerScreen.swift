@@ -12,6 +12,7 @@ struct PlayerScreen: View {
   var embedded = false
 
   @Environment(PlayerController.self) private var player
+  @Environment(\.isActivePage) private var isActivePage
   @State private var tab: PlayerTab = .upNext
   @State private var screenID = UUID()
   @State private var transcript: [TranscriptLine]?
@@ -49,11 +50,21 @@ struct PlayerScreen: View {
     .background(Color.stPage)
     .modifier(ScreenChrome(embedded: embedded, title: current.source) { toolbar })
     .onAppear {
+      guard isActivePage else { return }
       player.queue = queue
-      player.owner = screenID
+      player.screenShown(screenID)
       player.play(item)
     }
-    .onDisappear { if player.owner == screenID { player.stop() } }
+    .onDisappear { player.screenLeft(screenID) }
+    // On Mac a page you leave stays alive out of sight, so leaving it counts as leaving the video.
+    .onChange(of: isActivePage) { _, active in
+      if active {
+        if player.item == nil { player.queue = queue; player.play(item) }
+        player.screenShown(screenID)
+      } else {
+        player.screenLeft(screenID)
+      }
+    }
     .task(id: current.id) { await loadTranscript() }
   }
 
@@ -77,7 +88,7 @@ struct PlayerScreen: View {
   }
 
   private var video: some View {
-    PlayerWebView(webView: player.webView)
+    PlayerWebView(webView: player.webView, active: player.host == .screen(screenID))
       .aspectRatio(16 / 9, contentMode: .fit)
       .background(Color.black)
   }
@@ -123,6 +134,15 @@ struct PlayerScreen: View {
         .monospacedDigit()
 
       Spacer()
+
+      Button { player.pictureInPicture() } label: { Image(systemName: "pip.enter") }
+        .help("Picture in picture")
+      #if os(macOS)
+      Button { NotificationCenter.default.post(name: .stashPopOut, object: nil) } label: {
+        Image(systemName: "rectangle.on.rectangle")
+      }
+      .help("Float on top of other apps (⌥⌘P)")
+      #endif
 
       Menu {
         Picker("Speed", selection: Binding(get: { player.rate }, set: { player.setRate($0) })) {
@@ -302,16 +322,52 @@ struct PlayerScreen: View {
   }
 }
 
+/// A place the one video player can show: the player screen, the mini player or the floating
+/// window. The web view moves into whichever is active, so the video carries on where it was.
 #if os(iOS)
 struct PlayerWebView: UIViewRepresentable {
   let webView: WKWebView
-  func makeUIView(context: Context) -> WKWebView { webView }
-  func updateUIView(_ view: WKWebView, context: Context) {}
+  var active = true
+
+  func makeUIView(context: Context) -> UIView {
+    let container = UIView()
+    container.backgroundColor = .black
+    container.clipsToBounds = true
+    attach(to: container)
+    return container
+  }
+
+  func updateUIView(_ container: UIView, context: Context) { attach(to: container) }
+
+  private func attach(to container: UIView) {
+    guard active, webView.superview !== container else { return }
+    webView.removeFromSuperview()
+    webView.frame = container.bounds
+    webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    container.addSubview(webView)
+  }
 }
 #else
 struct PlayerWebView: NSViewRepresentable {
   let webView: WKWebView
-  func makeNSView(context: Context) -> WKWebView { webView }
-  func updateNSView(_ view: WKWebView, context: Context) {}
+  var active = true
+
+  func makeNSView(context: Context) -> NSView {
+    let container = NSView()
+    container.wantsLayer = true
+    container.layer?.backgroundColor = NSColor.black.cgColor
+    attach(to: container)
+    return container
+  }
+
+  func updateNSView(_ container: NSView, context: Context) { attach(to: container) }
+
+  private func attach(to container: NSView) {
+    guard active, webView.superview !== container else { return }
+    webView.removeFromSuperview()
+    webView.frame = container.bounds
+    webView.autoresizingMask = [.width, .height]
+    container.addSubview(webView)
+  }
 }
 #endif

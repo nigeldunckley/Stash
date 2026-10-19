@@ -6,6 +6,8 @@ struct SettingsView: View {
   @AppStorage("readerFontSize") private var fontSize = 20
   @AppStorage("readerFont") private var fontFamily = "Newsreader"
   @State private var confirmSignOut = false
+  @AppStorage("watchOnLeave") private var onLeave = "mini"
+  @AppStorage("watchOnSwitch") private var onSwitch = "float"
   @Environment(\.openURL) private var openURL
 
   var body: some View {
@@ -46,6 +48,19 @@ struct SettingsView: View {
               .buttonStyle(.text)
             }
           }
+
+          SettingsGroup("Watch: when you leave a playing video") {
+            SettingsChoice("Keep playing in the mini player", detail: "It sits in the corner until you close it.", value: "mini", selection: $onLeave)
+            SettingsChoice("Pause", detail: "Your place is saved for next time.", value: "pause", selection: $onLeave, divider: false)
+          }
+
+          #if os(macOS)
+          SettingsGroup("Watch: when you switch to another app") {
+            SettingsChoice("Float the video on top", detail: "It pops out by itself and comes back when you return.", value: "float", selection: $onSwitch)
+            SettingsChoice("Only when I ask", detail: "Use ⌥⌘P or the float button on the video.", value: "ask", selection: $onSwitch)
+            SettingsChoice("Keep playing sound only", detail: "Good for talks and podcasts.", value: "sound", selection: $onSwitch, divider: false)
+          }
+          #endif
 
           SettingsGroup(
             "The Edition",
@@ -181,6 +196,51 @@ struct SettingsRow<Control: View>: View {
     }
     .padding(.horizontal, 14)
     .frame(minHeight: 46)
+    .overlay(alignment: .bottom) {
+      if divider { Rectangle().fill(Color.stLine).frame(height: 1).padding(.leading, 14) }
+    }
+  }
+}
+
+/// One of a group's choices, with a line saying what it does and an orange dot when chosen.
+struct SettingsChoice: View {
+  let title: String
+  let detail: String
+  let value: String
+  @Binding var selection: String
+  var divider = true
+
+  init(_ title: String, detail: String, value: String, selection: Binding<String>, divider: Bool = true) {
+    self.title = title
+    self.detail = detail
+    self.value = value
+    self._selection = selection
+    self.divider = divider
+  }
+
+  var body: some View {
+    Button { selection = value } label: {
+      HStack(alignment: .top, spacing: 12) {
+        Circle()
+          .strokeBorder(selection == value ? Color.stAccent : Color.stLineStrong, lineWidth: selection == value ? 5 : 1.5)
+          .frame(width: 16, height: 16)
+          .padding(.top, 2)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(title)
+            .font(.ui(13, .medium, relativeTo: .subheadline))
+            .foregroundStyle(Color.stInk)
+          Text(detail)
+            .font(.ui(12, relativeTo: .footnote))
+            .foregroundStyle(Color.stMuted)
+        }
+        Spacer(minLength: 0)
+      }
+      .padding(.horizontal, 14)
+      .padding(.vertical, 12)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityAddTraits(selection == value ? .isSelected : [])
     .overlay(alignment: .bottom) {
       if divider { Rectangle().fill(Color.stLine).frame(height: 1).padding(.leading, 14) }
     }

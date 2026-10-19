@@ -9,6 +9,7 @@ struct MacShell: View {
   let collections: [WatchCollection]
 
   @Environment(\.scenePhase) private var scenePhase
+  @Environment(PlayerController.self) private var player
   @AppStorage("sidebarHidden") private var sidebarHidden = false
   @State private var channelsCount: Int?
   @State private var discoverCount: Int?
@@ -16,6 +17,11 @@ struct MacShell: View {
   /// Pages you've visited, newest last. They stay alive behind the current one, so each keeps
   /// its scroll position and anything it has open.
   @State private var visited: [AppSection] = []
+  /// The full player, opened from the mini player over whatever page you're on.
+  @State private var showingPlayer = false
+  @State private var floating: FloatingPlayer?
+  @AppStorage("miniPlayerCorner") private var miniCorner = MiniCorner.bottomTrailing
+  @State private var miniDrag: CGSize = .zero
 
   /// How many pages stay alive at once.
   private static let keepAlive = 6
@@ -36,7 +42,7 @@ struct MacShell: View {
       }
       ZStack {
         ForEach(visited, id: \.self) { visitedSection in
-          let active = visitedSection == section
+          let active = visitedSection == section && !showingPlayer
           page(visitedSection)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .opacity(active ? 1 : 0)
@@ -47,10 +53,16 @@ struct MacShell: View {
             .environment(\.isActivePage, active)
             .zIndex(active ? 1 : 0)
         }
+        if showingPlayer, let item = player.item {
+          expandedPlayer(item).zIndex(2)
+        }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .overlay { miniPlayer }
     }
     .animation(.snappy(duration: 0.25), value: sidebarHidden)
+    .animation(.snappy(duration: 0.25), value: player.host == .mini)
+    .animation(.snappy(duration: 0.3), value: showingPlayer)
     .background(Color.stPage)
     .containerBackground(Color.stPage, for: .window)
     .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
@@ -67,8 +79,14 @@ struct MacShell: View {
       capturing = true
     }
     .onReceive(NotificationCenter.default.publisher(for: .stashOpenSettings)) { _ in section = .settings }
+    .onReceive(NotificationCenter.default.publisher(for: .stashPopOut)) { _ in floating?.toggle() }
+    .onChange(of: player.host) { _, _ in floating?.sync() }
+    .onAppear { if floating == nil { floating = FloatingPlayer(player: player) } }
     .onAppear { visit(section) }
-    .onChange(of: section) { _, value in visit(value) }
+    .onChange(of: section) { _, value in
+      showingPlayer = false
+      visit(value)
+    }
     .onChange(of: collections) { _, current in
       // A collection that's gone shouldn't linger as a hidden page.
       visited.removeAll { page in
@@ -104,6 +122,49 @@ struct MacShell: View {
     }
   }
 
+  /// The video you left, in a corner of the page. Drag it to another corner.
+  @ViewBuilder
+  private var miniPlayer: some View {
+    if player.host == .mini {
+      GeometryReader { geometry in
+        MiniPlayer(onExpand: { showingPlayer = true })
+          .offset(miniDrag)
+          .gesture(
+            DragGesture(coordinateSpace: .named("page"))
+              .onChanged { miniDrag = $0.translation }
+              .onEnded { value in
+                let left = value.location.x < geometry.size.width / 2
+                let top = value.location.y < geometry.size.height / 2
+                withAnimation(.snappy(duration: 0.25)) {
+                  miniCorner = top ? (left ? .topLeading : .topTrailing) : (left ? .bottomLeading : .bottomTrailing)
+                  miniDrag = .zero
+                }
+              }
+          )
+          .padding(22)
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: miniCorner.alignment)
+      }
+      .coordinateSpace(.named("page"))
+      .transition(.scale(scale: 0.9).combined(with: .opacity))
+    }
+  }
+
+  /// The full player for whatever is playing, over the page, with a way back down.
+  private func expandedPlayer(_ item: LibraryItem) -> some View {
+    NavigationStack {
+      PlayerScreen(item: item, queue: player.queue, actions: [], perform: { _, _ in })
+        .toolbar {
+          ToolbarItem(placement: .navigation) {
+            Button { showingPlayer = false } label: { Label("Close the player", systemImage: "chevron.down") }
+              .help("Close the player; the video keeps playing in the corner")
+              .keyboardShortcut(.escape, modifiers: [])
+          }
+        }
+    }
+    .background(Color.stPage)
+    .transition(.move(edge: .bottom))
+  }
+
   private func visit(_ page: AppSection) {
     visited.removeAll { $0 == page }
     visited.append(page)
@@ -123,5 +184,21 @@ extension Notification.Name {
   static let stashCapture = Notification.Name("stashCapture")
   /// ⌘,: open Settings.
   static let stashOpenSettings = Notification.Name("stashOpenSettings")
+}
+#endif
+
+#if os(macOS)
+/// Which corner of the page the mini player sits in.
+enum MiniCorner: String {
+  case topLeading, topTrailing, bottomLeading, bottomTrailing
+
+  var alignment: Alignment {
+    switch self {
+    case .topLeading: return .topLeading
+    case .topTrailing: return .topTrailing
+    case .bottomLeading: return .bottomLeading
+    case .bottomTrailing: return .bottomTrailing
+    }
+  }
 }
 #endif

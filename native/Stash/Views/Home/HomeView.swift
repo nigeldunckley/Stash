@@ -499,7 +499,7 @@ struct HomeView: View {
       EmptyBox(title: "Couldn't load", message: error, systemImage: "wifi.exclamationmark")
     } else {
       EmptyBox(message: tab == .watch ? "You're all caught up on your channels." : "You're all caught up.") {
-        Button(tab == .watch ? "Open Channels" : "Open Feeds") { go(tab == .watch ? .channels : .feeds) }
+        Button(tab == .watch ? "Open Latest" : "Open Feeds") { go(tab == .watch ? .channels : .feeds) }
       }
     }
   }
@@ -513,7 +513,7 @@ struct HomeView: View {
           .foregroundStyle(Color.stMuted)
         Spacer()
         HStack(spacing: 6) {
-          Text(tab == .watch ? "Open Channels" : "Open Feeds")
+          Text(tab == .watch ? "Open Latest" : "Open Feeds")
           Image(systemName: "chevron.right").imageScale(.small)
         }
         .font(.ui(13, .medium))

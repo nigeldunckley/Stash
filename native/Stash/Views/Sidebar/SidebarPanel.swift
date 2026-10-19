@@ -47,7 +47,7 @@ struct SidebarPanel: View {
 
           SidebarGroupLabel(title: "Watch", isOpen: $watchOpen)
           if watchOpen {
-            row("Channels", "play.rectangle", .channels) {
+            row("Latest", "play.rectangle", .channels) {
               if let channelsCount, channelsCount > 0 { Count(channelsCount, style: .badge) }
             }
             row("Saved", "bookmark", .savedVideos)

@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Watch: new videos from your channels (optionally one collection), or the videos you've saved.
+/// Watch: Latest (what you were watching, your channels, and new videos by day), one channel
+/// or collection, or the videos you've saved.
 struct WatchView: View {
   enum Kind: Hashable {
     case channels
@@ -18,6 +19,18 @@ struct WatchView: View {
   @State private var collection: WatchCollection?
   @State private var toaster = Toaster()
   @AppStorage("watchShowAll") private var showAll = false
+  @AppStorage("watchLength") private var length = LengthFilter.any
+  @State private var continuing: [LibraryItem] = []
+  @State private var unseenByChannel: [String: Int] = [:]
+  @State private var path = NavigationPath()
+
+  private enum Route: Hashable { case allChannels }
+
+  /// Latest's front page, before you narrow it to a channel or collection.
+  private var isFront: Bool {
+    if case .channels = kind { return channel == nil && collection == nil }
+    return false
+  }
 
   private var activeCollection: WatchCollection? {
     if case .collection(let fixed) = kind { return fixed }
@@ -45,7 +58,7 @@ struct WatchView: View {
     switch kind {
     case .saved: return "Saved videos"
     case .collection(let fixed): return fixed.name
-    case .channels: return channel?.name ?? collection?.name ?? "Channels"
+    case .channels: return channel?.name ?? collection?.name ?? "Latest"
     }
   }
 
@@ -55,7 +68,7 @@ struct WatchView: View {
 
   /// Saved videos play oldest first, except any pinned on the web, which come first in their order.
   private var videos: [LibraryItem] {
-    let items = list.visibleItems
+    let items = list.visibleItems.filter { kind == .saved || length.matches($0) }
     guard kind == .saved, !savedOrder.isEmpty else { return items }
     let rank = Dictionary(savedOrder.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
     return items.enumerated().sorted { a, b in
@@ -71,7 +84,7 @@ struct WatchView: View {
   private var channels: [Subscription] { subscriptions.filter(\.isYouTube) }
 
   var body: some View {
-    NavigationStack {
+    NavigationStack(path: $path) {
       videoList
       .overlay { emptyState }
       .toasts(toaster)
@@ -79,6 +92,12 @@ struct WatchView: View {
       .navigationDestination(for: LibraryItem.self) { item in
         PlayerScreen(item: item, queue: videos, actions: actions, perform: perform)
           .onAppear { list.markSeen(item) }
+      }
+      .navigationDestination(for: Route.self) { _ in
+        AllChannelsView { picked in
+          channel = picked
+          path = NavigationPath()
+        }
       }
       .refreshable { await reload() }
       .task(id: query) { await list.load(query) }
@@ -91,6 +110,12 @@ struct WatchView: View {
   private var videoList: some View {
     #if os(iOS)
     List {
+      if isFront {
+        Group { frontSections }
+          .listRowSeparator(.hidden)
+          .listRowBackground(Color.clear)
+          .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+      }
       ForEach(videos) { item in
         ZStack {
           NavigationLink(value: item) { EmptyView() }.opacity(0)
@@ -113,6 +138,7 @@ struct WatchView: View {
     // for new videos.
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 26) {
+        if isFront { frontSections }
         ForEach(dayGroups, id: \.label) { group in
           VStack(alignment: .leading, spacing: 14) {
             if kind != .saved {
@@ -140,6 +166,54 @@ struct WatchView: View {
     }
     .scrollContentBackground(.hidden)
     #endif
+  }
+
+  /// Continue watching, then your channels, at the top of Latest.
+  @ViewBuilder
+  private var frontSections: some View {
+    if !continuing.isEmpty {
+      VStack(alignment: .leading, spacing: 14) {
+        WatchBand("Continue watching")
+        #if os(macOS)
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 18, alignment: .top), count: 3), spacing: 22) {
+          ForEach(continuing.prefix(3)) { item in
+            NavigationLink(value: item) { continueCard(item) }
+              .buttonStyle(.plain)
+          }
+        }
+        #else
+        ScrollView(.horizontal, showsIndicators: false) {
+          HStack(alignment: .top, spacing: 14) {
+            ForEach(continuing) { item in
+              NavigationLink(value: item) { continueCard(item).frame(width: 240) }
+                .buttonStyle(.plain)
+            }
+          }
+        }
+        #endif
+      }
+    }
+    if !channels.isEmpty {
+      VStack(alignment: .leading, spacing: 12) {
+        WatchBand("Your channels") {
+          Button { path.append(Route.allChannels) } label: {
+            Text("All channels ›").font(.stSmall).foregroundStyle(Color.stMuted)
+          }
+          .buttonStyle(.plain)
+          .fixedSize()
+        }
+        ChannelStrip(
+          channels: channels,
+          unseen: unseenByChannel,
+          onPick: { channel = $0 },
+          onAll: { path.append(Route.allChannels) }
+        )
+      }
+    }
+  }
+
+  private func continueCard(_ item: LibraryItem) -> some View {
+    VideoCard(item: item, channelName: channelName(item), timeLeft: videoTimeLeft(item))
   }
 
   /// "12 new", "40 videos" or "8 saved" beside the title.
@@ -175,6 +249,17 @@ struct WatchView: View {
   @ViewBuilder
   private var tools: some View {
     if kind != .saved {
+      #if os(macOS)
+      StashSegmented(selection: $length, LengthFilter.allCases.map { StashSegmented<LengthFilter>.Option($0.title, $0) })
+      #else
+      Menu {
+        Picker("Length", selection: $length) {
+          ForEach(LengthFilter.allCases) { Text($0.title).tag($0) }
+        }
+      } label: {
+        Label(length.title, systemImage: "clock")
+      }
+      #endif
       StashSegmented(selection: $showAll, [.init("New", false), .init("All", true)])
 
       Menu {
@@ -189,6 +274,24 @@ struct WatchView: View {
             ForEach(collections) { Text($0.name).tag(Optional($0)) }
           }
           .pickerStyle(.inline)
+        }
+        if let channel {
+          Section(channel.name) {
+            Toggle("Include Shorts", isOn: Binding(
+              get: { channel.includeShorts ?? false },
+              set: { value in updateChannel(channel, includeShorts: value) }
+            ))
+            if !collections.isEmpty {
+              Picker("Collection", selection: Binding(
+                get: { channel.collectionId ?? "" },
+                set: { value in updateChannel(channel, collectionId: value) }
+              )) {
+                Text("No collection").tag("")
+                ForEach(collections) { Text($0.name).tag($0.id) }
+              }
+            }
+            Button("Unfollow \(channel.name)", role: .destructive) { unfollow(channel) }
+          }
         }
       } label: {
         Label(channel?.name ?? collection?.name ?? "All channels", systemImage: "line.3.horizontal.decrease")
@@ -233,12 +336,49 @@ struct WatchView: View {
   private func reload() async {
     await list.reload(query)
     if kind == .saved { savedOrder = await Watch.savedOrder() }
+    if case .channels = kind { await loadFront() }
   }
 
   private func loadExtras() async {
     if kind == .saved { savedOrder = await Watch.savedOrder() }
     if subscriptions.isEmpty { subscriptions = (try? await Library.subscriptions()) ?? [] }
-    if case .channels = kind, collections.isEmpty { collections = (try? await Watch.collections()) ?? [] }
+    if case .channels = kind {
+      if collections.isEmpty { collections = (try? await Watch.collections()) ?? [] }
+      await loadFront()
+    }
+  }
+
+  private func loadFront() async {
+    async let watching = Watch.continueWatching()
+    async let counts = Watch.unseenByChannel()
+    continuing = await watching
+    unseenByChannel = await counts
+  }
+
+  private func updateChannel(_ target: Subscription, collectionId: String? = nil, includeShorts: Bool? = nil) {
+    Task {
+      do {
+        try await Watch.updateChannel(target.id, collectionId: collectionId, includeShorts: includeShorts)
+        subscriptions = (try? await Library.subscriptions()) ?? subscriptions
+        channel = subscriptions.first { $0.id == target.id }
+        await list.reload(query)
+      } catch {
+        toaster.show("Couldn't change \(target.name)")
+      }
+    }
+  }
+
+  private func unfollow(_ target: Subscription) {
+    Task {
+      do {
+        try await Watch.unfollow(target)
+        channel = nil
+        subscriptions.removeAll { $0.id == target.id }
+        toaster.show("Unfollowed \(target.name)")
+      } catch {
+        toaster.show("Couldn't unfollow \(target.name)")
+      }
+    }
   }
 
   private func perform(_ action: ItemAction, _ item: LibraryItem) {

@@ -5,6 +5,8 @@ struct VideoCard: View {
   let item: LibraryItem
   var channelName: String?
   var unseen = false
+  /// "11 min left", in place of the age, for Continue watching.
+  var timeLeft: String?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 9) {
@@ -26,8 +28,16 @@ struct VideoCard: View {
           Text(channelName ?? item.author ?? item.source)
             .foregroundStyle(Color.stInk2)
             .lineLimit(1)
-          Text("· \(shortAge(item.publishedAt ?? item.savedAt))")
-            .fixedSize()
+          if let timeLeft {
+            Spacer(minLength: 4)
+            Text(timeLeft)
+              .font(.mono(11))
+              .foregroundStyle(Color.stAccentText)
+              .fixedSize()
+          } else {
+            Text("· \(shortAge(item.publishedAt ?? item.savedAt))")
+              .fixedSize()
+          }
         }
         .font(.stSmall)
         .foregroundStyle(Color.stMuted)
