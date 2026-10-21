@@ -232,16 +232,16 @@ struct PlayerScreen: View {
         Text("Plays in this order").font(.stDetail).foregroundStyle(Color.stMuted).padding(.vertical, 8)
       }
       ForEach(Array(player.upNext.prefix(30).enumerated()), id: \.element.id) { index, next in
-        HStack(spacing: 6) {
-          Text("\(index + 1)").font(.stDetail).foregroundStyle(Color.stMuted).frame(width: 20)
-          Button { player.play(next) } label: { VideoRow(item: next) }.buttonStyle(.plain)
-          Menu {
-            Button("Move up") { player.moveUpcoming(next.id, by: -1) }.disabled(index == 0)
-            Button("Move down") { player.moveUpcoming(next.id, by: 1) }.disabled(index == player.upNext.count - 1)
-          } label: { Image(systemName: "ellipsis").frame(minWidth: target, minHeight: target) }
-            .menuIndicator(.hidden)
-            .accessibilityLabel("Reorder \(next.title)")
-        }
+        QueueRow(
+          item: next,
+          position: index + 1,
+          onPlay: { player.play(next) },
+          onMove: index == 0 && index == player.upNext.count - 1 ? nil : { step in
+            withAnimation(reduceMotion ? nil : StashMotion.change) { player.moveUpcoming(next.id, by: step) }
+          },
+          canMoveUp: index > 0,
+          canMoveDown: index < player.upNext.count - 1
+        )
         .onDrag { draggingID = next.id; return NSItemProvider(object: next.id as NSString) }
         .onDrop(of: [UTType.text], isTargeted: nil) { _ in
           guard let id = draggingID, let source = player.upNext.firstIndex(where: { $0.id == id }), source != index else { return false }
