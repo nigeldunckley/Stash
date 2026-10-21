@@ -7,6 +7,8 @@ import {
   Checks,
   Clock,
   GearSix,
+  ListDashes,
+  Stack,
   Play,
   Plus,
   Rows,
@@ -59,7 +61,11 @@ import {
   SiteIcon,
   SwipeAction,
   UnseenDot,
+  WireHour,
+  WireRow,
 } from '../../elements/stash'
+import { TheSort } from './TheSort'
+import { formatMinutes, readingMinutes } from '../../../lib/readingTime'
 import { Folio, useFeedsFolio } from '../../elements/stash/Folio'
 import { ease, motion } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
@@ -409,6 +415,23 @@ type View = 'unseen' | 'all' | 'later'
 
 const PEEK_WIDTH_KEY = 'feeds-peek-width'
 const LAYOUT_KEY = 'feeds-watch-layout'
+const READ_LAYOUT_KEY = 'feeds-read-layout'
+
+// The wire's hour marks: "10:00" today, "Yesterday 18:00", then the day.
+const wireHour = (date: string, now: number): string => {
+  const when = new Date(date)
+  const hour = `${String(when.getHours()).padStart(2, '0')}:00`
+  const day = new Date(now)
+  day.setHours(0, 0, 0, 0)
+  const start = day.getTime()
+  if (when.getTime() >= start) return hour
+  if (when.getTime() >= start - 86_400_000) return `Yesterday ${hour}`
+  return `${when.toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  })} ${hour}`
+}
 
 const byName = (a: Subscription, b: Subscription) =>
   a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
@@ -851,6 +874,27 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     }
   }
 
+  // Read shows items as cards or as the wire, kept between visits.
+  const [readLayout, setReadLayout] = useState<'cards' | 'wire'>('cards')
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(READ_LAYOUT_KEY) == 'wire') {
+        setReadLayout('wire')
+      }
+    } catch {
+      // Storage is unavailable; use cards.
+    }
+  }, [])
+  const changeReadLayout = (next: 'cards' | 'wire') => {
+    setReadLayout(next)
+    try {
+      window.localStorage.setItem(READ_LAYOUT_KEY, next)
+    } catch {
+      // Storage is unavailable; the choice lasts until the page closes.
+    }
+  }
+  const onWire = !watching && readLayout == 'wire'
+
   const select = useCallback(
     (subscription?: Subscription) => {
       const query = { ...router.query }
@@ -939,6 +983,40 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     [items, saved, archived, leaving, peekItem]
   )
   const total = itemsQuery.data?.pages[0]?.pageInfo.totalCount
+
+  // On the wire, items that arrive while you watch type themselves in.
+  const known = useRef<Set<string> | undefined>()
+  const [fresh, setFresh] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    known.current = undefined
+    setFresh(new Set())
+  }, [scopeKey, view, readLayout])
+  useEffect(() => {
+    if (itemsQuery.isPending) return
+    const ids = listed.map((item) => item.id)
+    if (!known.current) {
+      known.current = new Set(ids)
+      return
+    }
+    const arrived = ids.filter((id) => !known.current?.has(id))
+    if (arrived.length) {
+      arrived.forEach((id) => known.current?.add(id))
+      setFresh((current) => new Set([...current, ...arrived]))
+    }
+  }, [listed, itemsQuery.isPending])
+
+  // The Sort, opened from the toolbar or from Home (?sort=1).
+  const [sorting, setSorting] = useState(false)
+  useEffect(() => {
+    if (router.query.sort == '1' && !watching && !itemsQuery.isPending) {
+      setSorting(true)
+      const query = { ...router.query }
+      delete query.sort
+      router.replace({ pathname: router.pathname, query }, undefined, {
+        shallow: true,
+      })
+    }
+  }, [router, watching, itemsQuery.isPending])
 
   // Refetching the open list would pull rows out from under the reader, so a
   // one-item query watches for newer items and offers to show them. It looks
@@ -1732,6 +1810,106 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     ),
   ]
 
+  // The buttons a row shows on hover or when selected.
+  const actionsFor = (item: LibraryItemNode) => (
+    <>
+      {!later && (
+        <IconButton
+          label={saved.has(item.id) ? 'Saved' : 'Save'}
+          shortcut="s"
+          size="sm"
+          active={saved.has(item.id)}
+          onClick={() => save(item)}
+        >
+          {watching ? (
+            <Clock size={15} weight={saved.has(item.id) ? 'fill' : 'regular'} />
+          ) : (
+            <Bookmark
+              size={15}
+              weight={saved.has(item.id) ? 'fill' : 'regular'}
+            />
+          )}
+        </IconButton>
+      )}
+      <IconButton
+        label="Archive"
+        shortcut="⌫"
+        size="sm"
+        onClick={() => archive(item)}
+      >
+        <Archive size={15} />
+      </IconButton>
+      <IconButton
+        label="Peek"
+        shortcut="Space"
+        size="sm"
+        active={item.id == peekItem?.id}
+        onClick={() => (item.id == peekItem?.id ? closePeek() : openPeek(item))}
+      >
+        <SidebarSimple size={15} mirrored />
+      </IconButton>
+      <IconButton
+        label="Open original"
+        shortcut="v"
+        size="sm"
+        onClick={() => openOriginal(item)}
+      >
+        <ArrowSquareOut size={15} />
+      </IconButton>
+    </>
+  )
+
+  // One item as a line on the wire.
+  const wireFor = (item: LibraryItemNode) => {
+    const itemSeen = isSeen(item)
+    const when = new Date(item.publishedAt || item.savedAt || 0)
+    return (
+      <Leaving key={item.id} leaving={leaving.has(item.id)}>
+        <SwipeAction {...swipeFor(item)}>
+          <ContextMenu entries={menuFor(item)}>
+            <WireRow
+              ref={rowRef(item.id)}
+              leading={<UnseenDot hidden={itemSeen} />}
+              title={item.title}
+              morphId={item.id}
+              time={when.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+                hourCycle: 'h23',
+              })}
+              dateTime={item.publishedAt || item.savedAt}
+              source={selected ? item.author ?? undefined : sourceName(item)}
+              length={formatMinutes(readingMinutes(item.wordsCount))}
+              fresh={fresh.has(item.id)}
+              muted={itemSeen}
+              selected={peekItem ? item.id == peekItem.id : item.id == focusId}
+              onOpen={() =>
+                item.id == peekItem?.id ? closePeek() : openPeek(item)
+              }
+              onFocus={() => setFocusId(item.id)}
+              actions={actionsFor(item)}
+            />
+          </ContextMenu>
+        </SwipeAction>
+      </Leaving>
+    )
+  }
+
+  // The wire, with a mark at the top of each hour.
+  const wire = () => {
+    const out: JSX.Element[] = []
+    let last = ''
+    listed.forEach((item) => {
+      const hour = wireHour(item.publishedAt || item.savedAt || '', now)
+      if (hour != last) {
+        out.push(<WireHour key={`h-${hour}-${item.id}`}>{hour}</WireHour>)
+        last = hour
+      }
+      out.push(wireFor(item))
+    })
+    return out
+  }
+
   // One item as a row, for Read and for Watch's list view.
   const rowFor = (item: LibraryItemNode) => {
     const itemSeen = isSeen(item)
@@ -1800,58 +1978,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
                   : openPeek(item)
               }
               onFocus={() => setFocusId(item.id)}
-              actions={
-                <>
-                  {!later && (
-                    <IconButton
-                      label={saved.has(item.id) ? 'Saved' : 'Save'}
-                      shortcut="s"
-                      size="sm"
-                      active={saved.has(item.id)}
-                      onClick={() => save(item)}
-                    >
-                      {watching ? (
-                        <Clock
-                          size={15}
-                          weight={saved.has(item.id) ? 'fill' : 'regular'}
-                        />
-                      ) : (
-                        <Bookmark
-                          size={15}
-                          weight={saved.has(item.id) ? 'fill' : 'regular'}
-                        />
-                      )}
-                    </IconButton>
-                  )}
-                  <IconButton
-                    label="Archive"
-                    shortcut="⌫"
-                    size="sm"
-                    onClick={() => archive(item)}
-                  >
-                    <Archive size={15} />
-                  </IconButton>
-                  <IconButton
-                    label="Peek"
-                    shortcut="Space"
-                    size="sm"
-                    active={item.id == peekItem?.id}
-                    onClick={() =>
-                      item.id == peekItem?.id ? closePeek() : openPeek(item)
-                    }
-                  >
-                    <SidebarSimple size={15} mirrored />
-                  </IconButton>
-                  <IconButton
-                    label="Open original"
-                    shortcut="v"
-                    size="sm"
-                    onClick={() => openOriginal(item)}
-                  >
-                    <ArrowSquareOut size={15} />
-                  </IconButton>
-                </>
-              }
+              actions={actionsFor(item)}
             />
           </ContextMenu>
         </SwipeAction>
@@ -1975,6 +2102,38 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
                   <Rows size={15} />
                 </IconButton>
               </LayoutToggle>
+            )}
+            {!watching && (
+              <LayoutToggle role="group" aria-label="Layout">
+                <IconButton
+                  label="Cards"
+                  size="sm"
+                  active={readLayout == 'cards'}
+                  onClick={() => changeReadLayout('cards')}
+                >
+                  <Rows size={15} />
+                </IconButton>
+                <IconButton
+                  label="Wire"
+                  size="sm"
+                  active={readLayout == 'wire'}
+                  onClick={() => changeReadLayout('wire')}
+                >
+                  <ListDashes size={15} />
+                </IconButton>
+              </LayoutToggle>
+            )}
+            {!watching && unseenOnScreen.length >= 3 && (
+              <TextButton
+                aria-label="Sort the new items one at a time"
+                title="Sort the new items one at a time"
+                onClick={() => setSorting(true)}
+              >
+                <Stack size={14} />
+                <Wide css={peekItem ? { display: 'none' } : undefined}>
+                  Sort {unseenOnScreen.length}
+                </Wide>
+              </TextButton>
             )}
             <SegmentedControl
               label="Show"
@@ -2114,6 +2273,8 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
                     </section>
                   ))}
                 </VideoGroups>
+              ) : onWire ? (
+                <ItemList>{wire()}</ItemList>
               ) : (
                 <ItemList>{listed.map(rowFor)}</ItemList>
               )}
@@ -2125,6 +2286,23 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
         {peekItem && !isPhone && <FeedPeekPane {...peekProps(peekItem)} />}
       </Panes>
       {isPhone && peekItem && <FeedPeekSheet open {...peekProps(peekItem)} />}
+      {sorting && (
+        <TheSort
+          items={unseenOnScreen}
+          sourceName={sourceName}
+          onSave={save}
+          onArchive={archive}
+          onSkip={(item) => markSeen([item.id])}
+          onRead={(item) => {
+            setSorting(false)
+            open(item)
+          }}
+          onNeedMore={() => {
+            if (hasNextPage && !isFetchingNextPage) fetchNextPage()
+          }}
+          onClose={() => setSorting(false)}
+        />
+      )}
     </Page>
   )
 }
