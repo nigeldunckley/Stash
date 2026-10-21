@@ -24,6 +24,8 @@ struct ItemListView<Tools: View>: View {
   var groupsByDay = false
   /// The Wire: dense rows by the hour, and new posts typed in as they arrive.
   var wire = false
+  /// Keeps checking for new items while you look, offering them as "N new" (Feeds).
+  var live = false
   /// Called when a search is submitted.
   var onSearch: () -> Void = {}
   /// The mono line above the title.
@@ -33,6 +35,7 @@ struct ItemListView<Tools: View>: View {
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.isActivePage) private var isActivePage
+  @Environment(\.scenePhase) private var scenePhase
   @State private var selection: LibraryItem?
   @Namespace private var unfold
   @State private var toaster = Toaster()
@@ -96,7 +99,19 @@ struct ItemListView<Tools: View>: View {
     .toolbar(removing: .title)
     .toasts(toaster)
     .task(id: query) { await list.load(query) }
-    .task(id: wire ? query : nil) { await watchWire() }
+    .task(id: watchKey) { await watchForNew() }
+    .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await checkNow() } } }
+    .onChange(of: isActivePage) { _, active in if active { Task { await checkNow() } } }
+    // ⌘R checks for new posts now (the header's Refresh button does the same).
+    .background {
+      if live {
+        Button("Refresh") { Task { await refresh() } }
+          .keyboardShortcut("r", modifiers: .command)
+          .opacity(0)
+          .frame(width: 0, height: 0)
+          .accessibilityHidden(true)
+      }
+    }
     .onChange(of: list.items) { _, items in
       if let selected = selection, let updated = items.first(where: { $0.id == selected.id }) { selection = updated }
     }
@@ -118,7 +133,16 @@ struct ItemListView<Tools: View>: View {
   #if os(macOS)
   private var macList: some View {
     VStack(spacing: 0) {
-      PageHeader(title: title, detail: detail, accentDetail: showsUnseen, folio: folio) { EmptyView() }
+      PageHeader(title: title, detail: detail, accentDetail: showsUnseen, folio: folio) {
+        if live {
+          Button { Task { await refresh() } } label: {
+            Label("Refresh", systemImage: "arrow.clockwise")
+          }
+          .buttonStyle(.text)
+          .disabled(list.isLoading)
+          .help("Check for new posts (⌘R). Stash also checks every couple of minutes.")
+        }
+      }
       VStack(alignment: .leading, spacing: 12) {
         ViewThatFits(in: .horizontal) {
           HStack(spacing: 8) { tools(); Spacer(minLength: 0) }
@@ -144,6 +168,14 @@ struct ItemListView<Tools: View>: View {
           .padding(.bottom, 40)
         }
         .scrollContentBackground(.hidden)
+        .overlay(alignment: .top) {
+          NewItemsPill(count: list.waiting.count) {
+            list.showWaiting()
+            if let first = list.visibleItems.first {
+              withAnimation(reduceMotion ? nil : StashMotion.feedback) { proxy.scrollTo(first.id, anchor: .top) }
+            }
+          }
+        }
         .focusable()
         .focused($listFocused)
         .focusEffectDisabled()
@@ -193,13 +225,17 @@ struct ItemListView<Tools: View>: View {
     List { rows }
       .stashList()
       .overlay { if list.visibleItems.isEmpty { emptyState } }
+      .overlay(alignment: .top) {
+        NewItemsPill(count: list.waiting.count) { withAnimation { list.showWaiting() } }
+      }
       .toasts(toaster)
       .linkCapture(isPresented: $capturing)
       .stashPage(title, detail: detail, accentDetail: showsUnseen, folio: folio) { tools() }
       .modifier(Searchable(text: search, onSearch: onSearch))
-      .refreshable { await list.reload(query) }
+      .refreshable { await refresh() }
       .task(id: query) { await list.load(query) }
-      .task(id: wire ? query : nil) { await watchWire() }
+      .task(id: watchKey) { await watchForNew() }
+      .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await checkNow() } } }
       .navigationDestination(item: $selection) { item in
         ReaderScreen(item: item, actions: readerActions(for: item), perform: perform)
           .unfoldDestination(item, in: unfold)
@@ -368,13 +404,33 @@ struct ItemListView<Tools: View>: View {
   }
 
   /// On the Wire, checks for new posts every minute while the list is open.
-  private func watchWire() async {
-    guard wire else { return }
+  /// What the new-item check depends on: nothing for lists that don't check.
+  private var watchKey: String? {
+    guard live || wire else { return nil }
+    return "\(query)|\(wire)|\(isActivePage)"
+  }
+
+  /// Checks for new items every minute on the Wire (typing them straight in) and every two
+  /// minutes otherwise (held back as "N new"), while the page is the one showing. The
+  /// server itself checks every feed every five minutes.
+  private func watchForNew() async {
+    guard isActivePage else { return }
     while !Task.isCancelled {
-      try? await Task.sleep(for: .seconds(60))
+      try? await Task.sleep(for: .seconds(wire ? 60 : 120))
       guard !Task.isCancelled else { return }
-      await list.pullNew(query)
+      await checkNow()
     }
+  }
+
+  private func checkNow() async {
+    guard (live || wire), isActivePage else { return }
+    if wire { await list.pullNew(query) } else { await list.checkNew(query) }
+  }
+
+  /// Refresh: shows anything waiting and reloads the list, keeping your place.
+  private func refresh() async {
+    list.showWaiting()
+    await list.reload(query, preservingItems: true)
   }
 
   private func open(_ item: LibraryItem) {

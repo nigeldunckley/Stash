@@ -78,6 +78,7 @@ final class ItemList {
       removed.formIntersection(LibraryChanges.shared.pendingRemovals)
       if let count = total { total = max(0, count - refreshed.filter { removed.contains($0.id) }.count) }
       seen = []
+      waiting = []
       error = nil
     } catch {
       guard request == generation, !Task.isCancelled else { return }
@@ -133,8 +134,38 @@ final class ItemList {
     let fresh = page.items.filter { !known.contains($0.id) }
     for item in fresh { arrivals[item.id] = .now }
     items = fresh + items
+    waiting.removeAll { known.contains($0.id) || fresh.contains($0) }
     total = page.pageInfo.totalCount
     adjustPendingCount()
+  }
+
+  /// New items found while you were looking, held back until you ask for them so the list
+  /// doesn't shift under you. Shown as "N new" at the top of the list.
+  private(set) var waiting: [LibraryItem] = []
+
+  /// Looks for newer items. An empty list takes them straight away; otherwise they wait
+  /// behind the "N new" button.
+  func checkNew(_ query: String) async {
+    guard query == loadedQuery, !isLoading else { return }
+    if visibleItems.isEmpty { return await pullNew(query) }
+    let request = generation
+    guard let page = try? await search(query, nil, 30), request == generation,
+          query == requestedQuery, !Task.isCancelled else { return }
+    let known = Set(items.map(\.id)).union(waiting.map(\.id))
+    let fresh = page.items.filter { !known.contains($0.id) && !removed.contains($0.id) }
+    guard !fresh.isEmpty else { return }
+    waiting = fresh + waiting
+  }
+
+  /// Puts the waiting items at the top of the list.
+  func showWaiting() {
+    guard !waiting.isEmpty else { return }
+    let known = Set(items.map(\.id))
+    let fresh = waiting.filter { !known.contains($0.id) }
+    for item in fresh { arrivals[item.id] = .now }
+    items = fresh + items
+    if let count = total { total = count + fresh.count }
+    waiting = []
   }
 
   private func adjustPendingCount() {

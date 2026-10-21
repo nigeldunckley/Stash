@@ -42,6 +42,7 @@ struct FeedsView: View {
       countLabel: showAll ? "posts" : "unseen",
       groupsByDay: true,
       wire: wire,
+      live: true,
       folio: FolioContent(
         items: [FolioContent.today, "\(FolioData.shared.feeds) \(FolioData.shared.feeds == 1 ? "FEED" : "FEEDS")"],
         checked: true,

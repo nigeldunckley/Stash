@@ -16,6 +16,8 @@ struct HomeView: View {
   @State private var upNextError: String?
   @State private var contentWidth: CGFloat = 1100
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.isActivePage) private var isActivePage
+  @Environment(\.scenePhase) private var scenePhase
   @State private var leadTitle: String?
   /// The item open in the preview, and which list it came from, for moving up and down.
   @State private var peek: LibraryItem?
@@ -65,6 +67,21 @@ struct HomeView: View {
         #else
         .toolbar(.hidden, for: .navigationBar)
         #endif
+        // New feed posts every couple of minutes while Home is showing, offered as "N new".
+        .task(id: "\(feedsQuery)|\(isActivePage)") {
+          guard isActivePage else { return }
+          while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(120))
+            guard !Task.isCancelled else { return }
+            await feeds.checkNew(feedsQuery)
+          }
+        }
+        .onChange(of: scenePhase) { _, phase in
+          if phase == .active, isActivePage { Task { await feeds.checkNew(feedsQuery) } }
+        }
+        .onChange(of: isActivePage) { _, active in
+          if active { Task { await feeds.checkNew(feedsQuery) } }
+        }
         .task(id: feedsQuery) {
           await feeds.load(feedsQuery)
         }
@@ -489,6 +506,13 @@ struct HomeView: View {
 
   private var feedsHeading: some View {
     SectionHeading(title: "From your feeds") {
+      if !feeds.waiting.isEmpty {
+        Button { withAnimation(reduceMotion ? nil : StashMotion.change) { feeds.showWaiting() } } label: {
+          Label("\(feeds.waiting.count) new", systemImage: "arrow.up")
+        }
+        .buttonStyle(.textProminent)
+        .help("Show the new posts")
+      }
       Button("See all") { go(.feeds) }.buttonStyle(.text)
     }
   }
