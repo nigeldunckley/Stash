@@ -4,7 +4,7 @@ import SwiftUI
 /// underneath, up to two lines of summary, the age and length in mono, and a thumbnail when
 /// there's an image (88 × 60 beside a summary, 72 × 48 without). In a narrow list (Mac, beside the
 /// reader) it goes compact: three lines of title, then the source, age and length on one line,
-/// a smaller cover and no summary, rather than squeezing everything onto one line.
+/// a smaller cover, then the summary, rather than squeezing everything onto one line.
 struct ItemRow: View {
   let item: LibraryItem
   var subscriptionName: String?
@@ -53,7 +53,7 @@ struct ItemRow: View {
             }
             .foregroundStyle(Color.stMuted)
           }
-          if let summary, !compact {
+          if let summary {
             Text(summary)
               .font(.stExcerpt)
               .lineSpacing(2)
