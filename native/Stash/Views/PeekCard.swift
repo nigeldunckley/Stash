@@ -16,12 +16,14 @@ struct PeekCard: View {
   let onMove: (Int) -> Void
   let onExpand: () -> Void
   let perform: (ItemAction, LibraryItem) -> Void
+  @Environment(PlayerController.self) private var player
+  private var displayedItem: LibraryItem { Watch.isVideo(item) ? (player.item ?? item) : item }
 
   var body: some View {
     let card = VStack(spacing: 0) {
       header
       Divider()
-      ItemDestination(item: item, queue: queue, perform: perform, embedded: true)
+      ItemDestination(item: item, queue: queue, perform: perform, embedded: true, onClose: onClose)
         .id(item.id)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       Divider()
@@ -44,11 +46,11 @@ struct PeekCard: View {
 
   private var header: some View {
     HStack(spacing: 10) {
-      SiteIcon(url: item.iconURL)
+      SiteIcon(url: displayedItem.iconURL)
         .scaleEffect(1.3)
         .frame(width: 20, height: 20)
       VStack(alignment: .leading, spacing: 1) {
-        Text(sourceName)
+        Text(Watch.isVideo(item) ? displayedItem.source : sourceName)
           .font(.ui(13, .semibold))
           .foregroundStyle(Color.stInk)
           .lineLimit(1)
@@ -58,19 +60,21 @@ struct PeekCard: View {
           .lineLimit(1)
       }
       Spacer(minLength: 8)
-      if let position {
+      if let position, !Watch.isVideo(item) {
         Text(position)
           .font(.stDetail)
           .foregroundStyle(Color.stMuted)
           .monospacedDigit()
       }
-      HStack(spacing: 2) {
-        HeaderButton(systemImage: "chevron.up", help: "Previous (⌘↑)") { onMove(-1) }
-          .disabled(!canGoBack)
-          .keyboardShortcut(.upArrow, modifiers: .command)
-        HeaderButton(systemImage: "chevron.down", help: "Next (⌘↓)") { onMove(1) }
-          .disabled(!canGoForward)
-          .keyboardShortcut(.downArrow, modifiers: .command)
+      if !Watch.isVideo(item) {
+        HStack(spacing: 2) {
+          HeaderButton(systemImage: "chevron.up", help: "Previous (⌘↑)") { onMove(-1) }
+            .disabled(!canGoBack)
+            .keyboardShortcut(.upArrow, modifiers: .command)
+          HeaderButton(systemImage: "chevron.down", help: "Next (⌘↓)") { onMove(1) }
+            .disabled(!canGoForward)
+            .keyboardShortcut(.downArrow, modifiers: .command)
+        }
       }
       HeaderButton(systemImage: "arrow.up.left.and.arrow.down.right", help: "Open full size (⌘E)") { onExpand() }
         .keyboardShortcut("e", modifiers: .command)
@@ -82,7 +86,7 @@ struct PeekCard: View {
   }
 
   private var details: String {
-    [shortAge(item.date), readingLabel(item) ?? Watch.duration(item).map(Watch.timecode)]
+    [shortAge(displayedItem.date), readingLabel(displayedItem) ?? Watch.duration(displayedItem).map(Watch.timecode)]
       .compactMap { $0 }
       .filter { !$0.isEmpty }
       .joined(separator: " · ")
@@ -92,7 +96,7 @@ struct PeekCard: View {
 
   /// The main actions for this item: the first swipe on each side, then the rest.
   private var actions: [ItemAction] {
-    let swipes = ItemAction.swipes(for: item)
+    let swipes = ItemAction.swipes(for: displayedItem)
     var seen = Set<ItemAction>()
     return (swipes.leading.prefix(1) + swipes.trailing + swipes.leading.dropFirst())
       .filter { $0 != .openOriginal && seen.insert($0).inserted }
@@ -102,23 +106,23 @@ struct PeekCard: View {
     HStack(spacing: 8) {
       ForEach(Array(actions.enumerated()), id: \.element) { index, action in
         DockButton(
-          title: action.title(for: item),
+          title: action.title(for: displayedItem),
           systemImage: action.systemImage,
           key: Self.key(for: action),
           prominent: index == 0,
           destructive: action == .delete
-        ) { perform(action, item) }
+        ) { perform(action, displayedItem) }
         .modifier(Shortcut(key: Self.shortcut(for: action)))
       }
       Spacer(minLength: 8)
-      if let url = item.originalURL {
+      if let url = displayedItem.originalURL {
         ShareLink(item: url) {
           Image(systemName: "square.and.arrow.up")
         }
         .buttonStyle(.borderless)
         .help("Share")
         DockButton(title: "Open original", systemImage: "safari", key: "⌘↩", prominent: false, destructive: false) {
-          perform(.openOriginal, item)
+          perform(.openOriginal, displayedItem)
         }
         .keyboardShortcut(.return, modifiers: .command)
       }

@@ -97,12 +97,9 @@ struct SidebarPanel: View {
         .foregroundStyle(Color.stInk)
       Spacer(minLength: 0)
       SidebarIconButton(symbol: "sidebar.left", help: "Hide the sidebar (⌃⌘S)") {
-        withAnimation(.snappy(duration: 0.25)) { sidebarHidden = true }
+        withAnimation(StashMotion.layout(reduceMotion: StashMotion.systemReduceMotion)) { sidebarHidden = true }
       }
       SidebarIconButton(symbol: "plus", help: "Save a link (⌘N)") { capturing = true }
-        .popover(isPresented: $capturing, arrowEdge: .bottom) {
-          CapturePopover { capturing = false }
-        }
     }
     .padding(.leading, 16)
     .padding(.trailing, 10)
@@ -151,54 +148,4 @@ struct SidebarPanel: View {
   }
 }
 
-/// The + button's box: paste a link and press Return to save it.
-private struct CapturePopover: View {
-  let done: () -> Void
-
-  @State private var link = ""
-  @State private var status: String?
-  @State private var saving = false
-  @FocusState private var focused: Bool
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      CaptureField(text: $link, prompt: "Paste a link to save", focus: $focused, onSubmit: save)
-        .disabled(saving)
-      if let status {
-        Text(status)
-          .font(.stSmall)
-          .foregroundStyle(Color.stMuted)
-      }
-    }
-    .padding(12)
-    .frame(width: 360)
-    .background(Color.stPanel)
-    .onAppear {
-      if let text = NSPasteboard.general.string(forType: .string), text.hasPrefix("http"), URL(string: text) != nil {
-        link = text
-      }
-      focused = true
-    }
-  }
-
-  private func save() {
-    var url = link.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !url.isEmpty else { return }
-    if !url.lowercased().hasPrefix("http") { url = "https://" + url }
-    saving = true
-    status = "Saving…"
-    Task {
-      do {
-        try await Library.save(url: url)
-        Moments.shared.saved(title: url)
-        status = "Saved. It's on its way to Saved."
-        try? await Task.sleep(for: .seconds(1))
-        done()
-      } catch {
-        status = error.localizedDescription
-        saving = false
-      }
-    }
-  }
-}
 #endif

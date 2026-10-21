@@ -50,8 +50,8 @@ struct FeedSuggestion: Decodable, Identifiable, Hashable {
     switch reason.kind {
     case "link": return "Linked \(times) by \(reason.guideName)"
     case "blogroll": return "In \(reason.guideName)’s blogroll"
-    case "save": return reason.count > 1 ? "You saved \(reason.count) of its pieces" : "You saved one of its pieces"
-    case "writer": return "\(reason.guideName) writes here · you finished \(reason.count)"
+    case "save": return reason.count > 1 ? "You saved \(reason.count) articles from this feed" : "You saved an article from this feed"
+    case "writer": return "Articles by \(reason.guideName), whose work you have read"
     case "neighbour": return "Links to the same places as \(reason.guideName)"
     case "similar": return "Similar to \(reason.guideName)"
     case "starter": return reason.title.map { "A starting point · \($0)" } ?? "A starting point"

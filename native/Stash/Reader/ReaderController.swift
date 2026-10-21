@@ -10,6 +10,10 @@ final class ReaderController: NSObject {
   let webView: WKWebView
   private(set) var isReady = false
   private(set) var progress: Double = 0
+  private(set) var actionError: String?
+  private(set) var navigationError: String?
+  private(set) var loadGeneration = 0
+  @ObservationIgnored private var failedAction: (String, [String: Any])?
   @ObservationIgnored private var html: String?
   /// What the reader picked in the colophon: "next", "archiveNext", "archive" or "close".
   @ObservationIgnored var onColophon: ((String) -> Void)?
@@ -48,7 +52,11 @@ final class ReaderController: NSObject {
   /// Loads the page with the server as its address, so the reader's fonts and
   /// its own requests reach Stash, signed in with the app's token.
   func load(html: String, token: String?) async {
+    reset()
+    let generation = loadGeneration
     self.html = html
+    navigationError = nil
+    actionError = nil
     if let token, let host = StashConfig.server.host(),
        let cookie = HTTPCookie(properties: [
          .domain: host,
@@ -60,18 +68,24 @@ final class ReaderController: NSObject {
        ]) {
       await webView.configuration.websiteDataStore.httpCookieStore.setCookie(cookie)
     }
+    guard generation == loadGeneration, !Task.isCancelled else { return }
     webView.loadHTMLString(html, baseURL: StashConfig.server)
   }
 
   /// Clears the page ready for a different article.
   func reset() {
+    loadGeneration += 1
     isReady = false
     progress = 0
+    failedAction = nil
+    actionError = nil
+    navigationError = nil
   }
 
   /// Fires one of the reader's settings events, such as a new font size.
   func send(_ event: String, _ values: [String: Any]) {
-    webView.evaluateJavaScript(ReaderPage.event(event, values), completionHandler: nil)
+    let script = ReaderPage.event(event, values)
+    webView.evaluateJavaScript("window.stashPreservePosition ? window.stashPreservePosition(() => { \(script) }) : \(script)", completionHandler: nil)
   }
 
   fileprivate func handleProgress(_ body: Any) {
@@ -84,13 +98,48 @@ final class ReaderController: NSObject {
   fileprivate func handleAction(_ body: Any) {
     guard let message = body as? [String: Any],
           let action = message["actionID"] as? String,
-          let requestId = message["requestId"] as? Int else { return }
+          let requestId = message["requestId"] as? Int,
+          let documentID = message["documentID"] as? String else { return }
     let input = message["input"] as? [String: Any] ?? [:]
+    let generation = loadGeneration
     Task {
-      let result = (try? await ReaderBridge.perform(action, input: input)) ?? NSNull()
-      let json = (try? JSONSerialization.data(withJSONObject: result, options: .fragmentsAllowed))
-        .flatMap { String(data: $0, encoding: .utf8) } ?? "null"
-      webView.evaluateJavaScript("window.stashReply(\(requestId), \(json))", completionHandler: nil)
+      var result: Any = NSNull()
+      var failure: Any = NSNull()
+      do {
+        result = try await ReaderBridge.perform(action, input: input)
+        if action == "articleReadingProgress" { LibraryChanges.shared.publishProgress() }
+        else { LibraryChanges.shared.publish() }
+        guard generation == loadGeneration else { return }
+        actionError = nil
+        failedAction = nil
+      } catch {
+        guard generation == loadGeneration else { return }
+        actionError = "Couldn't save your changes. Try again."
+        failure = actionError!
+        failedAction = (action, input)
+      }
+      // A response from the previous article must not resolve a request in the next one.
+      let values: [Any] = [documentID, requestId, result, failure]
+      guard let data = try? JSONSerialization.data(withJSONObject: values),
+            let json = String(data: data, encoding: .utf8) else { return }
+      webView.evaluateJavaScript("(() => { const [doc,id,result,error] = \(json); if (window.stashDocumentID === doc) window.stashReply(id,result,error); })()", completionHandler: nil)
+    }
+  }
+
+  func retryAction() {
+    guard let (action, input) = failedAction else { return }
+    let generation = loadGeneration
+    Task {
+      do {
+        _ = try await ReaderBridge.perform(action, input: input)
+        LibraryChanges.shared.publish()
+        guard generation == loadGeneration else { return }
+        actionError = nil
+        failedAction = nil
+      } catch {
+        guard generation == loadGeneration else { return }
+        actionError = "Couldn't save your changes. Try again."
+      }
     }
   }
 
@@ -122,6 +171,15 @@ extension ReaderController: WKNavigationDelegate {
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     isReady = true
+  }
+
+  func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+    navigationError = "Couldn't open this article. Try again or open the original."
+  }
+
+  func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+    guard (error as? URLError)?.code != .cancelled else { return }
+    navigationError = "Couldn't open this article. Try again or open the original."
   }
 
   /// The system can stop a web view in the background; put the article back.

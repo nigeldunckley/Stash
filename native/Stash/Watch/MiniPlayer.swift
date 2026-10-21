@@ -142,11 +142,11 @@ struct MiniPlayer: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         Button { player.toggle() } label: {
-          Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").frame(width: 32, height: 32)
+          Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").frame(width: 44, height: 44)
         }
         .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
         Button { player.close() } label: {
-          Image(systemName: "xmark").frame(width: 32, height: 32)
+          Image(systemName: "xmark").frame(width: 44, height: 44)
         }
         .accessibilityLabel("Stop")
       }

@@ -13,6 +13,7 @@ struct ItemRow: View {
   /// The 1pt line under the row; off for the last row in a bordered box.
   var divider = true
 
+  @Environment(\.dynamicTypeSize) private var typeSize
   @State private var width: CGFloat = 600
 
   /// Narrow enough that the side-by-side layout would cut everything off.
@@ -20,7 +21,7 @@ struct ItemRow: View {
     #if os(macOS)
     width < 520
     #else
-    false
+    typeSize.isAccessibilitySize
     #endif
   }
 
@@ -35,21 +36,23 @@ struct ItemRow: View {
             .font(.stRowTitle)
             .tracking(Tracking.rowTitle)
             .foregroundStyle(Color.stInk)
-            .lineLimit(compact ? 3 : 2)
+            .lineLimit(typeSize.isAccessibilitySize ? nil : compact ? 3 : 2)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
-          HStack(spacing: 6) {
-            Text(subscriptionName ?? item.source)
-              .font(.stSmall)
-              .lineLimit(1)
-              .layoutPriority(-1)
-            #if os(iOS)
+          if typeSize.isAccessibilitySize {
+            Text(subscriptionName ?? item.source).font(.stSmall).foregroundStyle(Color.stMuted)
             meta
-            #else
-            if compact { meta }
-            #endif
+          } else {
+            HStack(spacing: 6) {
+              Text(subscriptionName ?? item.source).font(.stSmall).lineLimit(1).layoutPriority(-1)
+              #if os(iOS)
+              meta
+              #else
+              if compact { meta }
+              #endif
+            }
+            .foregroundStyle(Color.stMuted)
           }
-          .foregroundStyle(Color.stMuted)
           if let summary, !compact {
             Text(summary)
               .font(.stExcerpt)

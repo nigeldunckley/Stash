@@ -7,13 +7,15 @@ struct ItemDestination: View {
   var actions: [ItemAction]?
   let perform: (ItemAction, LibraryItem) -> Void
   var embedded = false
+  var resumePlayback = true
+  var onClose: (() -> Void)?
 
   var body: some View {
     let actions = actions ?? ItemAction.defaults(for: item)
     if Watch.isVideo(item) {
-      PlayerScreen(item: item, queue: queue.isEmpty ? [item] : queue, actions: actions, perform: perform, embedded: embedded)
+      PlayerScreen(item: item, queue: queue.isEmpty ? [item] : queue, actions: actions, perform: perform, embedded: embedded, resumePlayback: resumePlayback, onMini: onClose)
     } else {
-      ReaderScreen(item: item, actions: actions, perform: perform, embedded: embedded)
+      ReaderScreen(item: item, actions: actions, perform: perform, embedded: embedded, onBack: onClose)
     }
   }
 }
@@ -30,6 +32,7 @@ struct ScreenChrome<Bar: ToolbarContent>: ViewModifier {
   @Environment(\.inSheet) private var inSheet
   #if os(macOS)
   @AppStorage("sidebarHidden") private var sidebarHidden = false
+  @Environment(\.autoHiddenSidebar) private var autoHiddenSidebar
   #endif
 
   func body(content: Content) -> some View {
@@ -44,7 +47,7 @@ struct ScreenChrome<Bar: ToolbarContent>: ViewModifier {
             BackBar(back: back)
               .frame(maxWidth: .infinity, alignment: .leading)
               .padding(.horizontal, PageLayout.gutter)
-              .padding(.leading, sidebarHidden && !inSheet ? PageLayout.windowButtons : 0)
+              .padding(.leading, (sidebarHidden || autoHiddenSidebar) && !inSheet ? PageLayout.windowButtons : 0)
               .frame(height: 34)
               .background(Color.stPage)
               .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
@@ -76,6 +79,7 @@ extension ItemAction {
 @MainActor
 @Observable
 final class Toaster {
+  static let shared = Toaster()
   private(set) var message: String?
   private(set) var undo: (() -> Void)?
   private var shown = 0
@@ -83,13 +87,21 @@ final class Toaster {
   /// Shows a message for a moment, or longer with an Undo button.
   func show(_ message: String, undo: (() -> Void)? = nil) {
     shown += 1
+    #if os(iOS)
+    UIAccessibility.post(notification: .announcement, argument: message)
+    #endif
     let id = shown
     withAnimation {
       self.message = message
       self.undo = undo
     }
     Task {
-      try? await Task.sleep(for: .seconds(undo == nil ? 2 : 5))
+      #if os(iOS)
+      if UIAccessibility.isVoiceOverRunning { return }
+      #else
+      if NSWorkspace.shared.isVoiceOverEnabled { return }
+      #endif
+      try? await Task.sleep(for: .seconds(undo == nil ? 4 : 8))
       if shown == id { dismiss() }
     }
   }
@@ -104,6 +116,7 @@ final class Toaster {
 
 struct ToastOverlay: ViewModifier {
   let toaster: Toaster
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   func body(content: Content) -> some View {
     content.overlay(alignment: .bottom) {
@@ -111,9 +124,15 @@ struct ToastOverlay: ViewModifier {
         HStack(spacing: 14) {
           Text(message)
           if let undo = toaster.undo {
-            Button("Undo") {
+            Button {
               toaster.dismiss()
               undo()
+            } label: {
+              Text("Undo")
+                #if os(iOS)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+                #endif
             }
             .font(.ui(13, .semibold))
             .foregroundStyle(Color.stAccentText)
@@ -128,7 +147,7 @@ struct ToastOverlay: ViewModifier {
           .overlay(RoundedRectangle(cornerRadius: Radius.item, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
           .shadow(color: .black.opacity(0.12), radius: 16, y: 8)
           .padding(.bottom, 16)
-          .transition(.move(edge: .bottom).combined(with: .opacity))
+          .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
       }
     }
   }
@@ -169,4 +188,27 @@ func readingLabel(_ item: LibraryItem) -> String? {
     return "\(left) min left"
   }
   return "\(minutes) min"
+}
+
+
+@MainActor
+enum SeenActions {
+  /// Give a bulk action a short Undo window before committing it.
+  static func stage(query: String, count: Int?, toaster: Toaster, finished: @escaping () -> Void) -> Task<Void, Never> {
+    let task = Task {
+      defer { finished() }
+      do {
+        try await Task.sleep(for: .seconds(5))
+        try Task.checkCancellation()
+        try await Library.markSeen(query: query, expectedCount: count)
+        toaster.show("Marked all seen")
+      } catch is CancellationError {
+        return
+      } catch {
+        toaster.show("Couldn't mark these posts as seen. Try again.")
+      }
+    }
+    toaster.show("Marking posts as seen…", undo: { task.cancel(); toaster.show("Cancelled") })
+    return task
+  }
 }

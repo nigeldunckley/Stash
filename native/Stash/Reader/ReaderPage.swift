@@ -7,7 +7,7 @@ enum ReaderPage {
     var fontSize: Int
     var fontFamily: String
     var lineHeight = 160
-    var margin = 420
+    var width = 640
   }
 
   /// The web reader, built from packages/appreader with `yarn build-stash-app`.
@@ -63,7 +63,8 @@ enum ReaderPage {
           window.fontSize = \(settings.fontSize)
           window.fontFamily = "\(settings.fontFamily)"
           window.lineHeight = \(settings.lineHeight)
-          window.margin = \(settings.margin)
+          window.margin = \(1024 - settings.width)
+          window.stashReaderWidth = \(settings.width)
           window.justifyText = false
           window.prefersHighContrastFont = true
           window.enableHighlightBar = true

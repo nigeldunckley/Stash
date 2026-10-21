@@ -86,6 +86,9 @@ final class StashAPI: @unchecked Sendable {
 
   /// Runs a GraphQL query or mutation and decodes its `data`.
   func graphQL<T: Decodable>(_ query: String, variables: [String: Any] = [:]) async throws -> T {
+    #if DEBUG
+    if AppPreview.enabled { return try decoder.decode(T.self, from: await AppPreview.response(query, variables: variables)) }
+    #endif
     guard let token else { throw StashError.signedOut }
     var request = URLRequest(url: StashConfig.server.appending(path: "api/graphql"))
     request.httpMethod = "POST"
@@ -111,6 +114,12 @@ final class StashAPI: @unchecked Sendable {
 
   /// For the reader bridge, which passes plain JSON through untouched.
   func graphQLJSON(_ query: String, variables: [String: Any]) async throws -> [String: Any] {
+    #if DEBUG
+    if AppPreview.enabled {
+      let data = try await AppPreview.response(query, variables: variables)
+      return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+    }
+    #endif
     guard let token else { throw StashError.signedOut }
     var request = URLRequest(url: StashConfig.server.appending(path: "api/graphql"))
     request.httpMethod = "POST"

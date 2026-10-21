@@ -125,11 +125,21 @@ const NextTitle = styled('div', {
 
 export function Colophon({ data }) {
   const [busy, setBusy] = React.useState(false)
+  const [wasArchived, setWasArchived] = React.useState(false)
+  React.useEffect(() => {
+    const completed = (event) => {
+      setBusy(false)
+      if (event.archived) setWasArchived(true)
+    }
+    document.addEventListener('stashColophonResult', completed)
+    return () => document.removeEventListener('stashColophonResult', completed)
+  }, [])
   const choose = (choice) => {
     setBusy(true)
     window.webkit?.messageHandlers?.stashColophon?.postMessage({ choice })
   }
-  const { facts = [], next, archived, canClose } = data
+  const { facts = [], next, canClose } = data
+  const archived = data.archived || wasArchived
 
   return (
     <Card aria-label="Finished reading">

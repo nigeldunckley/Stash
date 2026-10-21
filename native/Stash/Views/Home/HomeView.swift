@@ -1,55 +1,52 @@
 import SwiftUI
 
-/// Home, laid out like the web's: the page header with the capture field, New videos, then the
-/// feeds list and Up next side by side. While The Edition is out and unopened, a strip at the
-/// top points to it. Items open in a floating preview (a sheet on iPhone).
+/// Continue an article or video, browse new arrivals, and open saved articles.
 struct HomeView: View {
   /// Switches to another part of the app, e.g. Feeds or The Edition.
   let go: (AppSection) -> Void
 
   @Environment(EditionModel.self) private var edition
+  @Environment(PlayerController.self) private var player
   @State private var feeds = ItemList()
   @State private var subscriptions: [Subscription] = []
-  @State private var tab: Tab = .read
-  @State private var sorting = false
-  @State private var otherCount: Int?
+  @State private var searching = false
   @State private var videos: [LibraryItem] = []
-  @State private var videosTotal: Int?
   @State private var upNext: [LibraryItem] = []
-  @State private var unreadTotal: Int?
-  @State private var loadingUpNext = true
+  @State private var continuingVideos: [LibraryItem] = []
+  @State private var upNextError: String?
+  @State private var contentWidth: CGFloat = 1100
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var leadTitle: String?
   /// The item open in the preview, and which list it came from, for moving up and down.
   @State private var peek: LibraryItem?
   @State private var peekSource: PeekSource = .feeds
   /// Items and searches opened full size from Home.
   @State private var path = NavigationPath()
+  @State private var capturing = false
   @State private var capture = ""
   @FocusState private var captureFocused: Bool
   #if os(macOS)
   @State private var selectedID: String?
   @FocusState private var listFocused: Bool
   @AppStorage("sidebarHidden") private var sidebarHidden = false
-  #else
-  @State private var capturing = false
+  @Environment(\.autoHiddenSidebar) private var autoHiddenSidebar
   #endif
   @State private var toaster = Toaster()
 
-  private enum Tab: String { case read, watch }
-  private enum PeekSource { case feeds, videos, upNext }
+  private enum PeekSource { case feeds, videos, upNext, continuing }
 
-  private static let feedLimit = 12
+  private static let feedLimit = 6
   /// The widest the page's content gets, as on the web.
   private static let maxWidth: CGFloat = 1180
 
   private var feedsQuery: String {
-    "in:following use:folders \(tab == .watch ? "type:video" : "-type:video") -is:seen sort:published-desc"
+    "in:following use:folders -type:video -is:seen sort:published-desc"
   }
 
   /// "MONDAY 19 OCTOBER · 64 FEEDS · CHECKED 2 MIN AGO", and the day of Stash on the right.
   private static var folio: FolioContent {
     FolioContent(
-      items: [FolioContent.today, "\(FolioData.shared.feeds) FEEDS"],
+      items: [FolioContent.today, "\(FolioData.shared.feeds) \(FolioData.shared.feeds == 1 ? "FEED" : "FEEDS")"],
       checked: true,
       right: FolioContent.volumeAndDay
     )
@@ -60,6 +57,7 @@ struct HomeView: View {
   var body: some View {
     NavigationStack(path: $path) {
       content
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
         .background(Color.stPage)
         .navigationTitle("Home")
         #if os(macOS)
@@ -69,7 +67,6 @@ struct HomeView: View {
         #endif
         .task(id: feedsQuery) {
           await feeds.load(feedsQuery)
-          otherCount = await count(tab == .read ? "type:video" : "-type:video")
         }
         .task {
           if subscriptions.isEmpty { subscriptions = (try? await Library.subscriptions()) ?? [] }
@@ -78,11 +75,14 @@ struct HomeView: View {
           await loadLead()
         }
         .navigationDestination(for: LibraryItem.self) { item in
-          ItemDestination(item: item, queue: videoQueue, perform: perform)
+          ItemDestination(item: item, queue: videoQueue, perform: perform, resumePlayback: false)
             #if os(macOS)
             .modifier(UnfoldIn())
             #endif
             .pageBack(["Home"])
+        }
+        .onChange(of: LibraryChanges.shared.revision) { _, _ in
+          Task { await loadVideos(); await loadUpNext() }
         }
         .pageTop { path = NavigationPath() }
         .navigationDestination(for: HomeSearch.self) { search in
@@ -91,28 +91,26 @@ struct HomeView: View {
         .toasts(toaster)
     }
     #if os(iOS)
+    .sheet(isPresented: $searching) {
+      VStack(alignment: .leading, spacing: 18) {
+        Text("Search Stash").font(.stSection)
+        CaptureField(text: $capture, prompt: "Search Stash", focus: $captureFocused) {
+          searching = false
+          submitCapture()
+        }
+        Button("Cancel") { searching = false }.buttonStyle(.text)
+      }
+      .padding(20).presentationDetents([.medium])
+      .onAppear { captureFocused = true }
+    }
     .sheet(item: $peek) { item in
       peekCard(item, inSheet: true)
         .presentationDetents([.large])
         .presentationCornerRadius(22)
         .presentationBackground(Color.stPage)
     }
-    .sheet(isPresented: $capturing) {
-      VStack(alignment: .leading, spacing: 14) {
-        Text("Save a link or search")
-          .font(.stSection)
-          .foregroundStyle(Color.stInk)
-        CaptureField(text: $capture, focus: $captureFocused) {
-          capturing = false
-          submitCapture()
-        }
-      }
-      .padding(20)
-      .presentationDetents([.height(150)])
-      .presentationBackground(Color.stPage)
-      .onAppear { captureFocused = true }
-    }
     #endif
+    .linkCapture(isPresented: $capturing)
   }
 
   // MARK: The preview
@@ -124,11 +122,13 @@ struct HomeView: View {
     case .feeds: return feedItems
     case .videos: return videos
     case .upNext: return upNext
+    case .continuing: return continuingVideos
     }
   }
 
   private var videoQueue: [LibraryItem] {
-    peekSource == .videos ? videos : feeds.visibleItems.filter(Watch.isVideo)
+    if peekSource == .continuing { return continuingVideos }
+    return peekSource == .videos ? videos : feeds.visibleItems.filter(Watch.isVideo)
   }
 
   private func peekCard(_ item: LibraryItem, inSheet: Bool) -> some View {
@@ -157,7 +157,7 @@ struct HomeView: View {
 
   private func show(_ item: LibraryItem) {
     markSeen(item)
-    withAnimation(.snappy(duration: 0.2)) { peek = item }
+    withAnimation(reduceMotion ? StashMotion.fade : StashMotion.change) { peek = item }
     #if os(macOS)
     if peekSource == .feeds { selectedID = item.id }
     #endif
@@ -166,7 +166,7 @@ struct HomeView: View {
   /// Opens the item full size, with the reader's own toolbar.
   private func expand(_ item: LibraryItem) {
     close()
-    path.append(item)
+    path.append(Watch.isVideo(item) ? (player.item ?? item) : item)
   }
 
   // MARK: Mac layout
@@ -178,14 +178,14 @@ struct HomeView: View {
       VStack(spacing: 0) {
         VStack(alignment: .leading, spacing: 18) {
           FolioView(content: Self.folio)
-          HomeHeader(capture: $capture, focus: $captureFocused, onSubmit: submitCapture)
+          HomeHeader(capture: $capture, focus: $captureFocused, onSubmit: submitCapture, onAdd: { capturing = true })
         }
           .padding(.horizontal, 40)
           // With the sidebar hidden, keep clear of the window buttons and sidebar button.
-          .padding(.leading, sidebarHidden ? 84 : 0)
+          .padding(.leading, (sidebarHidden || autoHiddenSidebar) ? 84 : 0)
           .padding(.top, 2)
           .padding(.bottom, 20)
-          .frame(maxWidth: Self.maxWidth + 80 + (sidebarHidden ? 84 : 0))
+          .frame(maxWidth: Self.maxWidth + 80 + ((sidebarHidden || autoHiddenSidebar) ? 84 : 0))
           .frame(maxWidth: .infinity)
         page
       }
@@ -200,12 +200,12 @@ struct HomeView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .transition(.asymmetric(
-          insertion: .scale(scale: 0.96).combined(with: .opacity),
-          removal: .scale(scale: 0.98).combined(with: .opacity)
+          insertion: reduceMotion ? .opacity : .scale(scale: 0.98).combined(with: .opacity),
+          removal: .opacity
         ))
       }
     }
-    .animation(.spring(duration: 0.32, bounce: 0.12), value: peek == nil)
+    .animation(reduceMotion ? StashMotion.fade : StashMotion.change, value: peek == nil)
   }
 
   /// Content 40pt from the edges, at most 1,180pt wide and centred. Rows are selected with a
@@ -213,34 +213,16 @@ struct HomeView: View {
   private var page: some View {
     ScrollViewReader { proxy in
       ScrollView {
-        VStack(alignment: .leading, spacing: 0) {
-          if showsEditionStrip {
-            editionStrip.padding(.bottom, 28)
-          }
-          if !videos.isEmpty {
-            videoStrip.padding(.bottom, 30)
-          }
-          HStack(alignment: .top, spacing: 44) {
-            VStack(alignment: .leading, spacing: 12) {
-              feedsHeading
-              feedBox
-            }
-            .frame(maxWidth: .infinity)
-            UpNextColumn(
-              items: upNext,
-              loading: loadingUpNext,
-              unreadTotal: unreadTotal,
-              open: { open($0, from: .upNext) },
-              openSaved: { go(.saved) },
-              perform: perform
-            )
-            .frame(width: 330)
-          }
+        VStack(alignment: .leading, spacing: 28) {
+          continuationSection
+          freshPanels
+          savedSuggestions
+          if showsEditionStrip { editionStrip }
         }
         .padding(.horizontal, 40)
-        .padding(.leading, sidebarHidden ? 84 : 0)
+        .padding(.leading, (sidebarHidden || autoHiddenSidebar) ? 84 : 0)
         .padding(.bottom, 40)
-        .frame(maxWidth: Self.maxWidth + 80 + (sidebarHidden ? 84 : 0))
+        .frame(maxWidth: Self.maxWidth + 80 + ((sidebarHidden || autoHiddenSidebar) ? 84 : 0))
         .frame(maxWidth: .infinity)
       }
       .scrollContentBackground(.hidden)
@@ -258,7 +240,7 @@ struct HomeView: View {
       }
       .onChange(of: selectedID) { _, id in
         guard let id else { return }
-        withAnimation(.snappy(duration: 0.15)) { proxy.scrollTo(id) }
+        withAnimation(reduceMotion ? nil : StashMotion.feedback) { proxy.scrollTo(id) }
         // Arrow keys move the preview through the feed list, but not one opened elsewhere.
         guard id != peek?.id, !(peek != nil && peekSource != .feeds),
               let item = feedItems.first(where: { $0.id == id }) else { return }
@@ -318,13 +300,10 @@ struct HomeView: View {
     List {
       FolioView(content: Self.folio).plainListRow(top: 8)
       iPhoneHeader.plainListRow(top: 12)
-      if showsEditionStrip {
-        editionStrip.plainListRow()
-      }
-      if !videos.isEmpty {
-        videoStrip.plainListRow(top: 14)
-      }
-      upNextStrip.plainListRow(top: 18)
+      continuationSection.plainListRow(top: 18)
+      if showsEditionStrip { editionStrip.plainListRow(top: 18) }
+      if !videos.isEmpty { latestVideos.plainListRow(top: 20) }
+      if !upNext.isEmpty { savedSuggestions.plainListRow(top: 20) }
       feedsHeading.plainListRow(top: 22, bottom: 10)
 
       let items = feedItems
@@ -365,16 +344,20 @@ struct HomeView: View {
           .tracking(-0.84)
           .foregroundStyle(Color.stInk)
         Spacer(minLength: 0)
+        Button { searching = true } label: {
+          Image(systemName: "magnifyingglass").frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain).accessibilityLabel("Search Stash")
         Button { capturing = true } label: {
           Image(systemName: "plus")
             .font(.ui(15, .medium))
             .foregroundStyle(Color.stInk)
-            .frame(width: 36, height: 36)
+            .frame(width: 44, height: 44)
             .background(Color.stSurface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Save a link or search")
+        .accessibilityLabel("Save a link")
       }
       Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased())
         .font(.mono(11))
@@ -383,70 +366,83 @@ struct HomeView: View {
     }
   }
 
-  /// Up next on iPhone: a row of cards to swipe through.
-  private var upNextStrip: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      SectionHeading(title: "Up next", detail: upNext.isEmpty ? nil : "\(upNext.count) to read")
-      if upNext.isEmpty {
-        if loadingUpNext {
-          ProgressView().frame(maxWidth: .infinity).padding(.vertical, 12)
-        } else {
-          EmptyBox(message: "Nothing waiting. Save an article and it shows up here.")
-        }
-      } else {
-        ScrollView(.horizontal, showsIndicators: false) {
-          HStack(alignment: .top, spacing: 12) {
-            ForEach(upNext) { item in
-              Button { open(item, from: .upNext) } label: {
-                VStack(alignment: .leading, spacing: 8) {
-                  ItemCover(item: item)
-                    .frame(width: 240, height: 130)
-                    .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
-                    .overlay(alignment: .bottom) {
-                      if item.progress > 0.02 {
-                        ProgressView(value: item.progress).tint(Color.stAccent).padding(8)
-                      }
-                    }
-                  Text(item.title)
-                    .font(.reading(16, .medium, relativeTo: .subheadline))
-                    .foregroundStyle(Color.stInk)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                  Text([item.source, readingLabel(item)].compactMap { $0 }.joined(separator: " · ").uppercased())
-                    .font(.mono(10.5))
-                    .foregroundStyle(item.progress >= 0.02 ? Color.stAccentText : Color.stMuted)
-                    .lineLimit(1)
-                }
-                .frame(width: 240, alignment: .leading)
-                .contentShape(Rectangle())
-              }
-              .buttonStyle(.plain)
-              .itemMenu(item, perform: perform)
-            }
-          }
-        }
-        .scrollClipDisabled()
-      }
-    }
-  }
   #endif
 
   // MARK: Shared pieces
 
-  private var showsEditionStrip: Bool {
-    edition.isFresh && edition.state?.showOnHome != false
+  @ViewBuilder
+  private var continuationSection: some View {
+    let article = upNext.first { $0.progress >= 0.02 }
+    let video = continuingVideos.first
+    if article != nil || video != nil {
+      VStack(alignment: .leading, spacing: 12) {
+        SectionHeading(title: "Pick up where you left off")
+        let layout = contentWidth >= 900
+          ? AnyLayout(HStackLayout(alignment: .top, spacing: 20))
+          : AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
+        layout {
+          if let article {
+            ContinuationCard(item: article, watching: false) { open(article, from: .upNext) }
+          }
+          if let video {
+            ContinuationCard(item: video, watching: true) { open(video, from: .continuing) }
+          }
+        }
+      }
+    }
   }
 
-  private var videoStrip: some View {
-    NewVideosStrip(
-      videos: videos,
-      total: videosTotal,
-      channelName: channelName,
-      open: { open($0, from: .videos) },
-      openWatch: { go(.channels) },
-      perform: perform
-    )
+  #if os(macOS)
+  private var freshPanels: some View {
+    let layout = contentWidth >= 900
+      ? AnyLayout(HStackLayout(alignment: .top, spacing: 28))
+      : AnyLayout(VStackLayout(alignment: .leading, spacing: 28))
+    return layout {
+      VStack(alignment: .leading, spacing: 12) { feedsHeading; feedBox }.frame(maxWidth: .infinity)
+      if !videos.isEmpty { latestVideos.frame(maxWidth: .infinity) }
+    }
+  }
+
+  #endif
+
+  private var latestVideos: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      SectionHeading(title: "New videos") { Button("See all") { go(.channels) }.buttonStyle(.text) }
+      ListBox {
+        ForEach(videos.prefix(3)) { item in
+          Button { open(item, from: .videos) } label: {
+            VideoRow(item: item, divider: item.id != videos.prefix(3).last?.id)
+          }
+          .buttonStyle(.plain)
+          .itemMenu(item, unseen: true, perform: perform)
+        }
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var savedSuggestions: some View {
+    let items = Array(upNext.filter { $0.progress < 0.02 }.prefix(3))
+    if !items.isEmpty {
+      VStack(alignment: .leading, spacing: 12) {
+        SectionHeading(title: "In Saved") { Button("Open Saved") { go(.saved) }.buttonStyle(.text) }
+        ListBox {
+          ForEach(items) { item in
+            Button { open(item, from: .upNext) } label: { ItemRow(item: item, divider: item.id != items.last?.id) }
+              .buttonStyle(.plain).itemMenu(item, perform: perform)
+          }
+        }
+      }
+    } else if let upNextError {
+      HStack {
+        Text(upNextError).font(.stSmall).foregroundStyle(Color.stMuted)
+        Button("Try again") { Task { await loadUpNext() } }.buttonStyle(.text)
+      }
+    }
+  }
+
+  private var showsEditionStrip: Bool {
+    edition.isOut && edition.state?.showOnHome != false
   }
 
   private var editionStrip: some View {
@@ -466,7 +462,7 @@ struct HomeView: View {
         if let leadTitle {
           Rectangle().fill(Color.stLine).frame(width: 1, height: 34)
           VStack(alignment: .leading, spacing: 2) {
-            Kicker("The week's best you missed", accent: true)
+            Kicker("In this week's issue", accent: true)
             Text(leadTitle)
               .font(.reading(20, .medium, relativeTo: .title3))
               .foregroundStyle(Color.stInk)
@@ -492,33 +488,8 @@ struct HomeView: View {
   }
 
   private var feedsHeading: some View {
-    feedsHeadingContent
-      .sortSheet(isPresented: $sorting, scope: "in:following use:folders -type:video") {
-        Task { await feeds.reload(feedsQuery) }
-      }
-  }
-
-  private var feedsHeadingContent: some View {
-    SectionHeading(title: "New from your feeds", detail: feeds.total.map { "\($0) unseen" }) {
-      StashSegmented(selection: $tab, [
-        .init("Read", Tab.read, count: tab == .read ? feeds.total : otherCount),
-        .init("Watch", Tab.watch, count: tab == .watch ? feeds.total : otherCount),
-      ])
-      if tab == .read, let unseen = feeds.total, unseen >= 3 {
-        Button { sorting = true } label: { Label("Sort them", systemImage: "rectangle.stack") }
-          .buttonStyle(.text)
-          .help("Go through them one card at a time")
-      }
-      Button { markAllSeen() } label: {
-        #if os(macOS)
-        Label("Mark all seen", systemImage: "checkmark")
-        #else
-        Label("Mark all seen", systemImage: "checkmark").labelStyle(.iconOnly)
-        #endif
-      }
-      .buttonStyle(.text)
-      .disabled(feeds.visibleItems.isEmpty)
-      .help("Mark everything here as seen")
+    SectionHeading(title: "From your feeds") {
+      Button("See all") { go(.feeds) }.buttonStyle(.text)
     }
   }
 
@@ -527,24 +498,26 @@ struct HomeView: View {
     if feeds.isLoading {
       ProgressView().frame(maxWidth: .infinity).padding(.vertical, 32)
     } else if let error = feeds.error {
-      EmptyBox(title: "Couldn't load", message: error, systemImage: "wifi.exclamationmark")
+      EmptyBox(title: "Couldn't load", message: error, systemImage: "wifi.exclamationmark") {
+        Button("Try again") { Task { await feeds.reload(feedsQuery) } }
+      }
     } else {
-      EmptyBox(message: tab == .watch ? "You're all caught up on your channels." : "You're all caught up.") {
-        Button(tab == .watch ? "Open Latest" : "Open Feeds") { go(tab == .watch ? .channels : .feeds) }
+      EmptyBox(message: "You're all caught up.") {
+        Button("Open Feeds") { go(.feeds) }
       }
     }
   }
 
   private func moreRow(_ shown: Int) -> some View {
     Button {
-      go(tab == .watch ? .channels : .feeds)
+      go(.feeds)
     } label: {
       HStack {
         Text("\((feeds.total ?? 0) - shown) more")
           .foregroundStyle(Color.stMuted)
         Spacer()
         HStack(spacing: 6) {
-          Text(tab == .watch ? "Open Latest" : "Open Feeds")
+          Text("Open Feeds")
           Image(systemName: "chevron.right").imageScale(.small)
         }
         .font(.ui(13, .medium))
@@ -578,37 +551,33 @@ struct HomeView: View {
 
   private func reload() async {
     await feeds.reload(feedsQuery)
-    otherCount = await count(tab == .read ? "type:video" : "-type:video")
     await loadVideos()
     await loadUpNext()
     await edition.refresh()
     await loadLead()
   }
 
-  private func count(_ type: String) async -> Int? {
-    try? await Library.search("in:following use:folders \(type) -is:seen", first: 1).pageInfo.totalCount
-  }
-
-  /// The newest unseen videos from your channels, for the strip at the top.
+  /// A short preview of new videos from your channels.
   private func loadVideos() async {
     guard let page = try? await Library.search(Self.videosQuery, first: 12) else { return }
     videos = page.items
-    videosTotal = page.pageInfo.totalCount
   }
 
   /// Anything you've started, then your newest unread saves.
   private func loadUpNext() async {
-    defer { loadingUpNext = false }
-    async let reading = Library.search("in:inbox use:folders is:reading -type:video sort:read-desc", first: 5)
-    async let unread = Library.search("in:inbox use:folders is:unread -type:video sort:saved-desc", first: 8)
-    let started = (try? await reading)?.items ?? []
-    let fresh = try? await unread
-    var seen = Set<String>()
-    upNext = (started + (fresh?.items ?? []))
-      .filter { seen.insert($0.id).inserted && $0.progress < 0.9 && !$0.isArchived }
-      .prefix(edition.state?.upNext ?? 5)
-      .map { $0 }
-    unreadTotal = fresh?.pageInfo.totalCount
+    do {
+      async let reading = Library.search("in:inbox use:folders is:reading -type:video sort:read-desc", first: 5)
+      async let unread = Library.search("in:inbox use:folders is:unread -type:video sort:saved-desc", first: 8)
+      let (started, fresh) = try await (reading, unread)
+      var seen = Set<String>()
+      upNext = (started.items + fresh.items)
+        .filter { seen.insert($0.id).inserted && $0.progress < 0.9 && !$0.isArchived }
+        .prefix(edition.state?.upNext ?? 5).map { $0 }
+      upNextError = nil
+    } catch { upNextError = "Couldn't update your saved articles. Try again." }
+    if let page = try? await Library.search("use:folders type:video is:reading sort:updated-desc", first: 6) {
+      continuingVideos = page.items.filter { !$0.isArchived && $0.progress < 0.9 }
+    }
   }
 
   /// Makes this week's issue if it's out and not made yet, so it's ready to open.
@@ -621,29 +590,12 @@ struct HomeView: View {
 
   // MARK: Doing things
 
-  /// A link is saved; anything else searches your library.
+  /// Search is separate from saving, so Return always does what the field says.
   private func submitCapture() {
     let text = capture.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !text.isEmpty else { return }
-    capture = ""
     captureFocused = false
-    let looksLikeLink = text.lowercased().hasPrefix("http") || (!text.contains(" ") && text.contains("."))
-    if looksLikeLink {
-      let url = text.lowercased().hasPrefix("http") ? text : "https://" + text
-      Task {
-        do {
-          try await Library.save(url: url)
-          Moments.shared.saved(title: url)
-          toaster.show("Saved")
-          try? await Task.sleep(for: .seconds(2))
-          await loadUpNext()
-        } catch {
-          toaster.show(error.localizedDescription)
-        }
-      }
-    } else {
-      path.append(HomeSearch(text: text))
-    }
+    path.append(HomeSearch(text: text))
   }
 
   private func channelName(_ item: LibraryItem) -> String? {
@@ -655,20 +607,6 @@ struct HomeView: View {
     guard item.isFeedItem else { return }
     if feeds.isUnseen(item) { feeds.markSeen(item) }
     Task { try? await Library.markSeen([item.id]) }
-  }
-
-  private func markAllSeen() {
-    let query = "in:following use:folders \(tab == .watch ? "type:video" : "-type:video") -is:seen"
-    Task {
-      do {
-        try await Library.markSeen(query: query)
-        toaster.show(tab == .watch ? "Marked all videos as seen" : "Marked all feeds as seen")
-        await feeds.reload(feedsQuery)
-        if tab == .watch { await loadVideos() }
-      } catch {
-        toaster.show(error.localizedDescription)
-      }
-    }
   }
 
   private func open(_ item: LibraryItem, from source: PeekSource) {

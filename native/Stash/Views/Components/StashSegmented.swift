@@ -3,6 +3,7 @@ import SwiftUI
 /// The web's quiet segmented control: a 1pt outline with a 2pt inset, and the chosen option
 /// filled grey rather than orange. Options can carry a count.
 struct StashSegmented<Value: Hashable>: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Binding var selection: Value
   let options: [Option]
 
@@ -23,13 +24,21 @@ struct StashSegmented<Value: Hashable>: View {
     self.options = options
   }
 
+  private var controlHeight: CGFloat {
+    #if os(iOS)
+    44
+    #else
+    22
+    #endif
+  }
+
   var body: some View {
     HStack(spacing: 2) {
       ForEach(options.indices, id: \.self) { index in
         let option = options[index]
         let chosen = option.value == selection
         Button {
-          withAnimation(.snappy(duration: 0.15)) { selection = option.value }
+          withAnimation(reduceMotion ? StashMotion.fade : StashMotion.feedback) { selection = option.value }
         } label: {
           HStack(spacing: 5) {
             Text(option.title)
@@ -42,7 +51,7 @@ struct StashSegmented<Value: Hashable>: View {
           }
           .foregroundStyle(chosen ? Color.stInk : Color.stMuted)
           .padding(.horizontal, 10)
-          .frame(minHeight: 22)
+          .frame(minHeight: controlHeight)
           .background(chosen ? Color.stSelected : Color.clear, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
           .contentShape(Rectangle())
         }

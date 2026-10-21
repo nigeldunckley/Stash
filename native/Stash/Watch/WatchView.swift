@@ -235,7 +235,7 @@ struct WatchView: View {
   private var folio: FolioContent? {
     guard isFront else { return nil }
     return FolioContent(
-      items: [FolioContent.today, "\(FolioData.shared.channels) CHANNELS"],
+      items: [FolioContent.today, "\(FolioData.shared.channels) \(FolioData.shared.channels == 1 ? "CHANNEL" : "CHANNELS")"],
       checked: true,
       right: showAll ? nil : list.total.map { "\($0) NEW" }
     )

@@ -32,11 +32,15 @@ struct ItemListView<Tools: View>: View {
   @ViewBuilder var tools: () -> Tools
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.isActivePage) private var isActivePage
   @State private var selection: LibraryItem?
   @Namespace private var unfold
   @State private var toaster = Toaster()
+  @State private var capturing = false
   #if os(macOS)
   @FocusState private var listFocused: Bool
+  @SceneStorage("readerFocus") private var readerFocus = false
+  @AppStorage("readerListWidth") private var listWidth = 340.0
   #endif
 
   private var detail: String? {
@@ -46,18 +50,60 @@ struct ItemListView<Tools: View>: View {
 
   var body: some View {
     #if os(macOS)
-    HSplitView {
-      macList
-        .frame(minWidth: 340, maxWidth: .infinity)
-      readerPane
-        .frame(minWidth: 380, idealWidth: 520, maxWidth: 860, maxHeight: .infinity)
+    GeometryReader { geometry in
+      let split = !readerFocus && geometry.size.width >= 800 && !list.visibleItems.isEmpty
+      let showList = split || selection == nil
+      let showReader = split || selection != nil
+      let width = split || readerFocus ? min(max(listWidth, 300), min(420, geometry.size.width - 420)) : geometry.size.width
+      HStack(spacing: 0) {
+        macList
+          .frame(width: width)
+          .transaction { $0.animation = nil }
+          .frame(width: showList ? width : 0, alignment: .leading)
+          .clipped()
+          .opacity(showList ? 1 : 0)
+          .allowsHitTesting(showList)
+          .disabled(!showList)
+          .accessibilityElement(children: showList ? .contain : .ignore)
+          .accessibilityHidden(!showList)
+        Group {
+          if split {
+            Rectangle().fill(Color.stLine)
+              .frame(width: 5)
+              .contentShape(Rectangle())
+              .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("readerLayout"))
+                .onChanged { value in listWidth = min(max(value.location.x, 300), min(420, geometry.size.width - 420)) })
+              .accessibilityLabel("Article list width")
+              .accessibilityAdjustableAction { direction in
+                listWidth = min(max(listWidth + (direction == .increment ? 20 : -20), 300), 420)
+              }
+              .help("Drag to resize the article list")
+          }
+        }
+        readerPane
+          .frame(width: showReader ? max(0, geometry.size.width - (showList ? width : 0) - (split ? 5 : 0)) : 0)
+          .clipped()
+          .opacity(showReader ? 1 : 0)
+          .allowsHitTesting(showReader)
+          .accessibilityElement(children: showReader ? .contain : .ignore)
+          .accessibilityHidden(!showReader)
+      }
+      .coordinateSpace(name: "readerLayout")
     }
+    .animation(StashMotion.layout(reduceMotion: reduceMotion), value: readerFocus)
     .background(Color.stPage)
     .navigationTitle(title)
     .toolbar(removing: .title)
     .toasts(toaster)
     .task(id: query) { await list.load(query) }
     .task(id: wire ? query : nil) { await watchWire() }
+    .onChange(of: list.items) { _, items in
+      if let selected = selection, let updated = items.first(where: { $0.id == selected.id }) { selection = updated }
+    }
+    .onReceive(NotificationCenter.default.publisher(for: .stashToggleFocus)) { _ in
+      if isActivePage && selection != nil { readerFocus.toggle() }
+    }
+    .linkCapture(isPresented: $capturing)
     #else
     if embedded {
       pushingList
@@ -72,12 +118,19 @@ struct ItemListView<Tools: View>: View {
   #if os(macOS)
   private var macList: some View {
     VStack(spacing: 0) {
-      PageHeader(title: title, detail: detail, accentDetail: showsUnseen, folio: folio) {
-        tools()
+      PageHeader(title: title, detail: detail, accentDetail: showsUnseen, folio: folio) { EmptyView() }
+      VStack(alignment: .leading, spacing: 12) {
+        ViewThatFits(in: .horizontal) {
+          HStack(spacing: 8) { tools(); Spacer(minLength: 0) }
+          VStack(alignment: .leading, spacing: 8) { tools() }
+        }
         if let search {
-          PageSearchField(text: search, onSubmit: onSearch)
+          PageSearchField(text: search, onSubmit: onSearch, expands: true)
+            .frame(maxWidth: .infinity)
         }
       }
+      .padding(.horizontal, 20)
+      .padding(.bottom, 16)
       ScrollViewReader { proxy in
         ScrollView {
           Group {
@@ -104,10 +157,10 @@ struct ItemListView<Tools: View>: View {
           NSWorkspace.shared.open(url)
           return .handled
         }
-        .onChange(of: selection) { _, item in
-          guard let item else { return }
+        .onChange(of: selection?.id) { _, _ in
+          guard let item = selection else { return }
           open(item)
-          withAnimation(.snappy(duration: 0.15)) { proxy.scrollTo(item.id) }
+          withAnimation(reduceMotion ? nil : StashMotion.feedback) { proxy.scrollTo(item.id) }
         }
       }
     }
@@ -117,38 +170,14 @@ struct ItemListView<Tools: View>: View {
   @ViewBuilder
   private var readerPane: some View {
     if let selection {
-      VStack(spacing: 0) {
-        HStack(spacing: 8) {
-          let actions = readerActions(for: selection)
-          ForEach(Array(actions.enumerated()), id: \.offset) { index, action in
-            Button { perform(action, selection) } label: {
-              Label(action.title(for: selection), systemImage: action.systemImage)
-            }
-            .buttonStyle(TextButtonStyle(prominent: index == 0))
-          }
-          if let url = selection.originalURL {
-            Button { NSWorkspace.shared.open(url) } label: {
-              Label("Open original", systemImage: "arrow.up.right.square")
-            }
-            .buttonStyle(.text)
-          }
-          Spacer(minLength: 0)
-          if let index = list.visibleItems.firstIndex(of: selection) {
-            Text("\(index + 1) of \(list.total ?? list.visibleItems.count)")
-              .font(.mono(11))
-              .monospacedDigit()
-              .foregroundStyle(Color.stMuted)
-          }
-        }
-        .padding(.horizontal, 20)
-        .frame(height: 52)
-        .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
-
-        ReaderScreen(item: selection, actions: readerActions(for: selection), perform: perform, embedded: true)
-          .modifier(UnfoldIn())
-          .id(selection.id)
-      }
-      .background(Color.stSurface)
+      ReaderScreen(
+        item: selection, actions: readerActions(for: selection), perform: perform,
+        embedded: true, paneControls: true,
+        onBack: { self.selection = nil; readerFocus = false },
+        onFocus: { readerFocus.toggle() }
+      )
+      .modifier(UnfoldIn())
+      .id(selection.id)
     } else {
       EmptyBox(message: "Pick something to read", systemImage: "text.alignleft", boxed: false)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -165,6 +194,7 @@ struct ItemListView<Tools: View>: View {
       .stashList()
       .overlay { if list.visibleItems.isEmpty { emptyState } }
       .toasts(toaster)
+      .linkCapture(isPresented: $capturing)
       .stashPage(title, detail: detail, accentDetail: showsUnseen, folio: folio) { tools() }
       .modifier(Searchable(text: search, onSearch: onSearch))
       .refreshable { await list.reload(query) }
@@ -195,6 +225,14 @@ struct ItemListView<Tools: View>: View {
       }
     } else {
       ForEach(list.visibleItems) { item in row(item) }
+    }
+    if let error = list.error, !list.items.isEmpty {
+      HStack {
+        Text(error).font(.stSmall).foregroundStyle(Color.stMuted)
+        Spacer()
+        Button("Try again") { Task { await list.reload(query, preservingItems: true) } }.buttonStyle(.text)
+      }
+      .padding(12).stashListRow()
     }
     if list.isLoading && !list.items.isEmpty {
       HStack { Spacer(); ProgressView().controlSize(.small); Spacer() }
@@ -250,10 +288,18 @@ struct ItemListView<Tools: View>: View {
       item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item),
       selected: selection?.id == item.id, divider: item.id != list.visibleItems.last?.id
     )
-    .onTapGesture {
-      listFocused = true
-      selection = item
+    .onTapGesture { listFocused = true; selection = item }
+    .accessibilityElement(children: .combine)
+    .accessibilityRepresentation {
+      Button { listFocused = true; selection = item } label: {
+        Text("\(item.title), \(subscriptionName(item) ?? item.source)")
+      }
+      .accessibilityValue(item.progress > 0.02 ? "\(Int(item.progress * 100)) percent read" : "Unread")
+      .accessibilityAddTraits(selection?.id == item.id ? .isSelected : [])
     }
+    .accessibilityAddTraits(.isButton)
+    .accessibilityAddTraits(selection?.id == item.id ? .isSelected : [])
+    .accessibilityAction { selection = item }
     #else
     Button { selection = item; open(item) } label: {
       ItemRow(item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item))
@@ -272,7 +318,19 @@ struct ItemListView<Tools: View>: View {
     } else if list.isLoading {
       ListBox { SkeletonRows() }
     } else {
-      EmptyBox(title: emptyTitle, message: emptyMessage)
+      if let search, !search.wrappedValue.isEmpty {
+        EmptyBox(title: "No results", message: "Try another search or clear it to see your articles.") {
+          Button("Clear search") { search.wrappedValue = ""; onSearch() }
+        }
+      } else if emptyTitle == "Nothing saved" {
+        EmptyBox(title: "Nothing saved", message: "Save an article from your feeds or add a link.", boxed: false) {
+          Button("Add link") { capturing = true }
+          Button("Browse feeds") { NotificationCenter.default.post(name: .stashBrowseFeeds, object: nil) }
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 40)
+      } else {
+        EmptyBox(title: emptyTitle, message: emptyMessage)
+      }
     }
   }
 
@@ -340,7 +398,7 @@ struct ItemListView<Tools: View>: View {
     runItemAction(
       action, item, toaster: toaster,
       remove: { list.remove(item) },
-      restore: { list.restore(item) },
+      restore: { list.restore(item); selection = item },
       refresh: {
         if action == .markSeen || action == .openOriginal { list.markSeen(item) } else { await list.reload(query) }
       }

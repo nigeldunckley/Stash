@@ -60,7 +60,7 @@ struct WireRow: View {
         .monospacedDigit()
         .foregroundStyle(Color.stMuted)
       Text(source)
-        .font(.mono(10.5, .medium))
+        .font(.mono(11, .medium))
         .tracking(0.8)
         .foregroundStyle(Color.stMuted)
         .lineLimit(1)
@@ -68,7 +68,7 @@ struct WireRow: View {
       headline.frame(maxWidth: .infinity, alignment: .leading)
       if let minutes = item.readingMinutes {
         Text("\(minutes) MIN")
-          .font(.mono(10.5))
+          .font(.mono(11))
           .foregroundStyle(Color.stMuted)
       }
     }
@@ -86,7 +86,7 @@ struct WireRow: View {
         Spacer(minLength: 0)
         if let minutes = item.readingMinutes { Text("\(minutes) MIN") }
       }
-      .font(.mono(10.5, relativeTo: .caption2))
+      .font(.mono(11, relativeTo: .caption2))
       .foregroundStyle(Color.stMuted)
       headline
     }
@@ -133,7 +133,7 @@ struct HourMark: View {
     VStack(alignment: .leading, spacing: 6) {
       Rectangle().fill(Color.stInk).frame(height: 1)
       Text(label)
-        .font(.mono(10.5, .medium))
+        .font(.mono(11, .medium))
         .tracking(0.8)
         .foregroundStyle(Color.stInk)
         .padding(.horizontal, 14)

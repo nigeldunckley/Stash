@@ -31,6 +31,15 @@ struct StashApp: App {
     .windowToolbarStyle(.unified)
     .windowBackgroundDragBehavior(.enabled)
     .commands {
+      #if DEBUG
+      if AppPreview.enabled {
+        CommandMenu("Preview") {
+          Button("Minimum window") { previewWindow(width: 640, height: 560) }
+          Button("Compact window") { previewWindow(width: 760, height: 640) }
+          Button("Standard window") { previewWindow(width: 1240, height: 820) }
+        }
+      }
+      #endif
       CommandGroup(replacing: .newItem) {
         Button("Save a Link…") { NotificationCenter.default.post(name: .stashCapture, object: nil) }
           .keyboardShortcut("n", modifiers: .command)
@@ -42,6 +51,15 @@ struct StashApp: App {
       CommandGroup(after: .windowArrangement) {
         Button("Float Video on Top") { NotificationCenter.default.post(name: .stashPopOut, object: nil) }
           .keyboardShortcut("p", modifiers: [.option, .command])
+      }
+      CommandMenu("Reading") {
+        Button("Larger text") { NotificationCenter.default.post(name: .stashLargerText, object: nil) }
+          .keyboardShortcut("+", modifiers: .command)
+        Button("Smaller text") { NotificationCenter.default.post(name: .stashSmallerText, object: nil) }
+          .keyboardShortcut("-", modifiers: .command)
+        Divider()
+        Button("Toggle Focus mode") { NotificationCenter.default.post(name: .stashToggleFocus, object: nil) }
+          .keyboardShortcut("f", modifiers: [.option, .command])
       }
       CommandMenu("Go") {
         Button("Back") { NotificationCenter.default.post(name: .stashBack, object: nil) }
@@ -56,6 +74,13 @@ struct StashApp: App {
     }
     #endif
   }
+
+  #if os(macOS) && DEBUG
+  private func previewWindow(width: CGFloat, height: CGFloat) {
+    NSApplication.shared.windows.first { $0.isVisible && $0.contentView != nil }?
+      .setContentSize(CGSize(width: width, height: height))
+  }
+  #endif
 }
 
 struct RootView: View {

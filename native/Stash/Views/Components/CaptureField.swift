@@ -11,7 +11,7 @@ struct CaptureField: View {
 
   var body: some View {
     HStack(spacing: 10) {
-      Image(systemName: text.hasPrefix("http") ? "plus" : "magnifyingglass")
+      Image(systemName: prompt == "Search Stash" ? "magnifyingglass" : "link")
         .font(.ui(13))
         .foregroundStyle(Color.stMuted)
       TextField("", text: $text, prompt: Text(prompt).foregroundStyle(Color.stMuted))
@@ -31,7 +31,7 @@ struct CaptureField: View {
       #endif
     }
     .padding(.horizontal, 12)
-    .frame(height: 38)
+    .frame(minHeight: 44)
     .background(Color.stSurface, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
     .overlay(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
   }

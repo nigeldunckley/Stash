@@ -12,6 +12,9 @@ final class Session {
   private static let tokenKey = "authToken"
 
   init() {
+    #if DEBUG
+    if AppPreview.enabled { isSignedIn = true; return }
+    #endif
     let token = Keychain.read(Self.tokenKey)
     StashAPI.shared.token = token
     isSignedIn = token != nil
@@ -21,6 +24,9 @@ final class Session {
   }
 
   func signIn(email: String, password: String) async throws {
+    #if DEBUG
+    if AppPreview.enabled { isSignedIn = true; await loadViewer(); return }
+    #endif
     let token = try await StashAPI.shared.signIn(email: email, password: password)
     Keychain.write(token, for: Self.tokenKey)
     StashAPI.shared.token = token
@@ -34,6 +40,9 @@ final class Session {
   }
 
   func signOut() {
+    #if DEBUG
+    if AppPreview.enabled { viewer = nil; isSignedIn = false; return }
+    #endif
     Keychain.write(nil, for: Self.tokenKey)
     StashAPI.shared.token = nil
     viewer = nil

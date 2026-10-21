@@ -210,7 +210,7 @@ enum Watch {
   }
 
   private static func saveProgress(_ id: String, percent: Double, anchor: Int) async throws {
-    _ = try await StashAPI.shared.graphQLJSON("""
+    let data = try await StashAPI.shared.graphQLJSON("""
       mutation SaveVideoPosition($input: SaveArticleReadingProgressInput!) {
         saveArticleReadingProgress(input: $input) {
           ... on SaveArticleReadingProgressSuccess { updatedArticle { id } }
@@ -220,6 +220,11 @@ enum Watch {
       """, variables: ["input": [
         "id": id, "force": true, "readingProgressPercent": percent, "readingProgressAnchorIndex": anchor,
       ]])
+    guard let result = data["saveArticleReadingProgress"] as? [String: Any],
+          result["updatedArticle"] is [String: Any],
+          (result["errorCodes"] as? [String] ?? []).isEmpty else {
+      throw StashError.server("Couldn't save your watching progress. Try again.")
+    }
   }
 
   static func transcript(_ videoID: String) async throws -> [TranscriptLine] {

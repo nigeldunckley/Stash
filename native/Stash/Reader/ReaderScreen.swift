@@ -8,9 +8,15 @@ struct ReaderScreen: View {
   let perform: (ItemAction, LibraryItem) -> Void
   /// Shown inside Home's preview card, which brings its own header and buttons.
   var embedded = false
+  var paneControls = false
+  var onBack: (() -> Void)?
+  var onFocus: (() -> Void)?
 
   @Environment(Session.self) private var session
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.isActivePage) private var isActivePage
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @ScaledMetric(relativeTo: .body) private var typeScale: CGFloat = 1
   /// The article picked from the colophon's "Next up", read here in place of `item`.
   @State private var next: LibraryItem?
   /// What the colophon offers to read next, once it's known.
@@ -21,6 +27,8 @@ struct ReaderScreen: View {
   @State private var loadError: String?
   @AppStorage("readerFontSize") private var fontSize = 20
   @AppStorage("readerFont") private var fontFamily = "Newsreader"
+  @AppStorage("readerWidth") private var lineWidth = 640
+  private var toaster: Toaster { Toaster.shared }
 
   private static let fonts = ["Newsreader", "Literata", "Geist"]
 
@@ -34,18 +42,30 @@ struct ReaderScreen: View {
     }
     .background(Color.stPage)
     .modifier(ScreenChrome(embedded: embedded, title: current.source) { toolbar })
+    .safeAreaInset(edge: .top, spacing: 0) {
+      if paneControls { paneToolbar }
+    }
     .task(id: current.id) { await load() }
     .onAppear { onScreen = true }
     // The colophon's handler holds this screen, so let go of it when the screen goes.
     .onDisappear { onScreen = false; reader?.onColophon = nil }
-    .onChange(of: fontSize) { _, size in reader?.send("updateFontSize", ["fontSize": size]) }
+    .onReceive(NotificationCenter.default.publisher(for: .stashLargerText)) { _ in
+      if onScreen && isActivePage { fontSize = min(40, fontSize + 2) }
+    }
+    .onReceive(NotificationCenter.default.publisher(for: .stashSmallerText)) { _ in
+      if onScreen && isActivePage { fontSize = max(12, fontSize - 2) }
+    }
+    .onChange(of: fontSize) { _, _ in updateSize() }
+    .onChange(of: typeScale) { _, _ in updateSize() }
     .onChange(of: fontFamily) { _, font in reader?.send("updateFontFamily", ["fontFamily": font]) }
+    .onChange(of: lineWidth) { _, width in reader?.send("stashReaderWidth", ["width": width]) }
   }
 
   private func article(_ reader: ReaderController) -> some View {
     ReaderWebView(webView: reader.webView)
       .ignoresSafeArea(edges: .bottom)
       .opacity(reader.isReady ? 1 : 0)
+      .animation(StashMotion.fade, value: reader.isReady)
       .overlay { placeholder(reader) }
       .overlay(alignment: .top) {
         GeometryReader { geometry in
@@ -56,11 +76,62 @@ struct ReaderScreen: View {
         .frame(height: 2)
         .opacity(reader.isReady ? 1 : 0)
       }
+      .safeAreaInset(edge: .bottom) {
+        if let error = reader.actionError {
+          HStack {
+            Text(error).font(.stSmall)
+            Button("Try again") { reader.retryAction() }.buttonStyle(.text)
+          }
+          .padding(12).frame(maxWidth: .infinity).background(Color.stPanel)
+        }
+      }
+  }
+
+  private var effectiveSize: Int { Int((Double(fontSize) * Double(typeScale)).rounded()) }
+  private func updateSize() { reader?.send("updateFontSize", ["fontSize": effectiveSize]) }
+
+  private var paneToolbar: some View {
+    ViewThatFits(in: .horizontal) {
+      HStack(spacing: 12) {
+        if let onBack { Button(action: onBack) { Label("Back", systemImage: "chevron.left") }.help("Back to the list") }
+        ForEach(currentActions.filter { $0 != .delete }, id: \.self) { action in
+          Button { perform(action, current) } label: { Label(action.title(for: current), systemImage: action.systemImage) }.help(action.title(for: current))
+        }
+        Spacer(minLength: 4)
+        ReaderTextButton()
+        if let url = current.originalURL { ShareLink(item: url); Link(destination: url) { Label("Open original", systemImage: "safari") }.help("Open original") }
+        if currentActions.contains(.delete) {
+          Menu {
+            Button("Delete", role: .destructive) { perform(.delete, current) }
+          } label: { Label("More", systemImage: "ellipsis") }.help("More actions")
+        }
+        if let onFocus { Button(action: onFocus) { Label("Focus", systemImage: "arrow.up.left.and.arrow.down.right") }.help("Toggle Focus mode") }
+      }
+      HStack {
+        if let onBack { Button(action: onBack) { Label("Back", systemImage: "chevron.left") }.help("Back to the list") }
+        Spacer()
+        ReaderTextButton()
+        Menu {
+          ForEach(currentActions, id: \.self) { action in
+            Button { perform(action, current) } label: { Label(action.title(for: current), systemImage: action.systemImage) }.help(action.title(for: current))
+          }
+          if let url = current.originalURL { ShareLink(item: url); Link("Open original", destination: url) }
+          if let onFocus { Button("Toggle Focus", action: onFocus) }
+        } label: { Label("More", systemImage: "ellipsis") }
+      }
+    }
+    .labelStyle(.iconOnly)
+    .buttonStyle(.borderless)
+    .font(.ui(15))
+    .padding(.horizontal, 20)
+    .frame(height: 48)
+    .background(Color.stPage)
+    .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
   }
 
   @ViewBuilder
   private func placeholder(_ reader: ReaderController) -> some View {
-    if let loadError, !reader.isReady {
+    if let loadError = loadError ?? reader.navigationError, !reader.isReady {
       EmptyBox(title: "Couldn't open this", message: loadError, systemImage: "doc.text", boxed: false) {
         Button("Try again") { Task { await load() } }
         if let url = current.originalURL { Link("Open original", destination: url) }
@@ -82,22 +153,11 @@ struct ReaderScreen: View {
         .help(action.title)
       }
 
-      Menu {
-        Button("Larger text", systemImage: "textformat.size.larger") { fontSize = min(fontSize + 2, 40) }
-          .keyboardShortcut("+", modifiers: .command)
-        Button("Smaller text", systemImage: "textformat.size.smaller") { fontSize = max(fontSize - 2, 12) }
-          .keyboardShortcut("-", modifiers: .command)
-        Picker("Font", selection: $fontFamily) {
-          ForEach(Self.fonts, id: \.self) { Text($0).tag($0) }
-        }
-      } label: {
-        Label("Text", systemImage: "textformat.size")
-      }
-      .help("Text size and font")
+      ReaderTextButton()
 
       if let url = current.originalURL {
         ShareLink(item: url)
-        Link(destination: url) { Label("Open original", systemImage: "safari") }
+        Link(destination: url) { Label("Open original", systemImage: "safari") }.help("Open original")
           .help("Open original")
       }
     }
@@ -149,38 +209,40 @@ struct ReaderScreen: View {
   }
 
   private func colophonPicked(_ choice: String, item: LibraryItem) {
+    if choice == "archiveNext" || choice == "archive" {
+      let generation = reader?.loadGeneration
+      Task {
+        do {
+          try await Library.setArchived(item.id, true)
+          Moments.shared.archived(item)
+          guard generation == reader?.loadGeneration else { return }
+          reader?.send("stashColophonResult", ["archived": true])
+          toaster.show("Archived", undo: {
+            Task {
+              do { try await Library.setArchived(item.id, false) }
+              catch { toaster.show("Couldn't move this article back to Saved. Try again.") }
+            }
+          })
+          if choice == "archiveNext", let upNext { reader?.reset(); next = upNext }
+          else if let onBack { onBack() }
+          else if !embedded { dismiss() }
+        } catch {
+          guard generation == reader?.loadGeneration else { return }
+          reader?.send("stashColophonResult", [:])
+          toaster.show("Couldn't archive this article. Try again.")
+        }
+      }
+      return
+    }
     switch choice {
-    case "next", "archiveNext":
-      if choice == "archiveNext" { archive(item) }
+    case "next":
       if let upNext {
         reader?.reset()
         next = upNext
       }
-    case "archive":
-      guard actions.contains(.archive), next == nil else {
-        archive(item)
-        if !embedded { dismiss() }
-        return
-      }
-      // The page that opened the reader takes it out of its list; some close the reader as
-      // they do, so only close it if it's still showing.
-      perform(.archive, item)
-      if !embedded {
-        Task {
-          try? await Task.sleep(for: .seconds(0.35))
-          if onScreen { dismiss() }
-        }
-      }
     default:
       dismiss()
     }
-  }
-
-  /// Archives without the opening page's help, for when the reader carries on to something else.
-  private func archive(_ item: LibraryItem) {
-    guard !item.isArchived else { return }
-    Moments.shared.archived(item)
-    Task { try? await Library.setArchived(item.id, true) }
   }
 
   private func load() async {
@@ -194,11 +256,12 @@ struct ReaderScreen: View {
       async let nextUp = Self.nextUp(after: item)
       let content = try await Library.article(username: viewer.profile.username, slug: item.slug)
       upNext = await nextUp
+      guard !Task.isCancelled, item.id == current.id else { return }
       reader.onColophon = { choice in colophonPicked(choice, item: item) }
       let html = ReaderPage.html(
         for: content,
         viewer: viewer,
-        settings: .init(fontSize: fontSize, fontFamily: fontFamily),
+        settings: .init(fontSize: effectiveSize, fontFamily: fontFamily, width: lineWidth),
         colophon: colophon(for: item)
       )
       await reader.load(html: html, token: StashAPI.shared.token)

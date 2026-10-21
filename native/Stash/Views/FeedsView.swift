@@ -7,6 +7,8 @@ struct FeedsView: View {
   @State private var source: Subscription?
   @AppStorage("feedsShowAll") private var showAll = false
   @State private var sorting = false
+  @State private var markTask: Task<Void, Never>?
+  @State private var toaster = Toaster()
   /// Cards (the usual rows) or the Wire.
   @AppStorage("feedsWire") private var wire = false
 
@@ -41,20 +43,12 @@ struct FeedsView: View {
       groupsByDay: true,
       wire: wire,
       folio: FolioContent(
-        items: [FolioContent.today, "\(FolioData.shared.feeds) FEEDS"],
+        items: [FolioContent.today, "\(FolioData.shared.feeds) \(FolioData.shared.feeds == 1 ? "FEED" : "FEEDS")"],
         checked: true,
         right: showAll ? nil : list.total.map { "\($0) UNSEEN" }
       )
     ) {
       StashSegmented(selection: $showAll, [.init("Unseen", false), .init("All", true)])
-      StashSegmented(selection: $wire, [.init("Cards", false), .init("Wire", true)])
-      if !showAll, let unseen = list.total, unseen >= 3 {
-        Button { sorting = true } label: { Label("Sort \(unseen)", systemImage: "rectangle.stack") }
-          .buttonStyle(.text)
-          .help("Go through them one card at a time")
-      }
-      Button { markAllSeen() } label: { Label("Mark all seen", systemImage: "checkmark") }
-        .buttonStyle(.text)
 
       Menu {
         Picker("Source", selection: $source) {
@@ -71,7 +65,21 @@ struct FeedsView: View {
       .buttonStyle(.text)
       .fixedSize()
       .help("Choose a feed")
+      Menu {
+        Picker("Layout", selection: $wire) {
+          Text("Cards").tag(false)
+          Text("Wire").tag(true)
+        }
+        if !showAll, (list.total ?? 0) >= 3 {
+          Button("Sort through feeds", systemImage: "rectangle.stack") { sorting = true }
+        }
+        Button("Mark all seen", systemImage: "checkmark") { markAllSeen() }
+          .disabled(markTask != nil || list.visibleItems.isEmpty)
+      } label: { Label("More", systemImage: "ellipsis") }
+      .buttonStyle(.text)
+      .help("Change the layout or act on this feed")
     }
+    .toasts(toaster)
     .pageBack(["Feeds"], enabled: source != nil) { source = nil }
     .task { subscriptions = (try? await Library.subscriptions()) ?? subscriptions }
     .sortSheet(isPresented: $sorting, scope: scope) { Task { await list.reload(query) } }
@@ -83,10 +91,11 @@ struct FeedsView: View {
   }
 
   private func markAllSeen() {
-    let query = "\(scope) -is:seen"
-    Task {
-      try? await Library.markSeen(query: query)
-      await list.reload(self.query)
+    markTask?.cancel()
+    let snapshot = "\(scope) -is:seen"
+    let count = showAll ? nil : list.total
+    markTask = SeenActions.stage(query: snapshot, count: count, toaster: toaster) {
+      markTask = nil
     }
   }
 }

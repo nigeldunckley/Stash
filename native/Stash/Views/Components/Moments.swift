@@ -6,10 +6,7 @@ import UIKit
 import AppKit
 #endif
 
-/// Saving and archiving, made to feel physical: the row lifts off as a card and swooshes along
-/// a curve into its place in the sidebar (Saved, Watch's Saved or Archive; on iPhone, its tab),
-/// with a soft sound (if turned on) and a tap on iPhone. Everything that saves or archives
-/// tells this one place.
+/// Shared save and archive feedback, including optional sound and haptics.
 enum MomentKind: Hashable {
   case saved, savedVideo, archived
 }
@@ -45,7 +42,7 @@ final class Moments {
   func archived(_ item: LibraryItem) { post(.archived, item: item, title: nil) }
 
   /// How long a flight takes, from lift-off to landing.
-  static let flightTime = 0.52
+  static let flightTime = 0.28
 
   private static var reduceMotion: Bool {
     #if os(iOS)
@@ -91,9 +88,7 @@ extension View {
   }
 }
 
-/// The row, lifted off as a card, swooshing along a curve into its place in the sidebar: it
-/// leans into the turn, shrinks as it goes and leaves a short blurred trail, then lands with the
-/// ribbon dip and "+1" on the row. With Reduce Motion, it just fades where it was.
+/// A short save transition toward its destination. Reduce Motion uses a fade.
 struct MomentFlight: View {
   let moment: Moment
   let target: CGRect
@@ -105,22 +100,13 @@ struct MomentFlight: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
-    if let source = moment.source {
+    if let source = moment.source, moment.kind != .archived {
       let path = FlightPath(
         from: CGPoint(x: source.midX - origin.x, y: source.midY - origin.y),
         to: CGPoint(x: target.midX - origin.x, y: target.midY - origin.y),
         width: min(source.width, 380)
       )
       ZStack {
-        if !reduceMotion {
-          // The trail: fainter, softer copies a moment behind.
-          ForEach([3, 2, 1], id: \.self) { step in
-            card(width: path.width)
-              .modifier(FlightStep(path: path, progress: progress, lag: CGFloat(step) * 0.07))
-              .opacity(0.22 - Double(step) * 0.05)
-              .blur(radius: CGFloat(step) * 2.5)
-          }
-        }
         card(width: path.width)
           .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
           .modifier(FlightStep(path: path, progress: reduceMotion ? 0 : progress, lag: 0))
@@ -140,7 +126,7 @@ struct MomentFlight: View {
         .lineLimit(1)
       if !moment.detail.isEmpty {
         Text(moment.detail.uppercased())
-          .font(.mono(9.5, .medium))
+          .font(.mono(11, .medium))
           .tracking(0.7)
           .foregroundStyle(moment.kind == .archived ? Color.stMuted : Color.stAccentText)
           .lineLimit(1)
@@ -162,7 +148,7 @@ struct MomentFlight: View {
   }
 }
 
-/// The curve a flight takes: up and over towards the sidebar, like a toss.
+/// A shallow curve toward Saved.
 struct FlightPath {
   let from: CGPoint
   let to: CGPoint
@@ -170,7 +156,7 @@ struct FlightPath {
 
   /// Above both ends and a little towards the start, so the card arcs rather than slides.
   var control: CGPoint {
-    CGPoint(x: to.x + (from.x - to.x) * 0.35, y: min(from.y, to.y) - max(60, abs(from.y - to.y) * 0.35))
+    CGPoint(x: to.x + (from.x - to.x) * 0.35, y: min(from.y, to.y) - min(14, abs(from.y - to.y) * 0.08))
   }
 
   func point(_ t: CGFloat) -> CGPoint {
@@ -197,14 +183,11 @@ private struct FlightStep: ViewModifier, Animatable {
   func body(content: Content) -> some View {
     let t = lag > 0 ? max(0, (progress - lag) / (1 - lag)) : progress
     // Lifts off (a touch bigger) in the first tenth, then shrinks to a chip on the target.
-    let lift = min(1, t / 0.1)
-    let scale = t < 0.1 ? 1 + 0.04 * lift : 1.04 - 0.86 * ((t - 0.1) / 0.9)
+    let scale = 1 - 0.85 * t
     // Leans into the curve and straightens as it lands.
-    let lean = -9 * sin(Double(t) * .pi)
     let fade = t > 0.82 ? 1 - Double((t - 0.82) / 0.18) : 1
     content
       .scaleEffect(scale)
-      .rotationEffect(.degrees(lean))
       .position(path.point(t))
       .opacity(fade)
   }
@@ -222,6 +205,7 @@ struct LandingRibbon: View {
   let kind: MomentKind
   @State private var lit = false
   @State private var dipped = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     RibbonIcon(lit: lit)
@@ -230,8 +214,8 @@ struct LandingRibbon: View {
   }
 
   private func land() {
-    withAnimation(.easeIn(duration: 0.12)) { lit = true; dipped = true }
-    withAnimation(.spring(duration: 0.2).delay(0.12)) { dipped = false }
+    withAnimation(.easeIn(duration: 0.12)) { lit = true; dipped = !reduceMotion }
+    withAnimation(.smooth(duration: 0.2, extraBounce: 0).delay(0.12)) { dipped = false }
     withAnimation(.easeOut(duration: 0.4).delay(1.2)) { lit = false }
   }
 }
@@ -240,12 +224,13 @@ struct LandingRibbon: View {
 struct LandingCount: View {
   let kind: MomentKind
   @State private var shown = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     Text("+1")
       .font(.mono(11))
       .foregroundStyle(Color.stAccentText)
-      .offset(y: shown ? 0 : 8)
+      .offset(y: shown || reduceMotion ? 0 : 4)
       .opacity(shown ? 1 : 0)
       .onChange(of: Moments.shared.landings[kind] ?? 0) { _, _ in
         withAnimation(.snappy(duration: 0.24)) { shown = true }

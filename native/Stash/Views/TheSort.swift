@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The Sort: your unseen feed posts as a stack of cards, one decision each. Flick up to save,
+/// Sort through feeds: your unseen feed posts as a stack of cards, one decision each. Flick up to save,
 /// left to archive, right to skip (marks it seen), tap to read. The queue is fixed when it
 /// opens; anything new joins the back.
 struct TheSort: View {
@@ -11,6 +11,9 @@ struct TheSort: View {
   @State private var queue: [LibraryItem] = []
   @State private var index = 0
   @State private var loaded = false
+  @State private var deciding = false
+  @State private var loadError: String?
+  @State private var toaster = Toaster()
   @State private var saved: [LibraryItem] = []
   @State private var archived = 0
   @State private var skipped = 0
@@ -34,28 +37,27 @@ struct TheSort: View {
         ZStack {
           if !loaded {
             ProgressView()
+          } else if let loadError {
+            EmptyBox(title: "Couldn't load these posts", message: loadError) {
+              Button("Try again") { Task { await load() } }
+            }
           } else if current == nil {
             endCard.transition(.opacity)
           } else {
-            stack
+            stack.allowsHitTesting(!deciding)
           }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 20)
-        if current != nil { buttons }
+        if current != nil { buttons.disabled(deciding) }
       }
       .background(Color.stPage)
       .navigationDestination(item: $reading) { item in
         ItemDestination(item: item, perform: { action, item in
-          switch action {
-          case .save: Moments.shared.saved(item)
-          case .archive: Moments.shared.archived(item)
-          default: break
-          }
-          Task { try? await action.run(on: item) }
+          runItemAction(action, item, toaster: toaster, remove: {}, restore: {})
         })
           .unfoldDestination(item, in: unfold)
-          .pageBack(["The Sort"], escape: true)
+          .pageBack(["Sort through feeds"], escape: true)
       }
       #if os(iOS)
       .toolbar(.hidden, for: .navigationBar)
@@ -79,6 +81,7 @@ struct TheSort: View {
       onDone()
       return .handled
     }
+    .toasts(toaster)
     .task { await load() }
     .task { await watchForNew() }
     .onAppear { focused = true }
@@ -90,7 +93,7 @@ struct TheSort: View {
   private var strip: some View {
     VStack(spacing: 0) {
       HStack {
-        Text(["THE SORT", queue.isEmpty ? nil : "\(min(index + 1, queue.count)) OF \(queue.count)", "\(saved.count) SAVED"]
+        Text(["SORT THROUGH FEEDS", queue.isEmpty ? nil : "\(min(index + 1, queue.count)) OF \(queue.count)", "\(saved.count) SAVED"]
           .compactMap { $0 }
           .joined(separator: " · "))
           .foregroundStyle(Color.stInk)
@@ -105,7 +108,7 @@ struct TheSort: View {
         .buttonStyle(.plain)
         .foregroundStyle(Color.stMuted)
       }
-      .font(.mono(10.5, .medium))
+      .font(.mono(11, .medium))
       .tracking(0.9)
       .padding(.horizontal, 20)
       .padding(.vertical, 14)
@@ -118,7 +121,7 @@ struct TheSort: View {
         }
       }
       .frame(height: 1)
-      .animation(.snappy(duration: 0.25), value: index)
+      .animation(reduceMotion ? nil : StashMotion.change, value: index)
     }
   }
 
@@ -135,7 +138,7 @@ struct TheSort: View {
       }
     }
     .frame(maxWidth: 560, maxHeight: 620)
-    .animation(Unfold.animation(reduceMotion: reduceMotion), value: index)
+    .animation(reduceMotion ? nil : StashMotion.change, value: index)
   }
 
   private func card(_ item: LibraryItem, top: Bool) -> some View {
@@ -145,7 +148,7 @@ struct TheSort: View {
         .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
         .unfoldSource(item, in: unfold)
       Text(kicker(item))
-        .font(.mono(10.5, .medium))
+        .font(.mono(11, .medium))
         .tracking(0.9)
         .foregroundStyle(Color.stAccentText)
         .lineLimit(1)
@@ -226,7 +229,7 @@ struct TheSort: View {
         } else if predicted.width > 160 {
           decide(.skip)
         } else {
-          withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { drag = .zero }
+          withAnimation(reduceMotion ? nil : .smooth(duration: 0.25, extraBounce: 0)) { drag = .zero }
         }
       }
   }
@@ -294,48 +297,52 @@ struct TheSort: View {
   }
 
   private func decide(_ verdict: Verdict) {
-    guard let item = current, leaving == nil else { return }
-    switch verdict {
-    case .save:
-      saved.append(item)
-      Moments.shared.saved(item)
-      Task { try? await ItemAction.save.run(on: item) }
-    case .archive:
-      archived += 1
-      Moments.shared.archived(item)
-      Task { try? await ItemAction.archive.run(on: item) }
-    case .skip:
-      skipped += 1
-      Task { try? await Library.markSeen([item.id]) }
-    }
-    withAnimation(reduceMotion ? Unfold.fade : .easeIn(duration: 0.22)) { leaving = verdict }
+    guard let item = current, leaving == nil, !deciding else { return }
+    deciding = true
     Task {
-      try? await Task.sleep(for: .seconds(reduceMotion ? 0.2 : 0.22))
-      var reset = Transaction()
-      reset.disablesAnimations = true
-      withTransaction(reset) {
-        leaving = nil
+      defer { deciding = false }
+      do {
+        switch verdict {
+        case .save:
+          try await ItemAction.save.run(on: item)
+          saved.append(item)
+          Moments.shared.saved(item)
+        case .archive:
+          try await ItemAction.archive.run(on: item)
+          archived += 1
+          Moments.shared.archived(item)
+        case .skip:
+          try await Library.markSeen([item.id])
+          skipped += 1
+        }
+        withAnimation(reduceMotion ? StashMotion.fade : StashMotion.change) { leaving = verdict }
+        try? await Task.sleep(for: .milliseconds(reduceMotion ? 150 : 200))
+        var reset = Transaction()
+        reset.disablesAnimations = true
+        withTransaction(reset) { leaving = nil; drag = .zero }
+        withAnimation(reduceMotion ? StashMotion.fade : StashMotion.change) { index += 1 }
+      } catch {
         drag = .zero
+        toaster.show("Couldn't save that change. Try again.")
       }
-      withAnimation(Unfold.animation(reduceMotion: reduceMotion)) { index += 1 }
     }
   }
 
-  /// Reading counts as sorting it: it's marked seen and the stack moves on behind the reader.
+  /// Opening a post keeps its place until marking it seen succeeds.
+
   private func read(_ item: LibraryItem) {
-    guard leaving == nil, reading == nil else { return }
-    skipped += 1
-    Task { try? await Library.markSeen([item.id]) }
+    guard leaving == nil, reading == nil, !deciding else { return }
     reading = item
     Task {
-      try? await Task.sleep(for: .seconds(0.5))
-      index += 1
+      do { try await Library.markSeen([item.id]); skipped += 1; index += 1 }
+      catch { toaster.show("Couldn't mark this post as seen. Try again.") }
     }
   }
 
   private func load() async {
-    let page = try? await Library.search("\(scope) -is:seen sort:published-desc", first: 100)
-    queue = page?.items ?? []
+    loadError = nil
+    do { queue = try await Library.search("\(scope) -is:seen sort:published-desc", first: 100).items }
+    catch { loadError = "Check your connection and try again." }
     loaded = true
   }
 
@@ -352,7 +359,7 @@ struct TheSort: View {
   }
 }
 
-/// The Sort's buttons: outlined, or ink for Save and Done.
+/// Sort through feeds's buttons: outlined, or ink for Save and Done.
 struct SortButtonStyle: ButtonStyle {
   var ink = false
 
@@ -371,7 +378,7 @@ struct SortButtonStyle: ButtonStyle {
 }
 
 extension View {
-  /// Opens The Sort over the page: full screen on iPhone, a large sheet on Mac.
+  /// Opens Sort through feeds over the page: full screen on iPhone, a large sheet on Mac.
   func sortSheet(isPresented: Binding<Bool>, scope: String, onDone: @escaping () -> Void) -> some View {
     #if os(iOS)
     fullScreenCover(isPresented: isPresented, onDismiss: onDone) {

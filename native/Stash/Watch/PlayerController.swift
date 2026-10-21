@@ -38,6 +38,9 @@ final class PlayerController: NSObject {
   }
 
   @ObservationIgnored private var savedTime: Double = 0
+  @ObservationIgnored private var savingPosition = false
+  @ObservationIgnored private var pendingPositions: [String: (seconds: Double, duration: Double)] = [:]
+  private(set) var syncError: String?
   @ObservationIgnored private var watched: Set<String> = []
   @ObservationIgnored private var pageLoaded = false
   /// YouTube's own frame inside the player page, where picture in picture has to be asked for.
@@ -124,7 +127,7 @@ final class PlayerController: NSObject {
   }
 
   func next() {
-    guard let upcoming = queue.first(where: { $0.id != item?.id }) else { return }
+    guard let upcoming = upNext.first else { pause(); return }
     play(upcoming)
   }
 
@@ -184,10 +187,16 @@ final class PlayerController: NSObject {
   }
 
   var upNext: [LibraryItem] {
-    guard let item, let index = queue.firstIndex(where: { $0.id == item.id }) else {
-      return queue.filter { $0.id != self.item?.id }
-    }
-    return Array(queue[(index + 1)...]) + Array(queue[..<index])
+    QueueOrder.remaining(queue, after: item?.id)
+  }
+
+  func moveUpcoming(_ id: String, by offset: Int) {
+    guard let index = queue.firstIndex(where: { $0.id == id }),
+          let current = item, let currentIndex = queue.firstIndex(where: { $0.id == current.id }) else { return }
+    let destination = index + offset
+    guard destination > currentIndex, queue.indices.contains(destination) else { return }
+    let moved = queue.remove(at: index)
+    queue.insert(moved, at: destination)
   }
 
   // MARK: Player messages
@@ -221,7 +230,12 @@ final class PlayerController: NSObject {
     if abs(time - savedTime) >= 10 { savePosition() }
     if duration > 0, time / duration >= 0.9, !watched.contains(item.id) {
       watched.insert(item.id)
-      Task { try? await Watch.markWatched(item.id) }
+      Task {
+        do {
+          try await Watch.markWatched(item.id)
+          LibraryChanges.shared.publish()
+        } catch { watched.remove(item.id); syncError = "Couldn't save your watched status. It will retry." }
+      }
     }
   }
 
@@ -231,10 +245,31 @@ final class PlayerController: NSObject {
 
   private func savePosition() {
     guard let item, duration > 0, abs(time - savedTime) >= 2 else { return }
-    savedTime = time
-    let (id, seconds, length) = (item.id, time, duration)
-    Task { try? await Watch.savePosition(id, seconds: seconds, duration: length) }
+    pendingPositions[item.id] = (time, duration)
+    flushPositions()
   }
+
+  private func flushPositions() {
+    guard !savingPosition, !pendingPositions.isEmpty else { return }
+    savingPosition = true
+    Task {
+      defer { savingPosition = false }
+      while let (id, position) = pendingPositions.first {
+        do {
+          try await Watch.savePosition(id, seconds: position.seconds, duration: position.duration)
+          if self.item?.id == id { savedTime = position.seconds }
+          if pendingPositions[id]?.seconds == position.seconds { pendingPositions.removeValue(forKey: id) }
+          syncError = nil
+          LibraryChanges.shared.publishProgress()
+        } catch {
+          syncError = "Couldn't save your place. Try again."
+          return
+        }
+      }
+    }
+  }
+
+  func retryPosition() { savePosition(); flushPositions() }
 
   private func command(_ name: String, _ args: [Any] = []) {
     guard let data = try? JSONSerialization.data(withJSONObject: args),
@@ -316,7 +351,7 @@ extension PlayerController: WKNavigationDelegate {
     // "Watch on YouTube" and other links inside the player open outside the app.
     if navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url {
       #if os(iOS)
-      UIApplication.shared.open(url)
+      await UIApplication.shared.open(url)
       #else
       NSWorkspace.shared.open(url)
       #endif

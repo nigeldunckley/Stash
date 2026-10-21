@@ -204,22 +204,24 @@ func runItemAction(
   restore: @escaping () -> Void,
   refresh: @escaping () async -> Void = {}
 ) {
-  switch action {
-  case .save: Moments.shared.saved(item)
-  case .archive: Moments.shared.archived(item)
-  default: break
-  }
-  if action.removesItem { withAnimation(.snappy(duration: 0.22)) { remove() } }
+  if action.removesItem, !LibraryChanges.shared.beginRemoval(item.id) { return }
+  if action.removesItem { withAnimation(StashMotion.systemReduceMotion ? nil : StashMotion.change) { remove() } }
   Task {
     do {
       try await action.run(on: item)
+      if action.removesItem { LibraryChanges.shared.endRemoval(item.id) }
+      switch action {
+      case .save: Moments.shared.saved(item)
+      case .archive: Moments.shared.archived(item)
+      default: break
+      }
       if !action.removesItem { await refresh() }
       guard action != .openOriginal else { return }
       toaster.show(action.doneMessage(for: item), undo: action.canUndo ? {
         Task {
           do {
             try await action.undo(on: item)
-            withAnimation { restore() }
+            withAnimation(StashMotion.systemReduceMotion ? nil : StashMotion.change) { restore() }
             await refresh()
           } catch {
             toaster.show(error.localizedDescription)
@@ -227,7 +229,8 @@ func runItemAction(
         }
       } : nil)
     } catch {
-      withAnimation { restore() }
+      if action.removesItem { LibraryChanges.shared.endRemoval(item.id) }
+      withAnimation(StashMotion.systemReduceMotion ? nil : StashMotion.change) { restore() }
       toaster.show(error.localizedDescription)
     }
   }

@@ -63,7 +63,7 @@ struct VideoThumbnail: View {
       .overlay(alignment: .bottomTrailing) {
         if let length = Watch.duration(item) {
           Text(Watch.timecode(length))
-            .font(.mono(10.5, .medium))
+            .font(.mono(11, .medium))
             .foregroundStyle(.white)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)

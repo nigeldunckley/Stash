@@ -253,5 +253,9 @@ extension Notification.Name {
   static let stashBack = Notification.Name("stashBack")
   static let stashForward = Notification.Name("stashForward")
   /// Clicking the sidebar item you're already on: back to that page's top.
+  static let stashToggleFocus = Notification.Name("stashToggleFocus")
+  static let stashLargerText = Notification.Name("stashLargerText")
+  static let stashSmallerText = Notification.Name("stashSmallerText")
+  static let stashBrowseFeeds = Notification.Name("stashBrowseFeeds")
   static let stashPageTop = Notification.Name("stashPageTop")
 }

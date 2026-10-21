@@ -26,29 +26,43 @@ The first time on iPhone:
 
 ## What's in it
 
-- Sign in, kept in the Keychain so you stay signed in.
-- **Home**: new from your feeds (Read or Watch, grouped by day, mark all seen) and Up next
-  (anything you've started, then your newest saves). While The Edition is out, a strip at
-  the top points to it.
-- **The Edition**: the weekly issue, in the sidebar (and an iPhone tab) only while it's out
-  and until you mark it read. The week's best you missed, the back of the shelf, your
-  highlights, someone new to read and your week in reading. Issues are shared with the web
-  app: whichever opens first makes it. Day, time, the Home strip and Up next count are in Settings.
-- **Highlights**: everything you've highlighted, searchable; tap one to open its article.
-- **Discover**: suggested feeds with why each was picked, follow or try for a week,
-  keep or drop a trial, and "not for me". (The reading map stays on the web.)
-- **Feeds**: unseen or all posts, filter by feed, swipe right to save, swipe left to archive,
-  mark all as seen. On Mac: Delete archives, S saves, Return opens the original.
-- **Saved** and **Archive**: search, add a link (⌘N), archive, delete.
-- **Reader**: the same reader and highlighting as the website, with text size and font,
-  share and open original. Highlights and reading position sync with the web app.
-- **Watch**: Channels (new or all videos, filter by channel or collection), Saved videos
-  (in the order you set on the web) and each collection in the Mac sidebar. The player has
-  speed remembered per channel, ±10 seconds (← and → on Mac, Space to pause), Up next with
-  autoplay, a transcript that follows along and seeks when tapped, and chapters.
-  Your place is saved as you watch and videos count as watched at 90%, same as the web.
-  On iPhone, Picture in Picture is in the video's full-screen controls, and sound
-  keeps playing with the screen locked.
+- **Home** puts unfinished articles and videos first, followed by a short view of new posts,
+  new videos and unread saves. The Edition has a smaller link while the issue is available.
+- **Read** has Feeds and Saved, with Highlights, Discover, Archive and The Edition under More
+  on iPhone. **Watch** has Latest and Saved, with a separate menu for collections. Home, Read,
+  Watch and Settings keep their places in the iPhone tab bar.
+- **Saved** supports All, Unread and In progress, plus search. Add link opens the same save
+  form throughout the app. Failed saves keep the address; accepted links show when the
+  article is being prepared.
+- **Reader** has font, text size and line width controls, Share, Open original and the item's
+  actions. On Mac, the list and reader share a resizable split once the content area reaches
+  800 points. Drag the divider or use its accessibility adjustment. Smaller windows show
+  the list or reader individually. Focus hides the list and sidebar without reloading the page.
+- **Feeds** keeps Unseen/All and the source filter visible. More contains Cards/Wire,
+  Sort through feeds and Mark all seen. Mark all seen waits five seconds before sending,
+  so Undo cancels it during that interval; the server has no bulk operation to make posts unseen.
+- **Discover** shows new suggestions first. Expired trials are grouped below them, with
+  Keep and Stop following actions. Suggestions retain their source explanations.
+- **Watch** keeps the player, position and current queue when moving between the full player,
+  mini player, floating window and Picture in Picture. Up next can be reordered for the current
+  session. It advances through the queue once and stops at the end. Failed position saves
+  remain queued for retry. Transcript, chapters and speed per channel remain available.
+- Sign-in stays in the Keychain. Articles, highlights and reading/watching positions use the
+  existing server. Successful changes refresh other library views without resetting navigation.
+
+## Motion and accessibility
+
+Native iPhone navigation uses the system transition. Mac article changes fade over 150ms;
+list changes take 200ms, Focus and sidebar changes 250ms, and player changes 300ms.
+Save feedback lasts 280ms, with no rotation or blur trail. Archive removes the row and briefly
+marks its destination. Reduce Motion uses fades and disables repeating loading effects.
+
+iPhone controls have at least a 44-point target. Reader text follows Dynamic Type as well as
+its own text-size setting. Rows expose selection to VoiceOver; errors have retry controls,
+and feedback with Undo stays visible while VoiceOver is running.
+
+Useful Mac shortcuts: ⌘N adds a link, ⌘+ / ⌘− changes reader text size, ⌥⌘F toggles Focus,
+and Esc leaves Focus. Feeds and Saved retain their existing arrow-key navigation and item actions.
 
 ## For developers
 
@@ -57,7 +71,6 @@ The first time on iPhone:
 - `Stash/Reader/reader.js` is the web app's reader, built from `packages/appreader`:
   `cd packages/appreader && yarn build-stash-app` (after `yarn install` at the repo root).
   Rebuild it when the web reader changes.
-- On iPhone, Read and Watch are tabs with a row of pages along the top, as on the website.
 - `Stash/API/Edition.swift` is a port of the web's `lib/edition` (schedule and ranking).
   Keep the two in step if either changes; both store issues in personalization `edition`.
 - The project uses Xcode 16's folder sync: new files in `Stash/` are picked up automatically.
@@ -67,3 +80,39 @@ The first time on iPhone:
   in `Stash/Views/Components`. Use these rather than system fonts or controls.
 - `Stash/Fonts` has Geist, Geist Mono and Newsreader (SIL OFL, licences alongside), cut to
   static weights from the web's variable fonts and registered at launch by `StashFonts`.
+
+## Checks and isolated preview
+
+Run `native/scripts/test-native.sh` from the repository. It compiles the production list,
+queue and save-form logic into a standalone test harness, then checks the reader's JavaScript
+request/reply bridge. It needs Swift and Node and does not contact the server.
+
+For a Mac visual preview without signing in, build Debug with a separate bundle identifier
+and the `STASH_PREVIEW` compilation condition:
+
+```sh
+xcodebuild -project native/Stash.xcodeproj -scheme Stash -configuration Debug \
+  -destination 'platform=macOS' -derivedDataPath /tmp/stash-preview \
+  PRODUCT_BUNDLE_IDENTIFIER=com.nigeldunckley.stash.preview PRODUCT_NAME='Stash Preview' \
+  'SWIFT_ACTIVE_COMPILATION_CONDITIONS=DEBUG STASH_PREVIEW' CODE_SIGNING_ALLOWED=NO build
+codesign --force --deep --sign - '/tmp/stash-preview/Build/Products/Debug/Stash Preview.app'
+```
+
+The Preview menu switches between minimum, compact and standard Mac window sizes.
+
+The preview uses in-memory sample articles and intercepts native GraphQL requests locally. Unknown
+operations fail locally. It does not read or update the personal library or the sign-in token.
+The same fixture mode can be enabled with `--preview` in a Debug build. Release builds do not
+include it. Use the normal bundle identifier and compilation conditions for the real app.
+
+### Visual checks, 21 October 2026
+
+Checked the isolated Mac preview at 640-point and 1,240-point window widths: Home,
+compact sidebar navigation, Saved, split reader, Focus, font size and line width,
+accessible divider adjustment, save validation/correction/success, archive and Undo,
+and Feeds controls. Checked that Up next stops at the end, that returning to Watch
+keeps the current video and position, and that expanding a paused video stays paused.
+
+The iOS Simulator release target compiles. An iPhone runtime check is still needed:
+the installed Xcode bundle does not contain Simulator.app. These checks used sample
+library data, not the signed-in personal library.

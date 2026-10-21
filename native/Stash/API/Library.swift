@@ -198,7 +198,8 @@ enum Library {
     try await mutate(gql, variables: ["input": ["pageId": id, "state": "SUCCEEDED"]])
   }
 
-  static func save(url: String) async throws {
+  @discardableResult
+  static func save(url: String) async throws -> String {
     let gql = """
       mutation SaveUrl($input: SaveUrlInput!) {
         saveUrl(input: $input) {
@@ -213,7 +214,16 @@ enum Library {
       "clientRequestId": UUID().uuidString.lowercased(),
       "timezone": TimeZone.current.identifier,
     ]
-    try await mutate(gql, variables: ["input": input])
+    struct Response: Decodable {
+      let saveUrl: Result
+      struct Result: Decodable { let url: String?; let errorCodes: [String]?; let message: String? }
+    }
+    let result: Response = try await StashAPI.shared.graphQL(gql, variables: ["input": input])
+    if let code = result.saveUrl.errorCodes?.first {
+      throw StashError.server(result.saveUrl.message ?? "Couldn't save this link (\(code)).")
+    }
+    await LibraryChanges.shared.publish()
+    return result.saveUrl.url ?? url
   }
 }
 
@@ -229,5 +239,6 @@ extension Library {
     if let result = data.values.first, let code = result.errorCodes?.first {
       throw StashError.server(result.message ?? "Stash couldn't do that (\(code)).")
     }
+    await LibraryChanges.shared.publish()
   }
 }

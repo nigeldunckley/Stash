@@ -11,6 +11,11 @@ struct MacShell: View {
   @Environment(\.scenePhase) private var scenePhase
   @Environment(PlayerController.self) private var player
   @AppStorage("sidebarHidden") private var sidebarHidden = false
+  @SceneStorage("readerFocus") private var readerFocus = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var windowWidth: CGFloat = 1240
+  @State private var compactSidebar = false
+  private var sidebarVisible: Bool { !sidebarHidden && !readerFocus && windowWidth >= 1000 }
   @State private var channelsCount: Int?
   @State private var discoverCount: Int?
   @State private var capturing = false
@@ -38,7 +43,7 @@ struct MacShell: View {
 
   var body: some View {
     HStack(spacing: 0) {
-      if !sidebarHidden {
+      if sidebarVisible {
         SidebarPanel(
           section: $section,
           collections: collections,
@@ -48,7 +53,7 @@ struct MacShell: View {
         )
         .padding(.leading, 12)
         .padding(.bottom, 12)
-        .transition(.move(edge: .leading).combined(with: .opacity))
+        .transition(reduceMotion ? .opacity : .move(edge: .leading).combined(with: .opacity))
       }
       ZStack {
         ForEach(visited, id: \.self) { visitedSection in
@@ -79,29 +84,41 @@ struct MacShell: View {
       .overlay { miniPlayer }
     }
     // The window can't shrink below what a list and its reader need beside the sidebar.
-    .frame(minWidth: 1000, minHeight: 560)
+    .frame(minWidth: 640, minHeight: 560)
+    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
+    .environment(\.autoHiddenSidebar, !sidebarVisible)
+    .linkCapture(isPresented: $capturing)
     // A saved card flying to Saved, or a hairline to Archive.
     .overlay { flightLayer }
 
-    .animation(.snappy(duration: 0.25), value: sidebarHidden)
-    .animation(.snappy(duration: 0.25), value: player.host == .mini)
-    .animation(.snappy(duration: 0.3), value: showingPlayer)
+    .animation(StashMotion.layout(reduceMotion: reduceMotion), value: sidebarHidden)
+    .animation(StashMotion.layout(reduceMotion: reduceMotion), value: readerFocus)
+    .animation(reduceMotion ? StashMotion.fade : StashMotion.player, value: player.host == .mini)
+    .animation(reduceMotion ? StashMotion.fade : StashMotion.player, value: showingPlayer)
     .background(Color.stPage)
+    .background(MacWindowTitle(title: windowTitle))
     .containerBackground(Color.stPage, for: .window)
     .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
     // With the sidebar open its own button hides it; this one only brings it back.
     .toolbar {
-      if sidebarHidden {
+      if !sidebarVisible {
         ToolbarItem(placement: .navigation) {
-          Button { sidebarHidden = false } label: {
+          Button {
+            if windowWidth < 1000 { compactSidebar = true }
+            else { sidebarHidden = false; readerFocus = false }
+          } label: {
             Label("Show Sidebar", systemImage: "sidebar.left")
           }
           .help("Show the sidebar (⌃⌘S)")
+          .popover(isPresented: $compactSidebar) {
+            SidebarPanel(section: $section, collections: collections, channelsCount: channelsCount,
+                         discoverCount: discoverCount, capturing: $capturing)
+              .frame(height: 520)
+          }
         }
       }
     }
     .onReceive(NotificationCenter.default.publisher(for: .stashCapture)) { _ in
-      sidebarHidden = false
       capturing = true
     }
     .onReceive(NotificationCenter.default.publisher(for: .stashOpenSettings)) { _ in section = .settings }
@@ -115,10 +132,15 @@ struct MacShell: View {
       showingPlayer = false
       navigator.goToTop(in: section)
     }
-    .onChange(of: player.host) { _, _ in floating?.sync() }
+    .onChange(of: player.host) { _, host in
+      if host == .mini { showingPlayer = false }
+      floating?.sync()
+    }
     .onAppear { if floating == nil { floating = FloatingPlayer(player: player) } }
     .onAppear { visit(section); navigator.record(section) }
     .onChange(of: section) { _, value in
+      compactSidebar = false
+      readerFocus = false
       showingPlayer = false
       visit(value)
       navigator.record(value)
@@ -133,7 +155,25 @@ struct MacShell: View {
       navigator.forget(where: gone)
     }
     .task(id: section) { await loadCounts() }
+    .onChange(of: LibraryChanges.shared.revision) { _, _ in Task { await loadCounts() } }
     .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await loadCounts() } } }
+  }
+
+  private var windowTitle: String {
+    if showingPlayer { return player.item?.title ?? "Watch" }
+    switch section {
+    case .home: return "Home"
+    case .edition: return "The Edition"
+    case .feeds, .read: return "Feeds"
+    case .saved: return "Saved"
+    case .highlights: return "Highlights"
+    case .discover: return "Discover"
+    case .archive: return "Archive"
+    case .channels, .watch: return "Latest videos"
+    case .savedVideos: return "Saved videos"
+    case .settings: return "Settings"
+    case .collection(let id): return collections.first(where: { $0.id == id })?.name ?? "Latest videos"
+    }
   }
 
   /// The page for the chosen sidebar item. Each page keeps its own navigation, so opening an
@@ -163,7 +203,7 @@ struct MacShell: View {
   @ViewBuilder
   private var flightLayer: some View {
     GeometryReader { geometry in
-      if !sidebarHidden, let moment = Moments.shared.current, let target = Moments.shared.targets[moment.kind] {
+      if sidebarVisible, let moment = Moments.shared.current, let target = Moments.shared.targets[moment.kind] {
         MomentFlight(moment: moment, target: target, origin: geometry.frame(in: .global).origin)
           .id(moment.id)
       }
@@ -187,7 +227,7 @@ struct MacShell: View {
         .onGeometryChange(for: CGSize.self) { $0.size } action: { miniSize = $0 }
         .position(x: rect.midX, y: rect.midY)
       }
-      .transition(.scale(scale: 0.9).combined(with: .opacity))
+      .transition(.opacity)
     }
   }
 
@@ -268,7 +308,7 @@ struct MacShell: View {
       if rect.minX - bounds.minX < near { x = 0 } else if bounds.maxX - rect.maxX < near { x = 1 }
       if rect.minY - bounds.minY < near { y = 0 } else if bounds.maxY - rect.maxY < near { y = 1 }
     }
-    withAnimation(.snappy(duration: 0.22)) {
+    withAnimation(reduceMotion ? nil : StashMotion.change) {
       miniX = min(max(x, 0), 1)
       miniY = min(max(y, 0), 1)
       miniWidth = Double(rect.width)
@@ -279,7 +319,7 @@ struct MacShell: View {
   /// The full player for whatever is playing, over the page, with a way back down.
   private func expandedPlayer(_ item: LibraryItem) -> some View {
     NavigationStack {
-      PlayerScreen(item: item, queue: player.queue, actions: [], perform: { _, _ in })
+      PlayerScreen(item: item, queue: player.queue, actions: [], perform: { _, _ in }, resumePlayback: false, onMini: { showingPlayer = false })
         .toolbar {
           ToolbarItem(placement: .navigation) {
             // Esc closes it too (see goBack).
@@ -289,13 +329,15 @@ struct MacShell: View {
         }
     }
     .background(Color.stPage)
-    .transition(.move(edge: .bottom))
+    .transition(.opacity)
   }
 
   /// Back: closes the full player, then goes up out of whatever the page has open, then (for
   /// ⌘[, not Esc) back to the sidebar page you were on before.
   private func goBack(escape: Bool) {
-    if showingPlayer {
+    if readerFocus {
+      readerFocus = false
+    } else if showingPlayer {
       showingPlayer = false
     } else if navigator.goUp(in: section) {
       return
@@ -319,6 +361,29 @@ struct MacShell: View {
     async let suggestions = try? Discover.newCount()
     channelsCount = await videos
     discoverCount = await suggestions
+  }
+}
+
+/// Retained navigation stacks can publish an old title. The visible page owns the window title.
+private struct MacWindowTitle: NSViewRepresentable {
+  let title: String
+  func makeNSView(context: Context) -> TitleView { TitleView() }
+  func updateNSView(_ view: TitleView, context: Context) { view.visibleTitle = title }
+
+  final class TitleView: NSView {
+    var visibleTitle = "Home" { didSet { applyTitle() } }
+    private var titleObservation: NSKeyValueObservation?
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      titleObservation = window?.observe(\.title) { [weak self] _, _ in
+        DispatchQueue.main.async { self?.applyTitle() }
+      }
+      applyTitle()
+    }
+    private func applyTitle() {
+      guard let window, window.title != visibleTitle else { return }
+      window.title = visibleTitle
+    }
   }
 }
 extension Notification.Name {

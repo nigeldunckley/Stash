@@ -66,7 +66,7 @@ struct SidebarGroupLabel: View {
 
   var body: some View {
     Button {
-      withAnimation(.snappy(duration: 0.2)) { isOpen.toggle() }
+      withAnimation(StashMotion.systemReduceMotion ? nil : StashMotion.change) { isOpen.toggle() }
     } label: {
       HStack(spacing: 8) {
         Text(title.uppercased())

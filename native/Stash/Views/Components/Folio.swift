@@ -79,7 +79,7 @@ struct FolioView: View {
             }
           }
         }
-        .font(.mono(10.5, .medium))
+        .font(.mono(11, .medium))
         .tracking(0.9)
         .lineLimit(1)
         .monospacedDigit()

@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import UniformTypeIdentifiers
 
 /// The player page: the video, its controls, and Up next, Transcript and About beside
 /// it on a Mac or underneath on iPhone.
@@ -10,13 +11,19 @@ struct PlayerScreen: View {
   let perform: (ItemAction, LibraryItem) -> Void
   /// Shown inside Home's preview card, which brings its own header and buttons.
   var embedded = false
+  var resumePlayback = true
+  var onMini: (() -> Void)?
 
+  @Environment(\.dismiss) private var dismiss
   @Environment(PlayerController.self) private var player
   @Environment(\.isActivePage) private var isActivePage
   @State private var tab: PlayerTab = .upNext
   @State private var screenID = UUID()
+  @State private var opened = false
   @State private var transcript: [TranscriptLine]?
   @State private var transcriptError = false
+  @State private var draggingID: String?
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private enum PlayerTab: String, CaseIterable, Identifiable {
     case upNext = "Up next", transcript = "Transcript", about = "About"
@@ -51,9 +58,12 @@ struct PlayerScreen: View {
     .modifier(ScreenChrome(embedded: embedded, title: current.source) { toolbar })
     .onAppear {
       guard isActivePage else { return }
-      player.queue = queue
+      if !opened {
+        if player.item?.id != item.id || player.queue.isEmpty { player.queue = queue }
+        if resumePlayback || player.item?.id != item.id { player.play(item) }
+        opened = true
+      }
       player.screenShown(screenID)
-      player.play(item)
     }
     .onDisappear { player.screenLeft(screenID) }
     // On Mac a page you leave stays alive out of sight, so leaving it counts as leaving the video.
@@ -66,6 +76,15 @@ struct PlayerScreen: View {
       }
     }
     .task(id: current.id) { await loadTranscript() }
+    .safeAreaInset(edge: .bottom) {
+      if let error = player.syncError {
+        HStack {
+          Text(error).font(.stSmall)
+          Button("Try again") { player.retryPosition() }.buttonStyle(.text)
+        }
+        .padding(12).frame(maxWidth: .infinity).background(Color.stPanel)
+      }
+    }
   }
 
   // MARK: Layout
@@ -114,55 +133,65 @@ struct PlayerScreen: View {
   }
 
   private var controls: some View {
-    HStack(spacing: 14) {
-      Button { player.skip(-10) } label: { Image(systemName: "gobackward.10") }
-        .keyboardShortcut(.leftArrow, modifiers: [])
-        .help("Back 10 seconds")
-      Button { player.toggle() } label: {
-        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-          .frame(width: 22)
+    ViewThatFits(in: .horizontal) {
+      HStack(spacing: 12) { playbackButtons; playbackTime; Spacer(); playbackOptions }
+      VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 12) { playbackButtons; Spacer(); playbackTime }
+        HStack(spacing: 12) { Spacer(); playbackOptions }
       }
-      .keyboardShortcut(.space, modifiers: [])
-      .help(player.isPlaying ? "Pause" : "Play")
-      Button { player.skip(10) } label: { Image(systemName: "goforward.10") }
-        .keyboardShortcut(.rightArrow, modifiers: [])
-        .help("Forward 10 seconds")
-
-      Text("\(Watch.timecode(player.time)) / \(Watch.timecode(player.duration))")
-        .font(.stDetail)
-        .foregroundStyle(Color.stMuted)
-        .monospacedDigit()
-
-      Spacer()
-
-      Button { player.pictureInPicture() } label: { Image(systemName: "pip.enter") }
-        .help("Picture in picture")
-      #if os(macOS)
-      Button { NotificationCenter.default.post(name: .stashPopOut, object: nil) } label: {
-        Image(systemName: "rectangle.on.rectangle")
-      }
-      .help("Float on top of other apps (⌥⌘P)")
-      #endif
-
-      Menu {
-        Picker("Speed", selection: Binding(get: { player.rate }, set: { player.setRate($0) })) {
-          ForEach(PlayerController.speeds, id: \.self) { speed in
-            Text(speed == 1 ? "Normal" : "\(speed.formatted())×").tag(speed)
-          }
-        }
-      } label: {
-        Text(player.rate == 1 ? "1×" : "\(player.rate.formatted())×")
-          .font(.stDetail)
-          .padding(.horizontal, 8)
-          .padding(.vertical, 4)
-          .overlay(Capsule().strokeBorder(Color.stLine))
-      }
-      .menuIndicator(.hidden)
-      .fixedSize()
-      .help("Playback speed, remembered for this channel")
     }
     .buttonStyle(.borderless)
     .font(.ui(17, relativeTo: .title3))
+  }
+
+  private var target: CGFloat {
+    #if os(iOS)
+    44
+    #else
+    28
+    #endif
+  }
+
+  private var playbackTime: some View {
+    Text("\(Watch.timecode(player.time)) / \(Watch.timecode(player.duration))")
+      .font(.stDetail).foregroundStyle(Color.stMuted).monospacedDigit().fixedSize()
+  }
+
+  @ViewBuilder
+  private var playbackButtons: some View {
+    Button { player.skip(-10) } label: { Image(systemName: "gobackward.10").frame(width: target, height: target) }
+      .keyboardShortcut(.leftArrow, modifiers: []).help("Back 10 seconds").accessibilityLabel("Back 10 seconds")
+    Button { player.toggle() } label: {
+      Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").frame(width: target, height: target)
+    }
+    .keyboardShortcut(.space, modifiers: []).help(player.isPlaying ? "Pause" : "Play")
+    .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+    Button { player.skip(10) } label: { Image(systemName: "goforward.10").frame(width: target, height: target) }
+      .keyboardShortcut(.rightArrow, modifiers: []).help("Forward 10 seconds").accessibilityLabel("Forward 10 seconds")
+  }
+
+  @ViewBuilder
+  private var playbackOptions: some View {
+    Button { player.pictureInPicture() } label: { Image(systemName: "pip.enter").frame(width: target, height: target) }
+      .help("Picture in Picture").accessibilityLabel("Picture in Picture")
+    Button { player.host = .mini; if let onMini { onMini() } else { dismiss() } } label: { Image(systemName: "rectangle.bottomthird.inset.filled").frame(width: target, height: target) }
+      .help("Mini player").accessibilityLabel("Mini player")
+    #if os(macOS)
+    Button { NotificationCenter.default.post(name: .stashPopOut, object: nil) } label: {
+      Image(systemName: "rectangle.on.rectangle").frame(width: target, height: target)
+    }
+    .help("Float above other apps (⌥⌘P)").accessibilityLabel("Float above other apps")
+    #endif
+    Menu {
+      Picker("Speed", selection: Binding(get: { player.rate }, set: { player.setRate($0) })) {
+        ForEach(PlayerController.speeds, id: \.self) { speed in
+          Text(speed == 1 ? "Normal" : "\(speed.formatted())×").tag(speed)
+        }
+      }
+    } label: {
+      Text("\(player.rate.formatted())×").font(.stDetail).padding(.horizontal, 8).frame(minHeight: target)
+    }
+    .menuIndicator(.hidden).fixedSize().help("Playback speed, remembered for this channel")
   }
 
   private var tabs: some View {
@@ -199,11 +228,27 @@ struct PlayerScreen: View {
           .font(.ui(13))
           .foregroundStyle(Color.stMuted)
       }
-      ForEach(player.upNext.prefix(30)) { next in
-        Button { player.play(next) } label: {
-          VideoRow(item: next)
+      if !player.upNext.isEmpty {
+        Text("Plays in this order").font(.stDetail).foregroundStyle(Color.stMuted).padding(.vertical, 8)
+      }
+      ForEach(Array(player.upNext.prefix(30).enumerated()), id: \.element.id) { index, next in
+        HStack(spacing: 6) {
+          Text("\(index + 1)").font(.stDetail).foregroundStyle(Color.stMuted).frame(width: 20)
+          Button { player.play(next) } label: { VideoRow(item: next) }.buttonStyle(.plain)
+          Menu {
+            Button("Move up") { player.moveUpcoming(next.id, by: -1) }.disabled(index == 0)
+            Button("Move down") { player.moveUpcoming(next.id, by: 1) }.disabled(index == player.upNext.count - 1)
+          } label: { Image(systemName: "ellipsis").frame(minWidth: target, minHeight: target) }
+            .menuIndicator(.hidden)
+            .accessibilityLabel("Reorder \(next.title)")
         }
-        .buttonStyle(.plain)
+        .onDrag { draggingID = next.id; return NSItemProvider(object: next.id as NSString) }
+        .onDrop(of: [UTType.text], isTargeted: nil) { _ in
+          guard let id = draggingID, let source = player.upNext.firstIndex(where: { $0.id == id }), source != index else { return false }
+          withAnimation(reduceMotion ? nil : StashMotion.change) { player.moveUpcoming(id, by: index - source) }
+          draggingID = nil
+          return true
+        }
       }
     }
   }
@@ -241,7 +286,7 @@ struct PlayerScreen: View {
           }
         }
         .onChange(of: currentLine) { _, line in
-          if let line, player.isPlaying { withAnimation { proxy.scrollTo(line, anchor: .center) } }
+          if let line, player.isPlaying { withAnimation(reduceMotion ? nil : StashMotion.change) { proxy.scrollTo(line, anchor: .center) } }
         }
       }
     } else if transcriptError || transcript?.isEmpty == true {

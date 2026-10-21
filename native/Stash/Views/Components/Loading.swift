@@ -21,6 +21,8 @@ struct SkeletonRows: View {
   var count = 6
 
   @State private var pulse = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.isActivePage) private var isActivePage
 
   var body: some View {
     VStack(spacing: 0) {
@@ -44,8 +46,11 @@ struct SkeletonRows: View {
       }
     }
     .opacity(pulse ? 0.55 : 1)
-    .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
-    .onAppear { pulse = true }
+    .animation(reduceMotion || !isActivePage ? nil : .easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
+    .onAppear { pulse = !reduceMotion && isActivePage }
+    .onChange(of: reduceMotion) { _, value in pulse = !value && isActivePage }
+    .onChange(of: isActivePage) { _, active in pulse = active && !reduceMotion }
+    .onDisappear { pulse = false }
     .accessibilityLabel("Loading")
   }
 }
@@ -69,6 +74,8 @@ struct SkeletonCards: View {
   var height: CGFloat = 170
 
   @State private var pulse = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.isActivePage) private var isActivePage
 
   var body: some View {
     LazyVGrid(columns: [GridItem(.adaptive(minimum: minWidth), spacing: 18, alignment: .top)], spacing: 18) {
@@ -79,8 +86,11 @@ struct SkeletonCards: View {
       }
     }
     .opacity(pulse ? 0.55 : 1)
-    .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
-    .onAppear { pulse = true }
+    .animation(reduceMotion || !isActivePage ? nil : .easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
+    .onAppear { pulse = !reduceMotion && isActivePage }
+    .onChange(of: reduceMotion) { _, value in pulse = !value && isActivePage }
+    .onChange(of: isActivePage) { _, active in pulse = active && !reduceMotion }
+    .onDisappear { pulse = false }
     .accessibilityLabel("Loading")
   }
 }

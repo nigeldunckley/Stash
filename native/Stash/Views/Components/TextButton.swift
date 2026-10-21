@@ -6,13 +6,21 @@ struct TextButtonStyle: ButtonStyle {
   var prominent = false
   @Environment(\.isEnabled) private var isEnabled
 
+  private var controlHeight: CGFloat {
+    #if os(iOS)
+    44
+    #else
+    28
+    #endif
+  }
+
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .font(.ui(12, .medium, relativeTo: .footnote))
       .labelStyle(TextButtonLabelStyle())
       .foregroundStyle(prominent ? Color.stPage : Color.stInk)
       .padding(.horizontal, 10)
-      .frame(minHeight: 28)
+      .frame(minHeight: controlHeight)
       .background(background(configuration.isPressed), in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
       .overlay(
         RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)

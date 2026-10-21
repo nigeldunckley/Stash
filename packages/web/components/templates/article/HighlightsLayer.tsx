@@ -855,29 +855,32 @@ export function HighlightsLayer(props: HighlightsLayerProps): JSX.Element {
           />
         </>
       )}
-      <StashNotebookPanel
-        open={props.showHighlightsModal}
-        onClose={closeNotebook}
-        viewer={props.viewer}
-        item={props.item}
-        viewInReader={(highlightId) => {
-          // The timeout here is a bit of a hack to work around rerendering
-          setTimeout(() => {
-            const target = document.querySelector(
-              `[omnivore-highlight-id="${highlightId}"]`
+      {/* Native readers already have article data; keep the closed notebook from fetching it. */}
+      {(!props.isAppleAppEmbed || props.showHighlightsModal) && (
+        <StashNotebookPanel
+          open={props.showHighlightsModal}
+          onClose={closeNotebook}
+          viewer={props.viewer}
+          item={props.item}
+          viewInReader={(highlightId) => {
+            // The timeout here is a bit of a hack to work around rerendering
+            setTimeout(() => {
+              const target = document.querySelector(
+                `[omnivore-highlight-id="${highlightId}"]`
+              )
+              target?.scrollIntoView({
+                block: 'center',
+                behavior: 'auto',
+              })
+            }, 1)
+            history.replaceState(
+              undefined,
+              window.location.href,
+              `#${highlightId}`
             )
-            target?.scrollIntoView({
-              block: 'center',
-              behavior: 'auto',
-            })
-          }, 1)
-          history.replaceState(
-            undefined,
-            window.location.href,
-            `#${highlightId}`
-          )
-        }}
-      />
+          }}
+        />
+      )}
     </>
   )
 }

@@ -13,6 +13,7 @@ struct PageHeader<Trailing: View>: View {
 
   #if os(macOS)
   @AppStorage("sidebarHidden") private var sidebarHidden = false
+  @Environment(\.autoHiddenSidebar) private var autoHiddenSidebar
   #endif
   /// The way back out, for a page you've drilled into.
   @Environment(\.pageBack) private var back
@@ -28,7 +29,7 @@ struct PageHeader<Trailing: View>: View {
     .padding(.horizontal, PageLayout.gutter)
     #if os(macOS)
     // With the sidebar hidden, keep clear of the window buttons and the sidebar button.
-    .padding(.leading, sidebarHidden ? PageLayout.windowButtons : 0)
+    .padding(.leading, (sidebarHidden || autoHiddenSidebar) ? PageLayout.windowButtons : 0)
     #endif
     .padding(.top, 2)
     .padding(.bottom, 20)
@@ -149,6 +150,7 @@ struct PageSearchField: View {
   @Binding var text: String
   var prompt = "Search"
   var onSubmit: () -> Void = {}
+  var expands = false
 
   var body: some View {
     HStack(spacing: 8) {
@@ -171,7 +173,7 @@ struct PageSearchField: View {
       }
     }
     .padding(.horizontal, 10)
-    .frame(width: 240, height: 28)
+    .frame(maxWidth: expands ? .infinity : 240, minHeight: 28, maxHeight: 28)
     .background(Color.stSurface, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
     .overlay(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
   }

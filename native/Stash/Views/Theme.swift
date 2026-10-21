@@ -129,7 +129,7 @@ extension Font {
   /// The summary under a row's title: 12, as the web's caption.
   static let stExcerpt = Font.ui(12, relativeTo: .footnote)
   /// Caps labels such as "TODAY": mono 10.5 / 500, tracked +0.9.
-  static let stLabel = Font.mono(10.5, .medium)
+  static let stLabel = Font.mono(11, .medium)
   /// Article titles in lists: Newsreader 17 / 500.
   static let stRowTitle = Font.reading(17, relativeTo: .headline)
   /// Video titles: 13.5 / 500.

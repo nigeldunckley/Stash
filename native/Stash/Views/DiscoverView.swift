@@ -8,6 +8,8 @@ struct DiscoverView: View {
   @State private var acted: [String: String] = [:]
   @State private var toaster = Toaster()
   @State private var turningOn = false
+  @State private var showingTrials = false
+  @State private var showingFollowed = false
 
   private var suggestions: [FeedSuggestion] { result?.suggestions ?? [] }
 
@@ -19,6 +21,8 @@ struct DiscoverView: View {
   private var channels: [FeedSuggestion] { fresh.filter(\.isChannel) }
   private var starters: [FeedSuggestion] { fresh.filter(\.isStarter) }
   private var trials: [FeedSuggestion] { suggestions.filter { $0.status == "TRIAL" && acted[$0.id] == nil } }
+  private var trialsDue: [FeedSuggestion] { trials.filter { ($0.trialDaysLeft ?? 1) == 0 } }
+  private var activeTrials: [FeedSuggestion] { trials.filter { ($0.trialDaysLeft ?? 1) > 0 } }
   private var following: [FeedSuggestion] { suggestions.filter { $0.status == "FOLLOWING" && acted[$0.id] == nil } }
 
   var body: some View {
@@ -40,16 +44,39 @@ struct DiscoverView: View {
               SkeletonCards()
             }
           } else {
-            if !trials.isEmpty {
-              section("Trying for a week", trials)
-            }
             if own.isEmpty && channels.isEmpty && starters.isEmpty && trials.isEmpty {
               EmptyBox(title: "Nothing new to suggest", message: "Stash looks again each night, from what you read and save.", systemImage: "sparkles", boxed: false)
             }
             if !own.isEmpty { section("From what you read", own) }
             if !channels.isEmpty { section("Channels for Watch", channels) }
             if !starters.isEmpty { section("Starting points", starters) }
-            if !following.isEmpty { section("Followed from here", following) }
+            if !trialsDue.isEmpty {
+              DisclosureGroup("Trials to review (\(trialsDue.count))", isExpanded: $showingTrials) {
+                VStack(spacing: 0) {
+                  ForEach(trialsDue) { suggestion in
+                    HStack(spacing: 12) {
+                      VStack(alignment: .leading, spacing: 4) {
+                        Text(suggestion.title).font(.stSection)
+                        Text(suggestion.host).font(.stSmall).foregroundStyle(Color.stMuted)
+                      }
+                      Spacer()
+                      Button("Keep") { act(.follow, suggestion) }.buttonStyle(.textProminent)
+                      Button("Stop following") { act(.drop, suggestion) }.buttonStyle(.text)
+                    }
+                    .padding(.vertical, 12)
+                    Divider()
+                  }
+                }
+              }
+              .font(.stSection).tint(Color.stInk)
+            }
+            if !activeTrials.isEmpty { section("Trying for a week", activeTrials) }
+            if !following.isEmpty {
+              DisclosureGroup("Followed from here (\(following.count))", isExpanded: $showingFollowed) {
+                section("Following", following)
+              }
+              .font(.stSection).tint(Color.stInk)
+            }
             if let built = result?.builtAt {
               Text("Updated \(built.formatted(.relative(presentation: .named)))")
                 .font(.stDetail)
@@ -167,6 +194,8 @@ struct SuggestionCard: View {
           }
           .buttonStyle(.borderless)
           .foregroundStyle(Color.stMuted)
+          .frame(minWidth: 44, minHeight: 44)
+          .accessibilityLabel("Dismiss \(suggestion.title)")
           .help("Not for me")
         }
       }
@@ -182,7 +211,7 @@ struct SuggestionCard: View {
           .lineLimit(2)
       }
 
-      ForEach(suggestion.latest.prefix(2), id: \.url) { post in
+      ForEach(suggestion.latest.prefix(1), id: \.url) { post in
         Button {
           if let url = URL(string: post.url) { openURL(url) }
         } label: {
@@ -221,9 +250,6 @@ struct SuggestionCard: View {
           }
         }
         Spacer(minLength: 0)
-        Text("\(suggestion.matchPercent)% match")
-          .font(.stDetail)
-          .foregroundStyle(Color.stMuted)
       }
       .controlSize(.small)
       .padding(.top, 2)
