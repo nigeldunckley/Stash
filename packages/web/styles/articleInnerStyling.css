@@ -799,9 +799,9 @@
   hanging-punctuation: first last;
 }
 
-/* The opening paragraph's first line in small caps, set by the reader on
-   a real paragraph of prose only. */
-.article-inner-css p.st-lede::first-line {
+/* The opening sentence (or its first clause) in small caps, set by the
+   reader on a real paragraph of prose only. */
+.article-inner-css p.st-lede .st-runin {
   font-variant-caps: all-small-caps;
   letter-spacing: 0.05em;
 }
