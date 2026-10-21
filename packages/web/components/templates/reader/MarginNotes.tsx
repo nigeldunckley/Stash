@@ -200,7 +200,7 @@ const collectNotes = (root: HTMLElement, pageUrls: string[]): Note[] => {
   return notes
 }
 
-// Small caps on the opening line, but only on a real paragraph of prose.
+// Marks the opening paragraph, but only a real paragraph of prose.
 const markLede = (root: HTMLElement) => {
   root.querySelector('p.st-lede')?.classList.remove('st-lede')
   const first = Array.from(root.querySelectorAll('p'))
