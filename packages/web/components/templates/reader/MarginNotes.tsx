@@ -15,9 +15,8 @@ import { motion } from '../../elements/stash/motion'
 // next to the line that cites it; on a narrow one, tapping the number opens
 // the note at the bottom of the screen instead of jumping away from the text.
 //
-// The article's own HTML is never changed beyond attributes, classes and the
-// spans that set the opening run-in, so highlight positions (which count
-// text) stay valid.
+// The article's own HTML is never changed beyond attributes and classes, so
+// highlight positions (which count text) stay valid.
 
 const NOTE_WIDTH = 220
 const MIN_NOTE_WIDTH = 160
@@ -201,103 +200,8 @@ const collectNotes = (root: HTMLElement, pageUrls: string[]): Note[] => {
   return notes
 }
 
-// Words that end in a full stop without ending the sentence.
-const ABBREVIATIONS = new Set(
-  (
-    'mr mrs ms mx dr prof st jr sr rev hon gen col capt lt sgt sen rep gov ' +
-    'pres vs etc inc ltd co corp no nos vol fig approx est dept univ ave ' +
-    'jan feb mar apr jun jul aug sep sept oct nov dec e.g i.e cf al ' +
-    'mt ft'
-  ).split(' ')
-)
-const MAX_RUN_IN = 110
-const MIN_CLAUSE = 24
-const MAX_CLAUSE = 90
-
-// Where the run-in should stop: the end of the first sentence when it's
-// short enough to set in small caps, otherwise the end of its first clause,
-// otherwise nowhere (no run-in beats one that stops mid-phrase).
-export const runInLength = (text: string): number | undefined => {
-  let end: number | undefined
-  const stop = /[.?!]+["”’')\]]*(?=\s)|[.?!]+["”’')\]]*$/g
-  for (let match = stop.exec(text); match; match = stop.exec(text)) {
-    const at = match.index + match[0].length
-    if (match[0].startsWith('.') && !match[0].startsWith('..')) {
-      const word = (/([\p{L}.]+)\.$/u.exec(text.slice(0, match.index + 1)) ??
-        [])[1]
-      if (
-        word &&
-        // An initial (John F. Kennedy), U.S. or a known abbreviation.
-        (word.length == 1 ||
-          word.includes('.') ||
-          ABBREVIATIONS.has(word.toLowerCase()))
-      ) {
-        continue
-      }
-    }
-    // A sentence starts next, not a lowercase word after "etc." or "…".
-    const next = text.slice(at).trimStart()
-    if (next && !/^["“‘'(\[]?[\p{Lu}\p{N}]/u.test(next)) {
-      continue
-    }
-    end = at
-    break
-  }
-  if (end !== undefined && end <= MAX_RUN_IN && text.length - end >= 30) {
-    return end
-  }
-  const clause = /[,;:]|\s[—–-]\s/g
-  for (let match = clause.exec(text); match; match = clause.exec(text)) {
-    if (match.index < MIN_CLAUSE) {
-      continue
-    }
-    if (match.index > MAX_CLAUSE) {
-      break
-    }
-    // Keep a comma or colon with the run-in, but not a dash.
-    return /[,;:]/.test(match[0]) ? match.index + 1 : match.index
-  }
-  return undefined
-}
-
-// Wraps the first `length` characters of the paragraph's text in small caps,
-// one span per text node so links and italics inside it stay as they are.
-const wrapRunIn = (p: HTMLElement, length: number) => {
-  const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT)
-  const nodes: Text[] = []
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    nodes.push(node as Text)
-  }
-  let left = length
-  for (const node of nodes) {
-    if (left <= 0) {
-      break
-    }
-    if (left < node.length) {
-      node.splitText(left)
-    }
-    left -= node.length
-    if (!node.nodeValue?.trim()) {
-      continue
-    }
-    const span = document.createElement('span')
-    span.className = 'st-runin'
-    node.replaceWith(span)
-    span.appendChild(node)
-  }
-}
-
-const unwrapRunIn = (root: HTMLElement) => {
-  root.querySelectorAll('span.st-runin').forEach((span) => {
-    const parent = span.parentNode
-    span.replaceWith(...Array.from(span.childNodes))
-    parent?.normalize()
-  })
-}
-
-// Small caps on the opening sentence, but only on a real paragraph of prose.
+// Marks the opening paragraph, but only a real paragraph of prose.
 const markLede = (root: HTMLElement) => {
-  unwrapRunIn(root)
   root.querySelector('p.st-lede')?.classList.remove('st-lede')
   const first = Array.from(root.querySelectorAll('p'))
     .slice(0, 4)
@@ -307,15 +211,6 @@ const markLede = (root: HTMLElement) => {
         !p.closest('blockquote, figure, li, table, aside, pre')
     )
   first?.classList.add('st-lede')
-  if (first) {
-    // Leading spaces count towards the text but not the sentence.
-    const raw = first.textContent ?? ''
-    const lead = raw.length - raw.trimStart().length
-    const length = runInLength(raw.trim())
-    if (length) {
-      wrapRunIn(first, lead + length)
-    }
-  }
   // A drop cap needs a letter to start on and three lines to sit in.
   root.querySelector('p.st-drop')?.classList.remove('st-drop')
   const text = (first?.textContent ?? '').trim()

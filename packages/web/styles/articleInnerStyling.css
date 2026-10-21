@@ -799,13 +799,6 @@
   hanging-punctuation: first last;
 }
 
-/* The opening sentence (or its first clause) in small caps, set by the
-   reader on a real paragraph of prose only. */
-.article-inner-css p.st-lede .st-runin {
-  font-variant-caps: all-small-caps;
-  letter-spacing: 0.05em;
-}
-
 /* A drop cap three lines deep on the opening paragraph, set by the reader
    when it starts with a letter and runs long enough to hold one. */
 .article-inner-css p.st-drop::first-letter {
