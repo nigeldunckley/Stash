@@ -43,6 +43,11 @@ import {
   PROCESS_YOUTUBE_VIDEO_JOB_NAME,
 } from '../jobs/process-youtube-video'
 import { PRUNE_TRASH_JOB } from '../jobs/prune_trash'
+import {
+  RescueSaveJobData,
+  RESCUE_SAVE_DELAY_MS,
+  RESCUE_SAVE_JOB,
+} from '../jobs/rescue_save'
 import { BUILD_FEED_SUGGESTIONS_JOB } from '../jobs/build_feed_suggestions'
 import {
   queueRSSRefreshFeedJob,
@@ -113,6 +118,7 @@ export const getJobPriority = (jobName: string): number => {
     case PROCESS_YOUTUBE_VIDEO_JOB_NAME:
     case `${FETCH_CONTENT_JOB}_low`:
     case `${FETCH_CONTENT_JOB}_rss_high`:
+    case RESCUE_SAVE_JOB:
       return 5
     case BULK_ACTION_JOB_NAME:
     case `${REFRESH_FEED_JOB_NAME}_high`:
@@ -649,6 +655,22 @@ export const enqueueThumbnailJob = async (
     priority: getJobPriority(THUMBNAIL_JOB),
     attempts: 1,
     delay: 1000,
+  })
+}
+
+// Reads a saved link's page directly if the browser fetch hasn't landed.
+export const enqueueRescueSave = async (data: RescueSaveJobData) => {
+  const queue = await getQueue()
+  if (!queue) {
+    return undefined
+  }
+  return queue.add(RESCUE_SAVE_JOB, data, {
+    jobId: `${RESCUE_SAVE_JOB}_${data.libraryItemId}_${Date.now()}`,
+    priority: getJobPriority(RESCUE_SAVE_JOB),
+    attempts: 1,
+    delay: RESCUE_SAVE_DELAY_MS,
+    removeOnComplete: true,
+    removeOnFail: true,
   })
 }
 

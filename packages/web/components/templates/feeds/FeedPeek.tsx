@@ -16,6 +16,10 @@ import {
   LibraryItemNode,
   useGetLibraryItemContent,
 } from '../../../lib/networking/library_items/useLibraryItems'
+import {
+  isUnparsedContent,
+  ParseFailedNotice,
+} from '../article/ParseFailedNotice'
 import { formatMinutes, readingMinutes } from '../../../lib/readingTime'
 import { shortTimeAgo } from '../../../lib/textFormatting'
 import { keyframes, styled } from '../../tokens/stitches.config'
@@ -540,7 +544,9 @@ function PeekArticle(props: FeedPeekProps): JSX.Element {
           {item.author && <span>{item.author}</span>}
           {minutes && <span>{formatMinutes(minutes)} read</span>}
         </Meta>
-        {content ? (
+        {content && isUnparsedContent(content) && data ? (
+          <ParseFailedNotice url={data.originalArticleUrl} slug={item.slug} />
+        ) : content ? (
           <Prose dangerouslySetInnerHTML={{ __html: content }} />
         ) : (
           <Prose>

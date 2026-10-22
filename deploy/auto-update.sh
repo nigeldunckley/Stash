@@ -28,7 +28,8 @@ main() {
   for pair in reader-web:WEB_IMAGE reader-api:API_IMAGE reader-queue-processor:QUEUE_IMAGE; do
     name=$(image "${pair#*:}")
     [ -n "$name" ] || continue
-    docker pull -q "$name" >/dev/null
+    # Intel-only images, so an Apple Silicon Mac pulls them for Rosetta.
+    docker pull -q --platform linux/amd64 "$name" >/dev/null
     running=$(docker inspect -f '{{.Image}}' "${pair%%:*}" 2>/dev/null || true)
     if [ "$running" != "$(docker image inspect -f '{{.Id}}' "$name")" ]; then
       stale=yes

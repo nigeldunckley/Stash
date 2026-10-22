@@ -745,6 +745,12 @@ export const useGetLibraryItemContent = (
   return useQuery({
     queryKey: ['libraryItem', slug],
     enabled: !!username && !!slug,
+    // A link still being saved fills in shortly; check back for a while.
+    refetchInterval: (query) =>
+      query.state.data?.state === State.PROCESSING &&
+      query.state.dataUpdateCount < 24
+        ? 5_000
+        : false,
     queryFn: async () => {
       const response = (await gqlFetcher(GQL_GET_LIBRARY_ITEM_CONTENT, {
         slug,

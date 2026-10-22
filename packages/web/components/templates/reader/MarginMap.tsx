@@ -21,7 +21,8 @@ import {
 
 // The margin map: the whole article drawn small down the right edge of the
 // window. Every paragraph is a few hairlines, headings get tiny numbered
-// labels, pictures are grey blocks and your highlights are orange ticks. A
+// labels, pictures are tiny copies of themselves (grey until you pass them)
+// and your highlights are orange ticks you can read on hover. A
 // bracket shows the screen you're on, and a running head above names the
 // section you're in. Rest the pointer on it and it unfolds into contents;
 // click or drag to travel.
@@ -48,20 +49,31 @@ const HOLD = 280
 const LINGER = 1200
 
 const BLOCKS =
-  'p, h1, h2, h3, h4, blockquote, figure, img, pre, ul, ol, table, iframe'
+  'p, h1, h2, h3, h4, blockquote, figure, img, pre, ul, ol, table, iframe, video'
 
 type Block = {
-  kind: 'text' | 'heading' | 'picture' | 'quote'
+  kind: 'text' | 'heading' | 'picture' | 'embed' | 'quote'
   top: number
   height: number
+  // Pictures: the image, its share of the column's width, and its caption.
+  src?: string
+  width?: number
+  caption?: string
   label?: string
   preview: string
   words: number
 }
 
+type Highlight = {
+  id: string
+  top: number
+  quote: string
+  hasNote: boolean
+}
+
 type Shape = {
   blocks: Block[]
-  highlights: number[]
+  highlights: Highlight[]
   height: number
 }
 
@@ -316,6 +328,47 @@ const PreviewText = styled('div', {
   overflow: 'hidden',
 })
 
+// A highlight read from the margin: the quote, then your note.
+const PreviewQuote = styled('div', {
+  fontFamily: 'var(--text-font-family)',
+  fontSize: '13px',
+  lineHeight: 1.45,
+  color: '$stInk',
+  display: '-webkit-box',
+  WebkitLineClamp: 5,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+})
+
+const PreviewNote = styled('div', {
+  paddingLeft: '8px',
+  borderLeft: '2px solid $stAccent',
+  fontSize: '12px',
+  lineHeight: 1.4,
+  color: '$stInk2',
+  display: '-webkit-box',
+  WebkitLineClamp: 3,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+})
+
+const PreviewPicture = styled('img', {
+  display: 'block',
+  width: '100%',
+  maxHeight: '150px',
+  objectFit: 'cover',
+  borderRadius: '3px',
+  background: '$stCanvas',
+})
+
+// "4 highlights" in the foot: a click starts at the first.
+const FootButton = styled('button', {
+  all: 'unset',
+  cursor: 'pointer',
+  '&:hover, &:focus-visible': { color: '$stAccent' },
+  '&:focus-visible': { outline: '1px solid $stAccent' },
+})
+
 // The contents the map unfolds into, to its left.
 const Panel = styled('div', {
   position: 'absolute',
@@ -509,6 +562,7 @@ const countWords = (text: string) => (text ? text.split(' ').length : 0)
 
 const measure = (root: HTMLElement): Shape => {
   const origin = root.getBoundingClientRect().top
+  const column = root.getBoundingClientRect().width
   const blocks: Block[] = []
   root.querySelectorAll<HTMLElement>(BLOCKS).forEach((element) => {
     const outer = element.parentElement?.closest(BLOCKS)
@@ -517,34 +571,72 @@ const measure = (root: HTMLElement): Shape => {
     if (rect.height < 2 || getComputedStyle(element).display == 'none') return
     const tag = element.tagName
     const text = clean(element.textContent ?? '')
+    const image =
+      tag == 'IMG'
+        ? (element as HTMLImageElement)
+        : element.querySelector<HTMLImageElement>('img')
     const kind: Block['kind'] = /^H[1-4]$/.test(tag)
       ? 'heading'
       : tag == 'BLOCKQUOTE'
       ? 'quote'
-      : /^(FIGURE|IMG|IFRAME)$/.test(tag) ||
-        (!text && element.querySelector('img'))
+      : tag == 'IFRAME' ||
+        tag == 'VIDEO' ||
+        (tag == 'FIGURE' && !image && element.querySelector('iframe, video'))
+      ? 'embed'
+      : tag == 'FIGURE' || tag == 'IMG' || (!text && image)
       ? 'picture'
       : 'text'
     if ((kind == 'text' || kind == 'heading') && !text) return
+    const shown =
+      kind == 'picture' && image ? image.getBoundingClientRect() : rect
     blocks.push({
       kind,
-      top: rect.top - origin,
-      height: rect.height,
+      top: (kind == 'picture' ? shown.top : rect.top) - origin,
+      height: kind == 'picture' ? Math.max(2, shown.height) : rect.height,
+      src:
+        kind == 'picture' && image
+          ? image.currentSrc || image.src || undefined
+          : undefined,
+      width:
+        kind == 'picture'
+          ? Math.min(1, Math.max(0.2, shown.width / Math.max(1, column)))
+          : undefined,
+      caption:
+        kind == 'picture'
+          ? clean(
+              element.querySelector('figcaption')?.textContent ||
+                image?.alt ||
+                ''
+            ).slice(0, 160) || undefined
+          : undefined,
       label: kind == 'heading' ? text : undefined,
       preview: text.slice(0, 220),
       words: kind == 'heading' ? 0 : countWords(text),
     })
   })
-  const seen = new Set<string>()
-  const highlights: number[] = []
+  // A highlight can span several elements; its text is all of them.
+  const found = new Map<string, Highlight>()
   root
     .querySelectorAll<HTMLElement>('[omnivore-highlight-id]')
     .forEach((element) => {
       const id = element.getAttribute('omnivore-highlight-id') ?? ''
-      if (seen.has(id)) return
-      seen.add(id)
-      highlights.push(element.getBoundingClientRect().top - origin)
+      const text = element.textContent ?? ''
+      const known = found.get(id)
+      if (known) {
+        known.quote += text
+        known.hasNote ||= element.classList.contains('highlight_with_note')
+        return
+      }
+      found.set(id, {
+        id,
+        top: element.getBoundingClientRect().top - origin,
+        quote: text,
+        hasNote: element.classList.contains('highlight_with_note'),
+      })
     })
+  const highlights = Array.from(found.values())
+    .map((highlight) => ({ ...highlight, quote: clean(highlight.quote) }))
+    .sort((a, b) => a.top - b.top)
   return { blocks, highlights, height: root.scrollHeight }
 }
 
@@ -582,7 +674,7 @@ const findSections = (shape: Shape): Section[] => {
     }
     const section = sections[sections.length - 1]
     section.words += block.words
-    if (!section.preview && block.kind != 'picture') {
+    if (!section.preview && block.kind != 'picture' && block.kind != 'embed') {
       section.preview = block.preview
     }
   })
@@ -590,8 +682,8 @@ const findSections = (shape: Shape): Section[] => {
   sections.forEach((section, index) => {
     section.end = sections[index + 1]?.top ?? shape.height
   })
-  shape.highlights.forEach((y) => {
-    const section = sections.filter((s) => s.top <= y + 1).pop()
+  shape.highlights.forEach(({ top }) => {
+    const section = sections.filter((s) => s.top <= top + 1).pop()
     if (section) section.highlights += 1
   })
   const headed = sections.filter((section) => section.number > 0)
@@ -617,6 +709,8 @@ type MarginMapProps = {
   wordsCount?: number
   // Where you were when the article opened, as a percentage.
   resumeProgress?: number
+  // Your notes on highlights, by highlight id.
+  notes?: Record<string, string>
 }
 
 export function MarginMap(props: MarginMapProps): JSX.Element | null {
@@ -890,7 +984,7 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
     if (!shape) return []
     const out: { y: number; w: number; x: number; heading?: boolean }[] = []
     shape.blocks.forEach((block, index) => {
-      if (block.kind == 'picture') return
+      if (block.kind == 'picture' || block.kind == 'embed') return
       const y = block.top * scale
       const h = block.height * scale
       if (block.kind == 'heading') {
@@ -954,6 +1048,47 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
     setSheet(false)
     setUnfolded(false)
   }
+
+  // Go to a highlight: it lands where you read.
+  const goToHighlight = useCallback(
+    (highlight: Highlight) => {
+      const root = props.contentRef.current
+      if (!root) return
+      const top = root.getBoundingClientRect().top + window.scrollY
+      window.scrollTo({
+        top: Math.max(0, top + highlight.top - window.innerHeight * EYE),
+        behavior: 'smooth',
+      })
+      setUnfolded(false)
+    },
+    [props.contentRef]
+  )
+
+  // [ and ] step to the previous and next highlight.
+  const highlightList = shape?.highlights
+  useEffect(() => {
+    if (!highlightList?.length) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key != '[' && event.key != ']') return
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable]')) return
+      const root = props.contentRef.current
+      if (!root) return
+      const eyeNow = window.innerHeight * EYE - root.getBoundingClientRect().top
+      const next =
+        event.key == ']'
+          ? highlightList.find((highlight) => highlight.top > eyeNow + 8)
+          : [...highlightList]
+              .reverse()
+              .find((highlight) => highlight.top < eyeNow - 8)
+      if (!next) return
+      event.preventDefault()
+      goToHighlight(next)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [highlightList, goToHighlight, props.contentRef])
 
   useEffect(() => {
     const move = (event: PointerEvent) => {
@@ -1077,8 +1212,41 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
   const readTo = Math.min(height, bracketTop + bracketHeight)
 
   // Without sections, the pointer previews its section and opening words.
+  // A highlight tick or a picture under the pointer reads out beside it.
+  const tickAt = (y: number) =>
+    shape.highlights
+      .map((highlight) => ({
+        highlight,
+        off: Math.abs(highlight.top * scale - y),
+      }))
+      .filter(({ off }) => off <= 4)
+      .sort((a, b) => a.off - b.off)[0]?.highlight
+  const hoverTick =
+    hover !== undefined && mode == 'wide' ? tickAt(hover) : undefined
+  const hoverPicture =
+    hover !== undefined && mode == 'wide' && !hoverTick
+      ? shape.blocks.find(
+          (block) =>
+            block.kind == 'picture' &&
+            block.src &&
+            hover >= block.top * scale - 1 &&
+            hover <= (block.top + block.height) * scale + 1
+        )
+      : undefined
+  const minutesAt = (y: number) => {
+    const minutes =
+      total !== undefined ? Math.round((total * y) / shape.height) : undefined
+    return minutes ? `${minutes} min in` : 'The start'
+  }
+
   let preview: { section: string; text: string; at: string } | undefined
-  if (hoverY !== undefined && mode == 'wide' && !sections.length) {
+  if (
+    hoverY !== undefined &&
+    mode == 'wide' &&
+    !sections.length &&
+    !hoverTick &&
+    !hoverPicture
+  ) {
     const y = hoverY
     const block =
       shape.blocks.find((b) => b.top <= y && y <= b.top + b.height + 16) ??
@@ -1100,7 +1268,9 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
     }
   }
 
-  const draw = (color: string, headingColor: string) => (
+  // The map, drawn twice: faint for what's ahead, darker (and pictures in
+  // colour) for what you've read.
+  const draw = (color: string, headingColor: string, read: boolean) => (
     <Lines width="100%" height={height} aria-hidden="true">
       {lines.map((line, index) => (
         <rect
@@ -1112,30 +1282,71 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
           fill={line.heading ? headingColor : color}
         />
       ))}
-      {shape.blocks
-        .filter((block) => block.kind == 'picture')
-        .map((block, index) => (
+      {shape.blocks.map((block, index) => {
+        if (block.kind != 'picture' && block.kind != 'embed') return null
+        const y = block.top * scale
+        const h = Math.max(2, block.height * scale - 1)
+        const w = `${Math.round((block.width ?? 1) * 100)}%`
+        if (block.kind == 'picture' && block.src) {
+          return (
+            <image
+              key={`p${index}`}
+              href={block.src}
+              x="0"
+              y={y}
+              width={w}
+              height={h}
+              preserveAspectRatio="xMidYMid slice"
+              style={
+                read ? undefined : { filter: 'grayscale(1)', opacity: 0.35 }
+              }
+            />
+          )
+        }
+        return (
+          <g key={`p${index}`}>
+            <rect
+              x="0"
+              y={y}
+              width={w}
+              height={h}
+              rx="1"
+              fill={color}
+              opacity="0.6"
+            />
+            {block.kind == 'embed' && h >= 8 && (
+              // A small play mark for videos and embeds.
+              <svg x="44%" y={y + h / 2 - 3} overflow="visible">
+                <path d="M 0 0 l 5 3 l -5 3 z" fill={headingColor} />
+              </svg>
+            )}
+          </g>
+        )
+      })}
+      {shape.highlights.map((highlight) =>
+        highlight.hasNote ? (
+          // With a note: an open tick.
           <rect
-            key={`p${index}`}
-            x="0"
-            y={block.top * scale}
-            width="100%"
-            height={Math.max(2, block.height * scale - 1)}
-            rx="1"
-            fill={color}
-            opacity="0.6"
+            key={highlight.id}
+            x="0.5"
+            y={highlight.top * scale - 0.5}
+            width="98%"
+            height="3"
+            fill="none"
+            stroke="var(--colors-stAccent)"
+            strokeWidth="1"
           />
-        ))}
-      {shape.highlights.map((y, index) => (
-        <rect
-          key={`h${index}`}
-          x="0"
-          y={y * scale}
-          width="100%"
-          height="2"
-          fill="var(--colors-stAccent)"
-        />
-      ))}
+        ) : (
+          <rect
+            key={highlight.id}
+            x="0"
+            y={highlight.top * scale}
+            width="100%"
+            height="2"
+            fill="var(--colors-stAccent)"
+          />
+        )
+      )}
     </Lines>
   )
 
@@ -1143,6 +1354,14 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
   const minutesIn =
     total !== undefined ? Math.round((total * eye) / shape.height) : undefined
   const unfolds = mode == 'wide' && sections.length > 0
+  // The contents unfold once the pointer has rested on the map a moment.
+  const armUnfold = () => {
+    if (!unfolds) return
+    window.clearTimeout(unfoldTimer.current)
+    unfoldTimer.current = window.setTimeout(() => {
+      if (!dragging.current) setUnfolded(true)
+    }, 300)
+  }
 
   return (
     <>
@@ -1151,13 +1370,7 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
         data-phone={mode == 'phone' ? '' : undefined}
         data-drawer={mode == 'phone' && drawer ? '' : undefined}
         data-hidden={hidden ? '' : undefined}
-        onMouseEnter={() => {
-          if (!unfolds) return
-          window.clearTimeout(unfoldTimer.current)
-          unfoldTimer.current = window.setTimeout(() => {
-            if (!dragging.current) setUnfolded(true)
-          }, 300)
-        }}
+        onMouseEnter={armUnfold}
         onMouseLeave={() => {
           window.clearTimeout(unfoldTimer.current)
           unfoldTimer.current = window.setTimeout(() => setUnfolded(false), 200)
@@ -1194,6 +1407,15 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
           aria-hidden="true"
           style={{ height: `${height}px` }}
           onPointerDown={(event: ReactMouseEvent<HTMLDivElement>) => {
+            const tick =
+              mode == 'wide' &&
+              tickAt(
+                event.clientY - event.currentTarget.getBoundingClientRect().top
+              )
+            if (tick) {
+              goToHighlight(tick)
+              return
+            }
             dragging.current = true
             if (mode == 'phone') {
               window.clearTimeout(linger.current)
@@ -1202,21 +1424,39 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
             }
             travel(event.clientY, mode == 'wide')
           }}
-          onMouseMove={(event) =>
-            setHover(
+          onMouseMove={(event) => {
+            const y =
               event.clientY - event.currentTarget.getBoundingClientRect().top
-            )
-          }
+            setHover(y)
+            // Reading a highlight or a picture holds the contents back.
+            const over =
+              tickAt(y) ||
+              shape.blocks.some(
+                (block) =>
+                  block.kind == 'picture' &&
+                  block.src &&
+                  y >= block.top * scale - 1 &&
+                  y <= (block.top + block.height) * scale + 1
+              )
+            if (over) {
+              window.clearTimeout(unfoldTimer.current)
+              if (unfolded) setUnfolded(false)
+            } else if (!unfolded) {
+              armUnfold()
+            }
+          }}
           onMouseLeave={() => setHover(undefined)}
         >
           {draw(
             'color-mix(in srgb, var(--font-color) 16%, transparent)',
-            'color-mix(in srgb, var(--font-color) 40%, transparent)'
+            'color-mix(in srgb, var(--font-color) 40%, transparent)',
+            false
           )}
           <Read style={{ height: `${readTo}px` }}>
             {draw(
               'color-mix(in srgb, var(--font-color) 42%, transparent)',
-              'var(--font-color)'
+              'var(--font-color)',
+              true
             )}
           </Read>
           <Bracket
@@ -1265,6 +1505,33 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
               )}
             </Bubble>
           )}
+          {hoverTick && (
+            <Preview style={{ top: `${hoverTick.top * scale}px` }}>
+              <PreviewMeta>
+                Highlight {shape.highlights.indexOf(hoverTick) + 1} of{' '}
+                {shape.highlights.length} · {minutesAt(hoverTick.top)}
+              </PreviewMeta>
+              <PreviewQuote>{hoverTick.quote}</PreviewQuote>
+              {props.notes?.[hoverTick.id] && (
+                <PreviewNote>{props.notes[hoverTick.id]}</PreviewNote>
+              )}
+            </Preview>
+          )}
+          {hoverPicture && (
+            <Preview
+              style={{
+                top: `${
+                  (hoverPicture.top + hoverPicture.height / 2) * scale
+                }px`,
+              }}
+            >
+              <PreviewPicture src={hoverPicture.src} alt="" />
+              <PreviewMeta>{minutesAt(hoverPicture.top)}</PreviewMeta>
+              {hoverPicture.caption && (
+                <PreviewText>{hoverPicture.caption}</PreviewText>
+              )}
+            </Preview>
+          )}
           {preview && hover !== undefined && (
             <Preview style={{ top: `${hover}px` }}>
               <PreviewMeta>{preview.at}</PreviewMeta>
@@ -1274,17 +1541,23 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
           )}
         </Track>
         {mode == 'wide' && (
-          <Foot aria-hidden="true">
+          <Foot>
             {left && (
               <>
                 <b>{done >= 0.99 ? 'Done' : `${left} left`}</b>
                 <br />
               </>
             )}
-            {shape.highlights.length > 0 &&
-              `${shape.highlights.length} highlight${
-                shape.highlights.length == 1 ? '' : 's'
-              }`}
+            {shape.highlights.length > 0 && (
+              <FootButton
+                type="button"
+                title="Go to the first highlight ( [ and ] step )"
+                onClick={() => goToHighlight(shape.highlights[0])}
+              >
+                {shape.highlights.length} highlight
+                {shape.highlights.length == 1 ? '' : 's'}
+              </FootButton>
+            )}
           </Foot>
         )}
         {unfolds && unfolded && (

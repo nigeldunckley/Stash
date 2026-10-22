@@ -223,14 +223,15 @@ export const useReaderSettings = (): ReaderSettings => {
         id: 'increaseMargin',
         section: 'Article',
         name: 'Increase margin width',
-        shortcut: [']'],
+        // [ and ] step through your highlights (the margin map).
+        shortcut: ['}'],
         perform: () => actionHandler('incrementMarginWidth'),
       },
       {
         id: 'decreaseMargin',
         section: 'Article',
         name: 'Decrease margin width',
-        shortcut: ['['],
+        shortcut: ['{'],
         perform: () => actionHandler('decrementMarginWidth'),
       },
       ...['Newsreader', 'Literata', 'Geist'].map((font) => ({
