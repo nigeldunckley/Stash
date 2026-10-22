@@ -544,6 +544,11 @@ export function ArticleContainer(props: ArticleContainerProps): JSX.Element {
             highlightQuotes={(props.article.highlights ?? [])
               .map((highlight) => highlight.quote ?? '')
               .filter(Boolean)}
+            highlightNotes={Object.fromEntries(
+              (props.article.highlights ?? [])
+                .filter((highlight) => highlight.annotation)
+                .map((highlight) => [highlight.id, highlight.annotation ?? ''])
+            )}
           />
         )}
         {props.footer}

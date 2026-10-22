@@ -46,6 +46,8 @@ export type ArticleProps = {
   pageUrls?: string[]
   // Your highlights' text, for the pull quote.
   highlightQuotes?: string[]
+  // Your notes on highlights, by highlight id, for the margin map.
+  highlightNotes?: Record<string, string>
   wordsCount?: number
 }
 
@@ -440,6 +442,7 @@ export function Article(props: ArticleProps): JSX.Element {
           contentKey={props.content}
           wordsCount={props.wordsCount}
           resumeProgress={props.resumeProgress}
+          notes={props.highlightNotes}
         />
       )}
       <PlaceMarker
