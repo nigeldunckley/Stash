@@ -118,6 +118,11 @@ export class LibraryItem {
   @Column('real')
   readingProgressBottomPercent!: number
 
+  // The parts actually read ("0-120,300-410", thousandths of the length).
+  // Only loaded when asked for.
+  @Column('text', { nullable: true, select: false })
+  readingTrail?: string | null
+
   @Column('text', { nullable: true })
   thumbnail?: string | null
 

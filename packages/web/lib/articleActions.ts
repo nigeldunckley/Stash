@@ -21,4 +21,11 @@ export type ArticleMutations = {
   articleReadingProgressMutation: (
     input: ArticleReadingProgressMutationInput
   ) => Promise<boolean>
+  // The reading trail (which parts were actually read). Optional: a reader
+  // without them keeps the trail on this device only.
+  readingTrailQuery?: (id: string) => Promise<string | undefined>
+  saveReadingTrailMutation?: (input: {
+    id: string
+    trail: string
+  }) => Promise<boolean>
 }

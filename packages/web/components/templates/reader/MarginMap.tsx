@@ -27,6 +27,11 @@ import {
 // section you're in. Rest the pointer on it and it unfolds into contents;
 // click or drag to travel.
 //
+// The map darkens only what you've actually read: a part counts once it
+// has been on screen long enough to read, so sections you jump past stay
+// pale and the foot offers to take you back. The trail is kept with the
+// article, so it's the same on every device.
+//
 // On a wide window it is always there. On a phone, touch and hold near the
 // right edge and it slides in as a drawer with its labels; drag to scrub,
 // with a bubble naming the section and a tick at each heading. A quick
@@ -47,6 +52,13 @@ const EDGE = 28
 const HOLD = 280
 // How long the drawer stays after you let go.
 const LINGER = 1200
+
+// The trail, in thousandths of the article's length.
+const STEPS = 1000
+// Reading speed in words a second, and how much of a screen's reading time
+// it must stay up before it counts as read (skimming is reading too).
+const WORDS_A_SECOND = 4.2
+const ENOUGH = 0.35
 
 const BLOCKS =
   'p, h1, h2, h3, h4, blockquote, figure, img, pre, ul, ol, table, iframe, video'
@@ -273,10 +285,22 @@ const Place = styled('div', {
   pointerEvents: 'none',
 })
 
+// Lines up under the map's right edge, like the running head over it.
 const Foot = styled('div', {
+  width: '180px',
+  marginLeft: `${WIDTH - 180}px`,
+  textAlign: 'right',
+  whiteSpace: 'nowrap',
   marginTop: '12px',
-  paddingTop: '10px',
-  borderTop: '1px solid $stLine',
+  // The rule stays the map's width.
+  '&::before': {
+    content: '""',
+    display: 'block',
+    width: `${WIDTH}px`,
+    marginLeft: 'auto',
+    marginBottom: '10px',
+    borderTop: '1px solid $stLine',
+  },
   fontFamily: '$mono',
   fontSize: '9px',
   lineHeight: 1.6,
@@ -364,6 +388,11 @@ const PreviewPicture = styled('img', {
 // "4 highlights" in the foot: a click starts at the first.
 const FootButton = styled('button', {
   all: 'unset',
+  display: 'inline-block',
+  maxWidth: '100%',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  verticalAlign: 'top',
   cursor: 'pointer',
   '&:hover, &:focus-visible': { color: '$stAccent' },
   '&:focus-visible': { outline: '1px solid $stAccent' },
@@ -694,6 +723,38 @@ const findSections = (shape: Shape): Section[] => {
   return sections
 }
 
+// "0-120,300-410" to and from a mark per thousandth.
+const parseTrail = (text: string | null | undefined, into: Uint8Array) => {
+  ;(text ?? '').split(',').forEach((part) => {
+    const match = /^(\d+)-(\d+)$/.exec(part.trim())
+    if (!match) return
+    const end = Math.min(STEPS, Number(match[2]))
+    for (let i = Math.max(0, Number(match[1])); i <= end; i++) into[i] = 1
+  })
+}
+
+const trailRanges = (text: string): [number, number][] =>
+  text
+    ? text.split(',').map((part) => {
+        const [start, end] = part.split('-').map(Number)
+        return [start, end]
+      })
+    : []
+
+const formatTrail = (read: Uint8Array): string => {
+  const out: string[] = []
+  let start = -1
+  for (let i = 0; i <= STEPS + 1; i++) {
+    if (i <= STEPS && read[i]) {
+      if (start < 0) start = i
+    } else if (start >= 0) {
+      out.push(`${start}-${i - 1}`)
+      start = -1
+    }
+  }
+  return out.join(',')
+}
+
 // A paragraph's last line is a little short, the way text really ends.
 const lastLine = (index: number) => 40 + ((index * 37) % 50)
 
@@ -711,6 +772,10 @@ type MarginMapProps = {
   resumeProgress?: number
   // Your notes on highlights, by highlight id.
   notes?: Record<string, string>
+  // The article, and where its reading trail is loaded from and saved to.
+  itemId?: string
+  loadTrail?: (id: string) => Promise<string | undefined>
+  saveTrail?: (input: { id: string; trail: string }) => Promise<boolean>
 }
 
 export function MarginMap(props: MarginMapProps): JSX.Element | null {
@@ -728,6 +793,18 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
   const scrub = useRef<{ y: number; scroll: number } | undefined>()
   const linger = useRef(0)
   const ticked = useRef<number | undefined>()
+  // The reading trail: what's counted as read, and how close each part is.
+  const trail = useRef(new Uint8Array(STEPS + 1))
+  const credit = useRef(new Float32Array(STEPS + 1))
+  const [trailText, setTrailText] = useState('')
+  const shapeRef = useRef<Shape | undefined>()
+  shapeRef.current = shape
+  const saving = useRef({ timer: 0, pending: '' })
+  const saveTrailRef = useRef(props.saveTrail)
+  saveTrailRef.current = props.saveTrail
+  const loadTrailRef = useRef(props.loadTrail)
+  loadTrailRef.current = props.loadTrail
+  const queueSave = useRef<(text: string) => void>(() => undefined)
   const [resume] = useState(() => props.resumeProgress ?? 0)
   const dragging = useRef(false)
   const trackRef = useRef<HTMLDivElement | null>(null)
@@ -805,6 +882,127 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
 
   const sections = useMemo(() => (shape ? findSections(shape) : []), [shape])
 
+  // Load the trail: what this device remembers and what the server has.
+  // An article read before the trail existed counts as read up to where
+  // you'd got.
+  const itemId = props.itemId
+  useEffect(() => {
+    trail.current = new Uint8Array(STEPS + 1)
+    credit.current = new Float32Array(STEPS + 1)
+    setTrailText('')
+    if (!itemId) return
+    let live = true
+    let local = ''
+    try {
+      local = localStorage.getItem(`stash:trail:${itemId}`) ?? ''
+    } catch {
+      local = ''
+    }
+    const add = (text: string) => {
+      parseTrail(text, trail.current)
+      setTrailText(formatTrail(trail.current))
+    }
+    add(local)
+    Promise.resolve()
+      .then(() => loadTrailRef.current?.(itemId))
+      .catch(() => undefined)
+      .then((server) => {
+        if (!live) return
+        if (server) add(server)
+        else if (!local && resume >= 3) {
+          add(`0-${Math.min(STEPS, Math.round(resume * 10))}`)
+        }
+        // Anything the server hasn't got yet (read offline, or while it
+        // was down) goes up with the next save.
+        const text = formatTrail(trail.current)
+        if (text && text != (server ?? '')) queueSave.current(text)
+      })
+    return () => {
+      live = false
+    }
+  }, [itemId, resume])
+
+  // Save it: on this device straight away, to the server a little later
+  // (and when you leave).
+  useEffect(() => {
+    if (!itemId) return
+    saving.current.pending = ''
+    // The server merges what it's sent, so the whole trail can go each
+    // time. It stays pending until a save succeeds.
+    const flush = () => {
+      window.clearTimeout(saving.current.timer)
+      const text = saving.current.pending
+      const save = saveTrailRef.current
+      if (!text || !save) return
+      Promise.resolve()
+        .then(() => save({ id: itemId, trail: text }))
+        .then((ok) => {
+          if (ok !== false && saving.current.pending == text) {
+            saving.current.pending = ''
+          }
+        })
+        .catch(() => undefined)
+    }
+    queueSave.current = (text: string) => {
+      saving.current.pending = text
+      window.clearTimeout(saving.current.timer)
+      saving.current.timer = window.setTimeout(flush, 5000)
+    }
+    const onHide = () => {
+      if (document.visibilityState == 'hidden') flush()
+    }
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      flush()
+    }
+  }, [itemId])
+
+  // Each second, credit what's on screen with the time it's been up there.
+  // A part counts as read once it's had enough of the time its words take
+  // to read. Flicks, jumps and scrubbing count for nothing.
+  useEffect(() => {
+    if (!measured || !itemId) return
+    let lastY = window.scrollY
+    const timer = window.setInterval(() => {
+      const root = props.contentRef.current
+      const shape = shapeRef.current
+      const y = window.scrollY
+      const moved = Math.abs(y - lastY)
+      lastY = y
+      if (!root || !shape || document.visibilityState != 'visible') return
+      if (moved > window.innerHeight * 0.8 || dragging.current) return
+      const top = root.getBoundingClientRect().top + y
+      const from = Math.max(0, (y - top + 84) / shape.height)
+      const to = Math.min(1, (y - top + window.innerHeight) / shape.height)
+      if (to <= from) return
+      const words = shape.blocks.reduce((sum, block) => sum + block.words, 0)
+      const onScreen = Math.max(20, (to - from) * words)
+      const gain = Math.min(0.5, WORDS_A_SECOND / onScreen)
+      const read = trail.current
+      const got = credit.current
+      let changed = false
+      const end = Math.min(STEPS, Math.ceil(to * STEPS))
+      for (let i = Math.floor(from * STEPS); i <= end; i++) {
+        got[i] += gain
+        if (!read[i] && got[i] >= ENOUGH) {
+          read[i] = 1
+          changed = true
+        }
+      }
+      if (!changed) return
+      const text = formatTrail(read)
+      setTrailText(text)
+      try {
+        localStorage.setItem(`stash:trail:${itemId}`, text)
+      } catch {
+        // Private windows: the server still keeps it.
+      }
+      queueSave.current(text)
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [measured, itemId, props.contentRef])
+
   // Asked for the contents from elsewhere (the top bar, or the app).
   useEffect(() => {
     if (!sections.length) return
@@ -851,7 +1049,7 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
     if (!shape) return 0
     const room =
       window.innerHeight -
-      (mode == 'phone' ? 220 : 190) -
+      (mode == 'phone' ? 220 : 230) -
       (mode == 'wide' && sections.length ? 50 : 0)
     return Math.max(80, Math.min(room, shape.height * 0.2))
   }, [shape, mode, sections.length])
@@ -1117,6 +1315,43 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
     total !== undefined ? Math.round(total * (1 - done)) : undefined
   const left = formatMinutes(leftMinutes)
   const allWords = sections.reduce((sum, section) => sum + section.words, 0)
+
+  // What's been read, in thousandths: the trail, or everything above the
+  // screen where there's no trail to keep.
+  const readRanges: [number, number][] = itemId
+    ? trailRanges(trailText)
+    : readEnd > 0
+    ? [[0, Math.min(STEPS, Math.round((readEnd / shape.height) * STEPS))]]
+    : []
+  // How much of a stretch of the article (in its own pixels) has been read.
+  const cover = (from: number, to: number) => {
+    const a = (from / shape.height) * STEPS
+    const b = (to / shape.height) * STEPS
+    if (b <= a) return 0
+    const got = readRanges.reduce(
+      (sum, [start, end]) =>
+        sum + Math.max(0, Math.min(b, end + 1) - Math.max(a, start)),
+      0
+    )
+    return Math.min(1, got / (b - a))
+  }
+  const isRead = (y: number) => cover(y, y + 1) > 0
+  // Sections you went past without reading, and other gaps behind you.
+  const furthest = readRanges.length
+    ? ((readRanges[readRanges.length - 1][1] + 1) / STEPS) * shape.height
+    : 0
+  const skipped = sections.filter(
+    (section) =>
+      section.end <= furthest + 1 &&
+      section.words >= 30 &&
+      cover(section.top, section.end) < 0.5
+  )
+  const gap = !sections.length
+    ? readRanges
+        .slice(1)
+        .map((range, index) => [readRanges[index][1] + 1, range[0]])
+        .find(([start, end]) => end - start >= 50)
+    : undefined
   // Each section's share of the reading time, rounded so they add up.
   const shares = sections.map((section) =>
     total && allWords ? (total * section.words) / allWords : 0
@@ -1151,7 +1386,7 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
       <Rows>
         {sections.map((section) => {
           const span = Math.max(1, section.end - section.top)
-          const read = Math.min(1, Math.max(0, (readEnd - section.top) / span))
+          const read = cover(section.top, section.top + span)
           const isCurrent = section === current
           const isHovered = !phone && section === hovered
           return (
@@ -1209,7 +1444,6 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
 
   const bracketTop = Math.max(0, (scroll.y - scroll.top + 84) * scale)
   const bracketHeight = Math.max(8, (scroll.view - 84) * scale)
-  const readTo = Math.min(height, bracketTop + bracketHeight)
 
   // Without sections, the pointer previews its section and opening words.
   // A highlight tick or a picture under the pointer reads out beside it.
@@ -1350,6 +1584,11 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
     </Lines>
   )
 
+  const readDrawing = draw(
+    'color-mix(in srgb, var(--font-color) 42%, transparent)',
+    'var(--font-color)',
+    true
+  )
   const hidden = mode == 'phone' && !awake && !drawer
   const minutesIn =
     total !== undefined ? Math.round((total * eye) / shape.height) : undefined
@@ -1452,13 +1691,28 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
             'color-mix(in srgb, var(--font-color) 40%, transparent)',
             false
           )}
-          <Read style={{ height: `${readTo}px` }}>
-            {draw(
-              'color-mix(in srgb, var(--font-color) 42%, transparent)',
-              'var(--font-color)',
-              true
-            )}
-          </Read>
+          {readRanges.map(([start, end]) => {
+            const top = (start / STEPS) * height
+            const bottom = ((end + 1) / STEPS) * height
+            return (
+              <Read
+                key={start}
+                style={{ top: `${top}px`, height: `${bottom - top}px` }}
+              >
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    top: `${-top}px`,
+                    height: `${height}px`,
+                  }}
+                >
+                  {readDrawing}
+                </div>
+              </Read>
+            )
+          })}
           <Bracket
             data-scrub={mode == 'phone' && scrubbing ? '' : undefined}
             style={{
@@ -1475,7 +1729,9 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
                   ? ''
                   : undefined
               }
-              data-read={label.y < readTo || !sections.length ? '' : undefined}
+              data-read={
+                isRead(label.y / scale) || !sections.length ? '' : undefined
+              }
             >
               {label.text}
             </Label>
@@ -1557,6 +1813,43 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
                 {shape.highlights.length} highlight
                 {shape.highlights.length == 1 ? '' : 's'}
               </FootButton>
+            )}
+            {skipped.length > 0 && (
+              <>
+                {shape.highlights.length > 0 && <br />}
+                <FootButton
+                  type="button"
+                  title={`Go back to ${skipped[0].label}`}
+                  onClick={() => goTo(skipped[0])}
+                >
+                  Skipped{' '}
+                  {skipped.length == 1
+                    ? `${sectionNumber(skipped[0].number)} ${skipped[0].short}`
+                    : `${skipped.length} sections`}
+                </FootButton>
+              </>
+            )}
+            {gap && (
+              <>
+                {shape.highlights.length > 0 && <br />}
+                <FootButton
+                  type="button"
+                  title="Go back to the part you skipped"
+                  onClick={() =>
+                    window.scrollTo({
+                      top: Math.max(
+                        0,
+                        scroll.top +
+                          (gap[0] / STEPS) * shape.height -
+                          window.innerHeight * EYE
+                      ),
+                      behavior: 'smooth',
+                    })
+                  }
+                >
+                  Skipped a part
+                </FootButton>
+              </>
             )}
           </Foot>
         )}

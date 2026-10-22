@@ -223,6 +223,9 @@ const App = () => {
                 mutation('updateHighlight', input),
               articleReadingProgressMutation: (input) =>
                 mutation('articleReadingProgress', input),
+              readingTrailQuery: (id) => mutation('readingTrail', { id }),
+              saveReadingTrailMutation: (input) =>
+                mutation('saveReadingTrail', input),
             }}
           />
         </VStack>

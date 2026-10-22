@@ -660,6 +660,26 @@ const schema = gql`
     updatedUser: User!
   }
 
+  # The parts of an article you've actually read, as ranges in thousandths
+  # of its length: "0-120,300-410". Saving joins them with what's stored,
+  # so two devices add up.
+  input SaveReadingTrailInput {
+    id: ID!
+    trail: String!
+  }
+  enum ReadingTrailErrorCode {
+    BAD_DATA
+    NOT_FOUND
+    UNAUTHORIZED
+  }
+  type ReadingTrailSuccess {
+    trail: String!
+  }
+  type ReadingTrailError {
+    errorCodes: [ReadingTrailErrorCode!]!
+  }
+  union ReadingTrailResult = ReadingTrailSuccess | ReadingTrailError
+
   # Mutation: saveArticleReadingProgress
   union SaveArticleReadingProgressResult =
       SaveArticleReadingProgressSuccess
@@ -3716,6 +3736,7 @@ const schema = gql`
     updateHighlight(input: UpdateHighlightInput!): UpdateHighlightResult!
     deleteHighlight(highlightId: ID!): DeleteHighlightResult!
     uploadFileRequest(input: UploadFileRequestInput!): UploadFileRequestResult!
+    saveReadingTrail(input: SaveReadingTrailInput!): ReadingTrailResult!
     saveArticleReadingProgress(
       input: SaveArticleReadingProgressInput!
     ): SaveArticleReadingProgressResult!
@@ -3838,6 +3859,7 @@ const schema = gql`
     me: User
     user(userId: ID, username: String): UserResult!
     article(username: String!, slug: String!, format: String): ArticleResult!
+    readingTrail(id: ID!): ReadingTrailResult!
     users: UsersResult!
     validateUsername(username: String!): Boolean!
     # getFollowers(userId: ID): GetFollowersResult!

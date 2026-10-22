@@ -1802,6 +1802,7 @@ type Mutation {
   saveFile(input: SaveFileInput!): SaveResult!
   saveFilter(input: SaveFilterInput!): SaveFilterResult!
   savePage(input: SavePageInput!): SaveResult!
+  saveReadingTrail(input: SaveReadingTrailInput!): ReadingTrailResult!
   saveUrl(input: SaveUrlInput!): SaveResult!
   setBookmarkArticle(input: SetBookmarkArticleInput!): SetBookmarkArticleResult!
   setDeviceToken(input: SetDeviceTokenInput!): SetDeviceTokenResult!
@@ -2030,6 +2031,7 @@ type Query {
   newsletterEmails: NewsletterEmailsResult!
   post(id: ID!): PostResult!
   posts(after: String, first: Int, userId: ID!): PostsResult!
+  readingTrail(id: ID!): ReadingTrailResult!
   recentEmails: RecentEmailsResult!
   recentSearches: RecentSearchesResult!
   rules(enabled: Boolean): RulesResult!
@@ -2072,6 +2074,22 @@ type ReadState {
   progressPercent: Float!
   reading: Boolean
   readingTime: Int
+}
+
+type ReadingTrailError {
+  errorCodes: [ReadingTrailErrorCode!]!
+}
+
+enum ReadingTrailErrorCode {
+  BAD_DATA
+  NOT_FOUND
+  UNAUTHORIZED
+}
+
+union ReadingTrailResult = ReadingTrailError | ReadingTrailSuccess
+
+type ReadingTrailSuccess {
+  trail: String!
 }
 
 type RecentEmail {
@@ -2467,6 +2485,11 @@ input SavePageInput {
   state: ArticleSavingRequestStatus
   title: String
   url: String!
+}
+
+input SaveReadingTrailInput {
+  id: ID!
+  trail: String!
 }
 
 union SaveResult = SaveError | SaveSuccess
