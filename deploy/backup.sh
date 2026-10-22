@@ -10,6 +10,8 @@ BACKUP_DIR=${STASH_BACKUP_DIR:-/var/backups/stash}
 KEEP_DB=${STASH_BACKUP_KEEP:-14}   # database copies are small, keep two weeks
 KEEP_FILES=3                       # stored files can be large, keep three
 BACKUP_COPY_FILE=/etc/stash-backup-copy-to
+# The dated folder name each backup gets, e.g. 2026-10-09-033000.
+STAMP='[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]'
 
 umask 077
 mkdir -p "$BACKUP_DIR"
@@ -55,18 +57,18 @@ fi
 # beyond KEEP_FILES.
 prune() {
   local root=$1 keep=$2 pattern=$3
-  find "$root" -mindepth 2 -maxdepth 2 -path "$root/20*/$pattern" | sort -r |
+  find "$root" -mindepth 2 -maxdepth 2 -path "$root/$STAMP/$pattern" | sort -r |
     tail -n +"$((keep + 1))" | xargs -r -d '\n' rm -f
 }
 tidy() {
   local root=$1
   prune "$root" "$KEEP_DB" database.dump
   prune "$root" "$KEEP_FILES" files.tar.gz
-  find "$root" -mindepth 2 -maxdepth 2 -path "$root/20*/*.partial" -delete
+  find "$root" -mindepth 2 -maxdepth 2 -path "$root/$STAMP/*.partial" -delete
   # Only touch dated backup folders, since the copy-to folder may hold
   # other things.
-  find "$root" -mindepth 1 -maxdepth 1 -type d -name '20*' -empty -delete
-  for dir in "$root"/20[0-9][0-9]-*/; do
+  find "$root" -mindepth 1 -maxdepth 1 -type d -name "$STAMP" -empty -delete
+  for dir in "$root"/$STAMP/; do
     [ -f "$dir/database.dump" ] || rm -rf "$dir"
   done
 }
@@ -76,14 +78,25 @@ echo "Backup saved to $dest ($(du -sh "$dest" | cut -f1))."
 
 # A second copy somewhere else, such as an iCloud Drive folder on the Mac
 # that runs Stash (sudo ./install.sh backup copy-to <folder>). A failed copy
-# leaves the backup above in place.
+# leaves the backup above in place but fails the run, so the log shows it.
+# The folder must already exist: a missing one usually means a share that
+# isn't mounted, and recreating it would quietly fill the local disk.
 copy_to=$(cat "$BACKUP_COPY_FILE" 2>/dev/null || true)
 if [ -n "$copy_to" ]; then
-  if mkdir -p "$copy_to" && cp -R "$dest" "$copy_to/"; then
+  if [ ! -d "$copy_to" ]; then
+    echo "Couldn't copy the backup: $copy_to isn't there." >&2
+    exit 1
+  fi
+  if [ "$(realpath "$copy_to")" = "$(realpath "$BACKUP_DIR")" ]; then
+    echo "Couldn't copy the backup: $copy_to is the backup folder itself." >&2
+    exit 1
+  fi
+  if cp -R "$dest" "$copy_to/"; then
     tidy "$copy_to"
     echo "Copied to $copy_to."
   else
     rm -rf "${copy_to:?}/$stamp"
     echo "Couldn't copy the backup to $copy_to." >&2
+    exit 1
   fi
 fi

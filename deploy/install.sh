@@ -181,6 +181,10 @@ setup_backup_copy() {
     return
   fi
   mkdir -p "$folder"
+  if [ "$(realpath "$folder")" = "$(realpath -m "${STASH_BACKUP_DIR:-/var/backups/stash}")" ]; then
+    echo "Pick a folder other than the backup folder itself." >&2
+    exit 1
+  fi
   printf '%s\n' "$folder" > /etc/stash-backup-copy-to
   echo "Each nightly backup will also be copied to $folder."
   echo "Copy the newest one there now with: sudo ./install.sh backup now"
