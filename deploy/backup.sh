@@ -9,6 +9,7 @@ cd "$(dirname "$0")"
 BACKUP_DIR=${STASH_BACKUP_DIR:-/var/backups/stash}
 KEEP_DB=${STASH_BACKUP_KEEP:-14}   # database copies are small, keep two weeks
 KEEP_FILES=3                       # stored files can be large, keep three
+BACKUP_COPY_FILE=/etc/stash-backup-copy-to
 
 umask 077
 mkdir -p "$BACKUP_DIR"
@@ -53,16 +54,36 @@ fi
 # Oldest first: drop database backups beyond KEEP_DB and file archives
 # beyond KEEP_FILES.
 prune() {
-  local keep=$1 pattern=$2
-  find "$BACKUP_DIR" -mindepth 2 -maxdepth 2 -name "$pattern" | sort -r |
-    tail -n +"$((keep + 1))" | xargs -r rm -f
+  local root=$1 keep=$2 pattern=$3
+  find "$root" -mindepth 2 -maxdepth 2 -path "$root/20*/$pattern" | sort -r |
+    tail -n +"$((keep + 1))" | xargs -r -d '\n' rm -f
 }
-prune "$KEEP_DB" database.dump
-prune "$KEEP_FILES" files.tar.gz
-find "$BACKUP_DIR" -mindepth 2 -maxdepth 2 -name '*.partial' -delete
-find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -empty -delete
-for dir in "$BACKUP_DIR"/*/; do
-  [ -f "$dir/database.dump" ] || rm -rf "$dir"
-done
+tidy() {
+  local root=$1
+  prune "$root" "$KEEP_DB" database.dump
+  prune "$root" "$KEEP_FILES" files.tar.gz
+  find "$root" -mindepth 2 -maxdepth 2 -path "$root/20*/*.partial" -delete
+  # Only touch dated backup folders, since the copy-to folder may hold
+  # other things.
+  find "$root" -mindepth 1 -maxdepth 1 -type d -name '20*' -empty -delete
+  for dir in "$root"/20[0-9][0-9]-*/; do
+    [ -f "$dir/database.dump" ] || rm -rf "$dir"
+  done
+}
+tidy "$BACKUP_DIR"
 
 echo "Backup saved to $dest ($(du -sh "$dest" | cut -f1))."
+
+# A second copy somewhere else, such as an iCloud Drive folder on the Mac
+# that runs Stash (sudo ./install.sh backup copy-to <folder>). A failed copy
+# leaves the backup above in place.
+copy_to=$(cat "$BACKUP_COPY_FILE" 2>/dev/null || true)
+if [ -n "$copy_to" ]; then
+  if mkdir -p "$copy_to" && cp -R "$dest" "$copy_to/"; then
+    tidy "$copy_to"
+    echo "Copied to $copy_to."
+  else
+    rm -rf "${copy_to:?}/$stamp"
+    echo "Couldn't copy the backup to $copy_to." >&2
+  fi
+fi

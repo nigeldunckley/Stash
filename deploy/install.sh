@@ -168,6 +168,24 @@ UNIT
   echo "See the last one with: journalctl -u stash-backup"
 }
 
+# Where backup.sh puts a second copy of each backup (see backup.sh).
+setup_backup_copy() {
+  local folder=${1:-}
+  if [ -z "$folder" ]; then
+    echo "Usage: sudo ./install.sh backup copy-to <folder>   (or: copy-to off)" >&2
+    exit 1
+  fi
+  if [ "$folder" = off ]; then
+    rm -f /etc/stash-backup-copy-to
+    echo "Backups are no longer copied anywhere else."
+    return
+  fi
+  mkdir -p "$folder"
+  printf '%s\n' "$folder" > /etc/stash-backup-copy-to
+  echo "Each nightly backup will also be copied to $folder."
+  echo "Copy the newest one there now with: sudo ./install.sh backup now"
+}
+
 ensure_backup() {
   if [ ! -e "$BACKUP_OFF_MARKER" ] &&
      [ ! -e /etc/systemd/system/stash-backup.timer ]; then
@@ -222,6 +240,7 @@ case "${1:-}" in
   backup)
     case "${2:-}" in
       now) ./backup.sh ;;
+      copy-to) setup_backup_copy "${3:-}" ;;
       *) setup_backup "${2:-}" ;;
     esac
     ;;
