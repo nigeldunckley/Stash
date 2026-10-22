@@ -1988,6 +1988,7 @@ export type Mutation = {
   saveFile: SaveResult;
   saveFilter: SaveFilterResult;
   savePage: SaveResult;
+  saveReadingTrail: ReadingTrailResult;
   saveUrl: SaveResult;
   setBookmarkArticle: SetBookmarkArticleResult;
   setDeviceToken: SetDeviceTokenResult;
@@ -2268,6 +2269,11 @@ export type MutationSaveFilterArgs = {
 
 export type MutationSavePageArgs = {
   input: SavePageInput;
+};
+
+
+export type MutationSaveReadingTrailArgs = {
+  input: SaveReadingTrailInput;
 };
 
 
@@ -2625,6 +2631,7 @@ export type Query = {
   newsletterEmails: NewsletterEmailsResult;
   post: PostResult;
   posts: PostsResult;
+  readingTrail: ReadingTrailResult;
   recentEmails: RecentEmailsResult;
   recentSearches: RecentSearchesResult;
   rules: RulesResult;
@@ -2706,6 +2713,11 @@ export type QueryPostsArgs = {
   after?: InputMaybe<Scalars['String']>;
   first?: InputMaybe<Scalars['Int']>;
   userId: Scalars['ID'];
+};
+
+
+export type QueryReadingTrailArgs = {
+  id: Scalars['ID'];
 };
 
 
@@ -2808,6 +2820,24 @@ export type ReadState = {
   progressPercent: Scalars['Float'];
   reading?: Maybe<Scalars['Boolean']>;
   readingTime?: Maybe<Scalars['Int']>;
+};
+
+export type ReadingTrailError = {
+  __typename?: 'ReadingTrailError';
+  errorCodes: Array<ReadingTrailErrorCode>;
+};
+
+export enum ReadingTrailErrorCode {
+  BadData = 'BAD_DATA',
+  NotFound = 'NOT_FOUND',
+  Unauthorized = 'UNAUTHORIZED'
+}
+
+export type ReadingTrailResult = ReadingTrailError | ReadingTrailSuccess;
+
+export type ReadingTrailSuccess = {
+  __typename?: 'ReadingTrailSuccess';
+  trail: Scalars['String'];
 };
 
 export type RecentEmail = {
@@ -3239,6 +3269,11 @@ export type SavePageInput = {
   state?: InputMaybe<ArticleSavingRequestStatus>;
   title?: InputMaybe<Scalars['String']>;
   url: Scalars['String'];
+};
+
+export type SaveReadingTrailInput = {
+  id: Scalars['ID'];
+  trail: Scalars['String'];
 };
 
 export type SaveResult = SaveError | SaveSuccess;
@@ -5080,6 +5115,10 @@ export type ResolversTypes = {
   Reaction: ResolverTypeWrapper<Reaction>;
   ReactionType: ReactionType;
   ReadState: ResolverTypeWrapper<ReadState>;
+  ReadingTrailError: ResolverTypeWrapper<ReadingTrailError>;
+  ReadingTrailErrorCode: ReadingTrailErrorCode;
+  ReadingTrailResult: ResolversTypes['ReadingTrailError'] | ResolversTypes['ReadingTrailSuccess'];
+  ReadingTrailSuccess: ResolverTypeWrapper<ReadingTrailSuccess>;
   RecentEmail: ResolverTypeWrapper<RecentEmail>;
   RecentEmailsError: ResolverTypeWrapper<RecentEmailsError>;
   RecentEmailsErrorCode: RecentEmailsErrorCode;
@@ -5156,6 +5195,7 @@ export type ResolversTypes = {
   SaveFilterResult: ResolversTypes['SaveFilterError'] | ResolversTypes['SaveFilterSuccess'];
   SaveFilterSuccess: ResolverTypeWrapper<SaveFilterSuccess>;
   SavePageInput: SavePageInput;
+  SaveReadingTrailInput: SaveReadingTrailInput;
   SaveResult: ResolversTypes['SaveError'] | ResolversTypes['SaveSuccess'];
   SaveSuccess: ResolverTypeWrapper<SaveSuccess>;
   SaveUrlInput: SaveUrlInput;
@@ -5704,6 +5744,9 @@ export type ResolversParentTypes = {
   Query: {};
   Reaction: Reaction;
   ReadState: ReadState;
+  ReadingTrailError: ReadingTrailError;
+  ReadingTrailResult: ResolversParentTypes['ReadingTrailError'] | ResolversParentTypes['ReadingTrailSuccess'];
+  ReadingTrailSuccess: ReadingTrailSuccess;
   RecentEmail: RecentEmail;
   RecentEmailsError: RecentEmailsError;
   RecentEmailsResult: ResolversParentTypes['RecentEmailsError'] | ResolversParentTypes['RecentEmailsSuccess'];
@@ -5762,6 +5805,7 @@ export type ResolversParentTypes = {
   SaveFilterResult: ResolversParentTypes['SaveFilterError'] | ResolversParentTypes['SaveFilterSuccess'];
   SaveFilterSuccess: SaveFilterSuccess;
   SavePageInput: SavePageInput;
+  SaveReadingTrailInput: SaveReadingTrailInput;
   SaveResult: ResolversParentTypes['SaveError'] | ResolversParentTypes['SaveSuccess'];
   SaveSuccess: SaveSuccess;
   SaveUrlInput: SaveUrlInput;
@@ -7406,6 +7450,7 @@ export type MutationResolvers<ContextType = ResolverContext, ParentType extends 
   saveFile?: Resolver<ResolversTypes['SaveResult'], ParentType, ContextType, RequireFields<MutationSaveFileArgs, 'input'>>;
   saveFilter?: Resolver<ResolversTypes['SaveFilterResult'], ParentType, ContextType, RequireFields<MutationSaveFilterArgs, 'input'>>;
   savePage?: Resolver<ResolversTypes['SaveResult'], ParentType, ContextType, RequireFields<MutationSavePageArgs, 'input'>>;
+  saveReadingTrail?: Resolver<ResolversTypes['ReadingTrailResult'], ParentType, ContextType, RequireFields<MutationSaveReadingTrailArgs, 'input'>>;
   saveUrl?: Resolver<ResolversTypes['SaveResult'], ParentType, ContextType, RequireFields<MutationSaveUrlArgs, 'input'>>;
   setBookmarkArticle?: Resolver<ResolversTypes['SetBookmarkArticleResult'], ParentType, ContextType, RequireFields<MutationSetBookmarkArticleArgs, 'input'>>;
   setDeviceToken?: Resolver<ResolversTypes['SetDeviceTokenResult'], ParentType, ContextType, RequireFields<MutationSetDeviceTokenArgs, 'input'>>;
@@ -7587,6 +7632,7 @@ export type QueryResolvers<ContextType = ResolverContext, ParentType extends Res
   newsletterEmails?: Resolver<ResolversTypes['NewsletterEmailsResult'], ParentType, ContextType>;
   post?: Resolver<ResolversTypes['PostResult'], ParentType, ContextType, RequireFields<QueryPostArgs, 'id'>>;
   posts?: Resolver<ResolversTypes['PostsResult'], ParentType, ContextType, RequireFields<QueryPostsArgs, 'userId'>>;
+  readingTrail?: Resolver<ResolversTypes['ReadingTrailResult'], ParentType, ContextType, RequireFields<QueryReadingTrailArgs, 'id'>>;
   recentEmails?: Resolver<ResolversTypes['RecentEmailsResult'], ParentType, ContextType>;
   recentSearches?: Resolver<ResolversTypes['RecentSearchesResult'], ParentType, ContextType>;
   rules?: Resolver<ResolversTypes['RulesResult'], ParentType, ContextType, Partial<QueryRulesArgs>>;
@@ -7621,6 +7667,20 @@ export type ReadStateResolvers<ContextType = ResolverContext, ParentType extends
   progressPercent?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
   reading?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
   readingTime?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type ReadingTrailErrorResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['ReadingTrailError'] = ResolversParentTypes['ReadingTrailError']> = {
+  errorCodes?: Resolver<Array<ResolversTypes['ReadingTrailErrorCode']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+};
+
+export type ReadingTrailResultResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['ReadingTrailResult'] = ResolversParentTypes['ReadingTrailResult']> = {
+  __resolveType: TypeResolveFn<'ReadingTrailError' | 'ReadingTrailSuccess', ParentType, ContextType>;
+};
+
+export type ReadingTrailSuccessResolvers<ContextType = ResolverContext, ParentType extends ResolversParentTypes['ReadingTrailSuccess'] = ResolversParentTypes['ReadingTrailSuccess']> = {
+  trail?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 };
 
@@ -9058,6 +9118,9 @@ export type Resolvers<ContextType = ResolverContext> = {
   Query?: QueryResolvers<ContextType>;
   Reaction?: ReactionResolvers<ContextType>;
   ReadState?: ReadStateResolvers<ContextType>;
+  ReadingTrailError?: ReadingTrailErrorResolvers<ContextType>;
+  ReadingTrailResult?: ReadingTrailResultResolvers<ContextType>;
+  ReadingTrailSuccess?: ReadingTrailSuccessResolvers<ContextType>;
   RecentEmail?: RecentEmailResolvers<ContextType>;
   RecentEmailsError?: RecentEmailsErrorResolvers<ContextType>;
   RecentEmailsResult?: RecentEmailsResultResolvers<ContextType>;
