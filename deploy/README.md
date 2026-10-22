@@ -87,8 +87,17 @@ sudo ./install.sh backup        # start them again
 ```
 
 The backups live on the same server, so they protect against mistakes
-and broken updates, not against losing the server itself. Copy a folder
-somewhere else now and then for that.
+and broken updates, not against losing the server itself. To keep a second
+copy of every backup somewhere else, name a folder. On a Mac mini running
+Stash in an OrbStack machine, a folder in iCloud Drive works (the backups
+include the `.env` secrets, so pick somewhere only you can read):
+
+```bash
+sudo ./install.sh backup copy-to "/Users/nigel/Library/Mobile Documents/com~apple~CloudDocs/Stash backups"
+sudo ./install.sh backup copy-to off   # stop copying
+```
+
+The copy keeps the same number of backups as the server.
 
 To restore a database backup, stop the app, load the dump, and start it
 again (replace the folder name):
