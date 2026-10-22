@@ -4,6 +4,22 @@ import { Configuration } from 'webpack'
 import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer'
 
 const analyze = process.env.ANALYZE
+// The Stash app loads the reader with the server as its base address, so
+// fonts keep their /static/fonts paths and come from the server.
+const stashApp = !!process.env.STASH_APP
+
+const fontPathRewrite = {
+  // We want paths like `/static/fonts/Inter/Inter.woff2 to become
+  // `Inter.woff2` which is how they will be bundled on iOS.
+  loader: 'string-replace-loader',
+  options: {
+    search: "('/static/fonts/.*/(.*)')",
+    replace(_s: string, _p: string, group: string) {
+      return group
+    },
+    flags: 'g',
+  },
+}
 
 const config: Configuration = {
   entry: {
@@ -33,18 +49,7 @@ const config: Configuration = {
             loader: 'css-loader',
             options: { url: false },
           },
-          {
-            // We want paths like `/static/fonts/Inter/Inter.woff2 to become
-            // `Inter.woff2` which is how they will be bundled on iOS.
-            loader: 'string-replace-loader',
-            options: {
-              search: "('/static/fonts/.*/(.*)')",
-              replace(_s: string, _p: string, group: string) {
-                return group
-              },
-              flags: 'g',
-            },
-          },
+          ...(stashApp ? [] : [fontPathRewrite]),
         ],
       },
     ],

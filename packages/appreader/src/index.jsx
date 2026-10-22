@@ -6,6 +6,7 @@ import { applyStoredTheme } from '@omnivore/web/lib/themeUpdater'
 import '@omnivore/web/styles/globals.css'
 import '@omnivore/web/styles/articleInnerStyling.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Colophon } from './Colophon.jsx'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,8 +16,37 @@ const queryClient = new QueryClient({
   },
 })
 
+// The Stash app answers each request by calling window.stashReply with the
+// request's id, rather than through a message reply.
+const pendingRequests = new Map()
+let nextRequestId = 1
+window.stashDocumentID = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+window.stashReply = (requestId, result, error) => {
+  const pending = pendingRequests.get(requestId)
+  pendingRequests.delete(requestId)
+  if (!pending) return
+  clearTimeout(pending.timeout)
+  if (error) pending.reject(new Error(error))
+  else pending.resolve(result)
+}
+
 const mutation = async (name, input) => {
-  if (window.webkit) {
+  if (window.stashApp) {
+    const requestId = nextRequestId++
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        pendingRequests.delete(requestId)
+        reject(new Error("Couldn't save your changes. Try again."))
+      }, 30000)
+      pendingRequests.set(requestId, { resolve, reject, timeout })
+      window.webkit.messageHandlers.stashAction.postMessage({
+        actionID: name,
+        requestId,
+        documentID: window.stashDocumentID,
+        input,
+      })
+    })
+  } else if (window.webkit) {
     // Send iOS a message
     const result =
       await window?.webkit?.messageHandlers.articleAction?.postMessage({
@@ -62,6 +92,44 @@ const App = () => {
   applyStoredTheme(false)
 
   const [pageTurn, setPageTurn] = React.useState(window.fullPageScroll ?? false)
+  const [readingWidth, setReadingWidth] = React.useState(window.stashReaderWidth)
+
+  React.useEffect(() => {
+    if (!window.stashApp) return
+    const paragraphs = () => [...document.querySelectorAll('[data-omnivore-anchor-idx]')]
+    const capture = () => {
+      const node = paragraphs().find((element) => element.getBoundingClientRect().bottom > 0)
+      return node ? { node, top: node.getBoundingClientRect().top } : null
+    }
+    let anchor = capture()
+    let restoring = false
+    const restore = (position) => {
+      if (!position?.node.isConnected) return
+      restoring = true
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        window.scrollBy(0, position.node.getBoundingClientRect().top - position.top)
+        restoring = false
+        anchor = capture()
+      }))
+    }
+    window.stashPreservePosition = (change) => {
+      const position = capture()
+      change()
+      restore(position)
+    }
+    const scroll = () => { if (!restoring) anchor = capture() }
+    const resize = () => restore(anchor)
+    const width = (event) => setReadingWidth(event.width)
+    window.addEventListener('scroll', scroll, { passive: true })
+    window.addEventListener('resize', resize)
+    document.addEventListener('stashReaderWidth', width)
+    return () => {
+      window.removeEventListener('scroll', scroll)
+      window.removeEventListener('resize', resize)
+      document.removeEventListener('stashReaderWidth', width)
+      delete window.stashPreservePosition
+    }
+  }, [])
 
   React.useEffect(() => {
     const doPageTurn = (clientX) => () => doubleClickPageTurn({ clientX })
@@ -127,17 +195,23 @@ const App = () => {
         >
           <ArticleContainer
             article={window.omnivoreArticle}
+            viewer={window.omnivoreViewer}
             labels={window.omnivoreArticle.labels}
             isAppleAppEmbed={true}
             highlightBarDisabled={!window.enableHighlightBar}
             fontSize={window.fontSize ?? 18}
             fontFamily={window.fontFamily ?? 'inter'}
-            margin={window.margin}
+            margin={readingWidth ? 1024 - readingWidth : window.margin}
             maxWidthPercentage={window.maxWidthPercentage}
             lineHeight={window.lineHeight}
             highlightOnRelease={window.highlightOnRelease}
             highContrastText={window.prefersHighContrastFont ?? true}
             justifyText={window.justifyText}
+            footer={
+              window.stashColophon ? (
+                <Colophon data={window.stashColophon} />
+              ) : undefined
+            }
             articleMutations={{
               createHighlightMutation: (input) =>
                 mutation('createHighlight', input),
