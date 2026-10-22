@@ -162,11 +162,20 @@ final class ReaderController: NSObject {
       var failure: Any = NSNull()
       do {
         result = try await ReaderBridge.perform(action, input: input)
-        if action == "articleReadingProgress" { LibraryChanges.shared.publishProgress() }
-        else { LibraryChanges.shared.publish() }
+        if ReaderBridge.isQuiet(action) {
+          // Nothing in the lists changed, and the banner belongs to the other actions.
+        } else if action == "articleReadingProgress" {
+          LibraryChanges.shared.publishProgress()
+        } else {
+          LibraryChanges.shared.publish()
+        }
         guard generation == loadGeneration else { return }
-        actionError = nil
-        failedAction = nil
+        if !ReaderBridge.isQuiet(action) {
+          actionError = nil
+          failedAction = nil
+        }
+      } catch is ReaderBridge.Unsupported {
+        failure = "Unsupported action"
       } catch {
         guard generation == loadGeneration else { return }
         actionError = "Couldn't save your changes. Try again."

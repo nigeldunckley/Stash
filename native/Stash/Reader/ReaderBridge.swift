@@ -69,9 +69,54 @@ enum ReaderBridge {
       _ = try payload(data, "saveArticleReadingProgress", "updatedArticle")
       return true
 
+    // The reading trail: the parts of the article you've actually read, kept with it on the
+    // server so the Mac and iPhone add up. These never show an error; the reader tries again.
+    case "readingTrail":
+      guard let id = input["id"] as? String else { return NSNull() }
+      do {
+        let data = try await StashAPI.shared.graphQLJSON("""
+          query ReadingTrail($id: ID!) {
+            readingTrail(id: $id) {
+              ... on ReadingTrailSuccess { trail }
+              ... on ReadingTrailError { errorCodes }
+            }
+          }
+          """, variables: ["id": id])
+        return try payload(data, "readingTrail", "trail")
+      } catch {
+        return NSNull()
+      }
+
+    case "saveReadingTrail":
+      guard let id = input["id"] as? String, let trail = input["trail"] as? String else { return false }
+      do {
+        let data = try await StashAPI.shared.graphQLJSON("""
+          mutation SaveReadingTrail($input: SaveReadingTrailInput!) {
+            saveReadingTrail(input: $input) {
+              ... on ReadingTrailSuccess { trail }
+              ... on ReadingTrailError { errorCodes }
+            }
+          }
+          """, variables: ["input": ["id": id, "trail": trail]])
+        _ = try payload(data, "saveReadingTrail", "trail")
+        return true
+      } catch {
+        return false
+      }
+
     default:
-      return true
+      throw Unsupported()
     }
+  }
+
+  /// An action this version of the app doesn't know, answered with an error so the reader
+  /// isn't left waiting.
+  struct Unsupported: Error {}
+
+  /// Actions that save quietly in the background: no error banner, and nothing for the lists
+  /// to refresh.
+  static func isQuiet(_ action: String) -> Bool {
+    action == "readingTrail" || action == "saveReadingTrail"
   }
 
   private static func payload(_ data: [String: Any], _ field: String, _ key: String) throws -> Any {
