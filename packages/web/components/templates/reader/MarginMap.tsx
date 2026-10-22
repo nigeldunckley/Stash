@@ -804,6 +804,7 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
   saveTrailRef.current = props.saveTrail
   const loadTrailRef = useRef(props.loadTrail)
   loadTrailRef.current = props.loadTrail
+  const queueSave = useRef<(text: string) => void>(() => undefined)
   const [resume] = useState(() => props.resumeProgress ?? 0)
   const dragging = useRef(false)
   const trackRef = useRef<HTMLDivElement | null>(null)
@@ -911,6 +912,10 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
         else if (!local && resume >= 3) {
           add(`0-${Math.min(STEPS, Math.round(resume * 10))}`)
         }
+        // Anything the server hasn't got yet (read offline, or while it
+        // was down) goes up with the next save.
+        const text = formatTrail(trail.current)
+        if (text && text != (server ?? '')) queueSave.current(text)
       })
     return () => {
       live = false
@@ -921,15 +926,27 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
   // (and when you leave).
   useEffect(() => {
     if (!itemId) return
+    saving.current.pending = ''
+    // The server merges what it's sent, so the whole trail can go each
+    // time. It stays pending until a save succeeds.
     const flush = () => {
       window.clearTimeout(saving.current.timer)
       const text = saving.current.pending
-      saving.current.pending = ''
       const save = saveTrailRef.current
       if (!text || !save) return
       Promise.resolve()
         .then(() => save({ id: itemId, trail: text }))
+        .then((ok) => {
+          if (ok !== false && saving.current.pending == text) {
+            saving.current.pending = ''
+          }
+        })
         .catch(() => undefined)
+    }
+    queueSave.current = (text: string) => {
+      saving.current.pending = text
+      window.clearTimeout(saving.current.timer)
+      saving.current.timer = window.setTimeout(flush, 5000)
     }
     const onHide = () => {
       if (document.visibilityState == 'hidden') flush()
@@ -981,17 +998,7 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
       } catch {
         // Private windows: the server still keeps it.
       }
-      saving.current.pending = text
-      window.clearTimeout(saving.current.timer)
-      saving.current.timer = window.setTimeout(() => {
-        const save = saveTrailRef.current
-        const pending = saving.current.pending
-        saving.current.pending = ''
-        if (!save || !pending) return
-        Promise.resolve()
-          .then(() => save({ id: itemId, trail: pending }))
-          .catch(() => undefined)
-      }, 5000)
+      queueSave.current(text)
     }, 1000)
     return () => window.clearInterval(timer)
   }, [measured, itemId, props.contentRef])

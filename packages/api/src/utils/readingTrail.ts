@@ -31,5 +31,19 @@ export const mergeTrail = (...trails: TrailRange[][]): TrailRange[] => {
   return out
 }
 
+// At most MAX_RANGES: the narrowest gaps are filled in first.
+export const capTrail = (ranges: TrailRange[]): TrailRange[] => {
+  const out = ranges.map(([start, end]): TrailRange => [start, end])
+  while (out.length > MAX_RANGES) {
+    let at = 1
+    for (let i = 2; i < out.length; i++) {
+      if (out[i][0] - out[i - 1][1] < out[at][0] - out[at - 1][1]) at = i
+    }
+    out[at - 1][1] = Math.max(out[at - 1][1], out[at][1])
+    out.splice(at, 1)
+  }
+  return out
+}
+
 export const formatTrail = (ranges: TrailRange[]): string =>
   ranges.map(([start, end]) => `${start}-${end}`).join(',')
