@@ -9,10 +9,15 @@ import {
 } from '../generated/graphql'
 import { createPubSubClient, PubsubClient } from '../pubsub'
 import { redisDataSource } from '../redis_data_source'
-import { enqueueFetchContentJob } from '../utils/createTask'
+import { enqueueFetchContentJob, enqueueRescueSave } from '../utils/createTask'
 import { cleanUrl, generateSlug } from '../utils/helpers'
 import { logger } from '../utils/logger'
-import { createOrUpdateLibraryItem } from './library_item'
+import { authTrx } from '../repository'
+import { libraryItemRepository } from '../repository/library_item'
+import {
+  createOrUpdateLibraryItem,
+  deleteLibraryItemById,
+} from './library_item'
 
 interface PageSaveRequest {
   user: User
@@ -31,6 +36,12 @@ interface PageSaveRequest {
 }
 
 const SAVING_CONTENT = 'Your link is being saved...'
+// An item in one of these states never got its article.
+const UNREAD_STATES = [
+  LibraryItemState.Processing,
+  LibraryItemState.Failed,
+  LibraryItemState.ContentNotFetched,
+]
 
 const isPrivateIP = privateIpLib.default
 
@@ -134,6 +145,23 @@ export const createPageSaveRequest = async ({
   const userId = user.id
   url = cleanUrl(url)
 
+  // Saving a link again after deleting it, or after it failed to read,
+  // starts it afresh rather than reviving the old copy at its old date.
+  if (!subscription) {
+    const existing = await authTrx(
+      (tx) =>
+        tx
+          .withRepository(libraryItemRepository)
+          .findByUserIdAndUrl(userId, url),
+      { uid: userId }
+    )
+    if (existing?.state === LibraryItemState.Deleted) {
+      await deleteLibraryItemById(existing.id, userId)
+    } else if (existing && UNREAD_STATES.includes(existing.state)) {
+      savedAt = savedAt || new Date()
+    }
+  }
+
   // create processing item
   const libraryItem = await createOrUpdateLibraryItem(
     {
@@ -179,6 +207,16 @@ export const createPageSaveRequest = async ({
     publishedAt: publishedAt?.toISOString(),
     rssFeedUrl: subscription,
   })
+
+  // Feeds read pages directly already; saved links get the same fallback
+  // in case the browser fetch never lands.
+  if (!subscription) {
+    try {
+      await enqueueRescueSave({ userId, libraryItemId: libraryItem.id })
+    } catch (error) {
+      logger.error('failed to enqueue rescue-save', { url, error })
+    }
+  }
 
   return libraryItem
 }

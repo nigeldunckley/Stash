@@ -56,7 +56,7 @@ const createSlug = (url: string, title?: string | null | undefined) => {
   return [generateSlug(title || croppedPathname), croppedPathname]
 }
 
-const shouldParseInBackend = (input: SavePageInput): boolean => {
+export const shouldParseInBackend = (input: SavePageInput): boolean => {
   return (
     ALREADY_PARSED_SOURCES.indexOf(input.source) === -1 &&
     FORCE_PUPPETEER_URLS.some((regex) => {

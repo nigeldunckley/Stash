@@ -60,6 +60,7 @@ import {
   PROCESS_YOUTUBE_VIDEO_JOB_NAME,
 } from './jobs/process-youtube-video'
 import { pruneTrashJob, PRUNE_TRASH_JOB } from './jobs/prune_trash'
+import { rescueSave, RESCUE_SAVE_JOB } from './jobs/rescue_save'
 import {
   REFRESH_ALL_FEEDS_JOB_NAME,
   refreshAllFeeds,
@@ -193,6 +194,8 @@ export const createWorker = (connection: ConnectionOptions) =>
           }
           case THUMBNAIL_JOB:
             return findThumbnail(job.data)
+          case RESCUE_SAVE_JOB:
+            return rescueSave(job.data)
           case TRIGGER_RULE_JOB_NAME:
             return triggerRule(job.data)
           case UPDATE_LABELS_JOB:

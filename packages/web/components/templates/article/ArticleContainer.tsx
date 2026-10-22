@@ -8,6 +8,7 @@ import { Button } from '../../elements/Button'
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { ReportIssuesModal } from './ReportIssuesModal'
 import { ReaderHeaderImage } from './ReaderHeaderImage'
+import { isUnparsedContent, ParseFailedNotice } from './ParseFailedNotice'
 import { reportIssueMutation } from '../../../lib/networking/mutations/reportIssueMutation'
 import { updateTheme, updateThemeLocally } from '../../../lib/themeUpdater'
 import { ArticleMutations } from '../../../lib/articleActions'
@@ -523,21 +524,28 @@ export function ArticleContainer(props: ArticleContainerProps): JSX.Element {
             />
           )} */}
         </VStack>
-        <Article
-          articleId={props.article.id}
-          content={props.article.content}
-          highlightHref={highlightHref}
-          initialAnchorIndex={props.article.readingProgressAnchorIndex}
-          initialReadingProgressTop={props.article.readingProgressTopPercent}
-          resumeProgress={props.article.readingProgressPercent}
-          articleMutations={props.articleMutations}
-          isAppleAppEmbed={props.isAppleAppEmbed}
-          pageUrls={[props.article.originalArticleUrl, props.article.url]}
-          wordsCount={props.article.wordsCount}
-          highlightQuotes={(props.article.highlights ?? [])
-            .map((highlight) => highlight.quote ?? '')
-            .filter(Boolean)}
-        />
+        {!props.isAppleAppEmbed && isUnparsedContent(props.article.content) ? (
+          <ParseFailedNotice
+            url={props.article.originalArticleUrl}
+            slug={props.article.slug}
+          />
+        ) : (
+          <Article
+            articleId={props.article.id}
+            content={props.article.content}
+            highlightHref={highlightHref}
+            initialAnchorIndex={props.article.readingProgressAnchorIndex}
+            initialReadingProgressTop={props.article.readingProgressTopPercent}
+            resumeProgress={props.article.readingProgressPercent}
+            articleMutations={props.articleMutations}
+            isAppleAppEmbed={props.isAppleAppEmbed}
+            pageUrls={[props.article.originalArticleUrl, props.article.url]}
+            wordsCount={props.article.wordsCount}
+            highlightQuotes={(props.article.highlights ?? [])
+              .map((highlight) => highlight.quote ?? '')
+              .filter(Boolean)}
+          />
+        )}
         {props.footer}
         <Box css={{ height: '100px' }} />
       </Box>
