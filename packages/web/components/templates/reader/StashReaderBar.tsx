@@ -204,7 +204,6 @@ const TimeLeftButton = styled('button', {
   '@media (hover: hover)': {
     '&:hover': { color: '$stInk', background: '$stSurface' },
   },
-  '@smDown': { display: 'none' },
 })
 
 const MenuGlyph = styled('span', {
@@ -410,10 +409,12 @@ export function StashReaderBar(props: StashReaderBarProps): JSX.Element {
         {left &&
           left !== 'Read' &&
           (sections.count > 1 ? (
+            // On phone it stands in for the title until the title reaches the bar.
             <TimeLeftButton
               type="button"
               onClick={openContents}
               title="Contents"
+              style={phone && titleInBar ? { display: 'none' } : undefined}
             >
               {left} left
             </TimeLeftButton>
