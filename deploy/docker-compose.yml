@@ -80,6 +80,11 @@ services:
     command: ["yarn", "workspace", "@omnivore/api", "start_queue_processor"]
     container_name: reader-queue-processor
     env_file: .env
+    # On a 2 GB server the queue grows over days until the box swaps and
+    # articles time out. Cap it so it restarts instead of starving the API.
+    environment:
+      - NODE_OPTIONS=--max-old-space-size=320
+    mem_limit: 450m
     depends_on:
       api:
         condition: service_started
@@ -111,6 +116,8 @@ services:
     environment:
       - USE_FIREFOX=true
     env_file: .env
+    # The headless browser for full-page fetches; same reason as the queue.
+    mem_limit: 600m
     depends_on:
       redis:
         condition: service_healthy
