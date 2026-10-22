@@ -11,12 +11,6 @@ import { State } from '../../../lib/networking/fragments/articleFragment'
 import { ReaderSettings } from '../../../lib/hooks/useReaderSettings'
 import { useMediaQuery } from '../../../lib/hooks/useMediaQuery'
 import { formatMinutes, minutesLeft } from '../../../lib/readingTime'
-import {
-  SECTIONS_EVENT,
-  SectionsDetail,
-  openContents,
-  sectionNumber,
-} from '../../../lib/readerSections'
 import { siteName } from '../../../lib/textFormatting'
 import { setThemeColorToken } from '../../../lib/themeUpdater'
 import {
@@ -77,45 +71,6 @@ const BarTitle = styled('div', {
       true: { opacity: 1, transform: 'translate(-50%, 0)' },
     },
   },
-})
-
-// On a phone, the section you're in sits under the headline; a tap on
-// either opens the article's contents.
-const BarTitleButton = styled('button', {
-  all: 'unset',
-  display: 'grid',
-  justifyItems: 'center',
-  gap: '2px',
-  minWidth: 0,
-  maxWidth: '100%',
-  cursor: 'pointer',
-  textAlign: 'center',
-  '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '2px' },
-  'span, small': {
-    maxWidth: '100%',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  small: {
-    fontFamily: '$mono',
-    fontSize: '10px',
-    fontWeight: 400,
-    letterSpacing: '0.06em',
-    textTransform: 'uppercase',
-    color: '$stMuted',
-  },
-})
-
-// A notch on the progress line where each section starts.
-const Notch = styled('div', {
-  position: 'absolute',
-  bottom: '-4px',
-  width: '1px',
-  height: '6px',
-  background: '$stInk',
-  opacity: 0.55,
-  pointerEvents: 'none',
 })
 
 const Bar = styled('header', {
@@ -188,25 +143,6 @@ const TimeLeft = styled('span', {
   '@smDown': { display: 'none' },
 })
 
-// With sections, the time left opens the contents.
-const TimeLeftButton = styled('button', {
-  all: 'unset',
-  fontFamily: '$mono',
-  fontSize: '$micro',
-  color: '$stMuted',
-  whiteSpace: 'nowrap',
-  marginRight: '2px',
-  padding: '4px 6px',
-  borderRadius: '$sm',
-  fontVariantNumeric: 'tabular-nums',
-  cursor: 'pointer',
-  '&:focus-visible': { outline: '2px solid $stAccent' },
-  '@media (hover: hover)': {
-    '&:hover': { color: '$stInk', background: '$stSurface' },
-  },
-  '@smDown': { display: 'none' },
-})
-
 const MenuGlyph = styled('span', {
   display: 'grid',
   placeItems: 'center',
@@ -258,18 +194,6 @@ export function StashReaderBar(props: StashReaderBarProps): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false)
   const [titleInBar, setTitleInBar] = useState(false)
   const phone = useMediaQuery('(max-width: 575px)')
-  const [sections, setSections] = useState<SectionsDetail>({
-    count: 0,
-    marks: [],
-  })
-
-  // The margin map tells the bar about the article's sections.
-  useEffect(() => {
-    const onSections = (event: Event) =>
-      setSections((event as CustomEvent<SectionsDetail>).detail)
-    window.addEventListener(SECTIONS_EVENT, onSections)
-    return () => window.removeEventListener(SECTIONS_EVENT, onSections)
-  }, [])
 
   // Safari's toolbar takes the reader's paper colour while reading.
   useEffect(() => {
@@ -356,15 +280,6 @@ export function StashReaderBar(props: StashReaderBarProps): JSX.Element {
           aria-hidden="true"
           style={{ transform: `scaleX(${percent / 100})` }}
         />
-        {phone &&
-          sections.count > 1 &&
-          sections.marks.map((mark, index) => (
-            <Notch
-              key={index}
-              aria-hidden="true"
-              style={{ left: `${mark * 100}%` }}
-            />
-          ))}
         <IconButton label="Back" shortcut="u" onClick={props.onBack}>
           <CaretLeft size={18} />
         </IconButton>
@@ -384,42 +299,11 @@ export function StashReaderBar(props: StashReaderBarProps): JSX.Element {
         )}
         {item && (
           <BarTitle shown={titleInBar} aria-hidden={!titleInBar}>
-            {phone && sections.count > 1 ? (
-              <BarTitleButton
-                type="button"
-                tabIndex={titleInBar ? undefined : -1}
-                style={{ pointerEvents: titleInBar ? 'auto' : 'none' }}
-                onClick={openContents}
-                aria-label="Contents"
-              >
-                <span>{item.title}</span>
-                <small>
-                  {sections.current
-                    ? `${sectionNumber(sections.current.number)} ${
-                        sections.current.label
-                      }`
-                    : 'Contents'}
-                </small>
-              </BarTitleButton>
-            ) : (
-              <span>{item.title}</span>
-            )}
+            <span>{item.title}</span>
           </BarTitle>
         )}
         <span style={{ flex: 1 }} />
-        {left &&
-          left !== 'Read' &&
-          (sections.count > 1 ? (
-            <TimeLeftButton
-              type="button"
-              onClick={openContents}
-              title="Contents"
-            >
-              {left} left
-            </TimeLeftButton>
-          ) : (
-            <TimeLeft>{left} left</TimeLeft>
-          ))}
+        {left && left !== 'Read' && <TimeLeft>{left} left</TimeLeft>}
         {!phone && (
           <>
             <IconButton

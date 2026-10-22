@@ -432,9 +432,7 @@ export function Article(props: ArticleProps): JSX.Element {
         contentKey={props.content}
         highlights={props.highlightQuotes ?? []}
       />
-      {/* Stash's own iPhone and Mac app shows it; the old embedded readers don't. */}
-      {(!props.isAppleAppEmbed ||
-        (typeof window !== 'undefined' && (window as any).stashApp)) && (
+      {!props.isAppleAppEmbed && (
         <MarginMap
           contentRef={articleContentRef}
           contentKey={props.content}

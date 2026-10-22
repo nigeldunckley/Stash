@@ -10,34 +10,22 @@ import {
 import { styled } from '../../tokens/stitches.config'
 import { Ribbon } from '../../elements/stash/Ribbon'
 import { formatMinutes, readingMinutes } from '../../../lib/readingTime'
-import {
-  CONTENTS_EVENT,
-  SECTIONS_EVENT,
-  SectionsDetail,
-  sectionNumber,
-  shortNames,
-} from '../../../lib/readerSections'
 
 // The margin map: the whole article drawn small down the right edge of the
-// window. Every paragraph is a few hairlines, headings get tiny numbered
-// labels, pictures are grey blocks and your highlights are orange ticks. A
-// bracket shows the screen you're on, and a running head above names the
-// section you're in. Rest the pointer on it and it unfolds into contents;
-// click or drag to travel.
+// window. Every paragraph is a few hairlines, headings get tiny labels,
+// pictures are grey blocks and your highlights are orange ticks. A bracket
+// shows the screen you're on; hover for a preview, click or drag to travel.
 //
 // On a wide window it is always there. On a phone it appears while you
-// scroll quickly, as a scrubber, and steps away when you stop; the contents
-// open as a sheet from the reader's top bar.
+// scroll quickly, as a scrubber, and steps away when you stop.
 
 // Width the map takes from the right margin, so margin notes and pull
 // quotes can leave room for it.
-export const MAP_ROOM = 108
+export const MAP_ROOM = 84
 const WIDE = 1100
 const PHONE = 760
-const WIDTH = 56
+const WIDTH = 44
 const LINE_GAP = 3
-// How far down the screen counts as "where you're reading".
-const EYE = 0.3
 
 const BLOCKS =
   'p, h1, h2, h3, h4, blockquote, figure, img, pre, ul, ol, table, iframe'
@@ -48,25 +36,12 @@ type Block = {
   height: number
   label?: string
   preview: string
-  words: number
 }
 
 type Shape = {
   blocks: Block[]
   highlights: number[]
   height: number
-}
-
-type Section = {
-  // 0 for the opening before the first heading.
-  number: number
-  label: string
-  short: string
-  top: number
-  end: number
-  words: number
-  highlights: number
-  preview: string
 }
 
 // Whether the map is showing in the margin at this window width.
@@ -77,9 +52,8 @@ export const marginMapShown = (): boolean =>
 
 const Root = styled('div', {
   position: 'fixed',
-  top: '84px',
-  // Leaves room for labels that run past the map's right edge.
-  right: '30px',
+  top: '96px',
+  right: '18px',
   width: `${WIDTH}px`,
   zIndex: 3,
   userSelect: 'none',
@@ -96,38 +70,6 @@ const Root = styled('div', {
     boxShadow: '0 8px 20px rgba(9, 9, 11, 0.08)',
   },
   '&[data-hidden]': { opacity: 0, pointerEvents: 'none' },
-})
-
-// The section you're in, over the map: "03 of 08" and its full name.
-const Head = styled('div', {
-  display: 'grid',
-  justifyItems: 'end',
-  gap: '3px',
-  width: '150px',
-  marginLeft: `${WIDTH - 150}px`,
-  marginBottom: '14px',
-  textAlign: 'right',
-  pointerEvents: 'none',
-})
-
-const HeadCount = styled('div', {
-  fontFamily: '$mono',
-  fontSize: '9px',
-  letterSpacing: '0.1em',
-  textTransform: 'uppercase',
-  color: 'var(--font-color-muted)',
-})
-
-const HeadTitle = styled('div', {
-  fontFamily: 'var(--text-font-family)',
-  fontStyle: 'italic',
-  fontSize: '13px',
-  lineHeight: 1.25,
-  color: 'var(--font-color)',
-  display: '-webkit-box',
-  WebkitLineClamp: 2,
-  WebkitBoxOrient: 'vertical',
-  overflow: 'hidden',
 })
 
 const Track = styled('div', {
@@ -154,21 +96,18 @@ const Read = styled('div', {
 const Label = styled('div', {
   position: 'absolute',
   left: 0,
-  right: '-18px',
-  paddingRight: '2px',
+  right: '-12px',
   fontFamily: '$mono',
   fontSize: '7.5px',
   lineHeight: '9px',
-  letterSpacing: '0.06em',
+  letterSpacing: '0.08em',
   textTransform: 'uppercase',
   whiteSpace: 'nowrap',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
-  color: 'var(--font-color-muted)',
+  color: 'var(--font-color)',
   background: '$readerBg',
   pointerEvents: 'none',
-  '&[data-read]': { color: 'var(--font-color)' },
-  '&[data-current]': { color: '$stAccent', fontWeight: 600 },
 })
 
 const Bracket = styled('div', {
@@ -243,196 +182,7 @@ const PreviewText = styled('div', {
   overflow: 'hidden',
 })
 
-// The contents the map unfolds into, to its left.
-const Panel = styled('div', {
-  position: 'absolute',
-  top: 0,
-  right: 'calc(100% + 18px)',
-  width: '300px',
-  maxHeight: 'calc(100vh - 120px)',
-  display: 'flex',
-  flexDirection: 'column',
-  background: '$stSurface',
-  border: '1px solid $stLineStrong',
-  borderRadius: '8px',
-  boxShadow: '0 16px 36px rgba(9, 9, 11, 0.12)',
-  userSelect: 'none',
-  animation: 'stashMapUnfold 160ms cubic-bezier(0.2, 0, 0, 1)',
-  '@keyframes stashMapUnfold': {
-    from: { opacity: 0, transform: 'translateX(6px)' },
-    to: { opacity: 1, transform: 'none' },
-  },
-  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
-})
-
-const Scrim = styled('div', {
-  position: 'fixed',
-  inset: 0,
-  zIndex: 20,
-  background: 'rgba(9, 9, 11, 0.2)',
-  '@media print': { display: 'none' },
-})
-
-// On a phone, the same contents as a sheet from the bottom.
-const Sheet = styled('div', {
-  position: 'fixed',
-  left: 0,
-  right: 0,
-  bottom: 0,
-  zIndex: 21,
-  maxHeight: '72vh',
-  display: 'flex',
-  flexDirection: 'column',
-  paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-  background: '$stSurface',
-  borderTop: '1px solid $stLineStrong',
-  borderRadius: '18px 18px 0 0',
-  boxShadow: '0 -12px 32px rgba(9, 9, 11, 0.12)',
-  fontFamily: '$inter',
-  animation: 'stashSheetRise 220ms cubic-bezier(0.2, 0, 0, 1)',
-  '@keyframes stashSheetRise': {
-    from: { transform: 'translateY(24px)', opacity: 0 },
-    to: { transform: 'none', opacity: 1 },
-  },
-  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
-  '@media print': { display: 'none' },
-})
-
-const Grabber = styled('div', {
-  alignSelf: 'center',
-  width: '36px',
-  height: '4px',
-  margin: '8px 0 6px',
-  borderRadius: '2px',
-  background: '$stLineStrong',
-})
-
-const ContentsTop = styled('div', {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '12px',
-  padding: '12px 16px 10px',
-  borderBottom: '1px solid $stLine',
-  fontFamily: '$mono',
-  fontSize: '10px',
-  letterSpacing: '0.1em',
-  textTransform: 'uppercase',
-  color: '$stMuted',
-})
-
-const Rows = styled('div', {
-  overflowY: 'auto',
-  overscrollBehavior: 'contain',
-  padding: '4px 0',
-})
-
-const Row = styled('button', {
-  all: 'unset',
-  boxSizing: 'border-box',
-  width: '100%',
-  display: 'grid',
-  gridTemplateColumns: '24px minmax(0, 1fr) auto',
-  columnGap: '8px',
-  rowGap: '5px',
-  padding: '8px 16px',
-  cursor: 'pointer',
-  fontFamily: '$inter',
-  color: '$stInk2',
-  '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '-2px' },
-  '@media (hover: hover)': { '&:hover': { background: '$stCanvas' } },
-  '&[data-hover]': { background: '$stCanvas' },
-  '&[data-read]': { color: '$stInk' },
-  '&[data-current]': {
-    color: '$stInk',
-    background: 'color-mix(in srgb, $colors$stAccent 7%, transparent)',
-  },
-  '@smDown': { minHeight: '48px', padding: '9px 20px' },
-})
-
-const RowNumber = styled('span', {
-  paddingTop: '2px',
-  fontFamily: '$mono',
-  fontSize: '10px',
-  color: '$stMuted',
-  '[data-read] > &': { color: '$stInk' },
-  '[data-current] > &': { color: '$stAccent', fontWeight: 600 },
-})
-
-const RowTitle = styled('span', {
-  fontSize: '13.5px',
-  lineHeight: 1.3,
-  '[data-current] > &': { fontWeight: 600 },
-  '@smDown': { fontSize: '14.5px' },
-})
-
-const RowMinutes = styled('span', {
-  paddingTop: '2px',
-  fontFamily: '$mono',
-  fontSize: '10px',
-  letterSpacing: '0.04em',
-  color: '$stMuted',
-  textAlign: 'right',
-  whiteSpace: 'nowrap',
-})
-
-const RowLine = styled('span', {
-  gridColumn: '2',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px',
-})
-
-const RowRead = styled('span', {
-  position: 'relative',
-  flex: 1,
-  height: '2px',
-  borderRadius: '1px',
-  overflow: 'hidden',
-  background: '$stLine',
-  span: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    background: '$stInk',
-  },
-  '[data-current] &': { span: { background: '$stAccent' } },
-})
-
-const Dot = styled('span', {
-  width: '5px',
-  height: '5px',
-  borderRadius: '50%',
-  background: '$stAccent',
-  flexShrink: 0,
-})
-
-const RowPreview = styled('span', {
-  gridColumn: '2 / 4',
-  fontFamily: 'var(--text-font-family)',
-  fontSize: '12.5px',
-  lineHeight: 1.4,
-  color: '$stMuted',
-  display: '-webkit-box',
-  WebkitLineClamp: 2,
-  WebkitBoxOrient: 'vertical',
-  overflow: 'hidden',
-})
-
-const ContentsFoot = styled('div', {
-  padding: '11px 16px',
-  borderTop: '1px solid $stLine',
-  fontFamily: '$mono',
-  fontSize: '10px',
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-  color: '$stInk',
-  fontWeight: 500,
-})
-
 const clean = (text: string) => text.replace(/\s+/g, ' ').trim()
-
-const countWords = (text: string) => (text ? text.split(' ').length : 0)
 
 const measure = (root: HTMLElement): Shape => {
   const origin = root.getBoundingClientRect().top
@@ -452,14 +202,13 @@ const measure = (root: HTMLElement): Shape => {
         (!text && element.querySelector('img'))
       ? 'picture'
       : 'text'
-    if ((kind == 'text' || kind == 'heading') && !text) return
+    if (kind == 'text' && !text) return
     blocks.push({
       kind,
       top: rect.top - origin,
       height: rect.height,
       label: kind == 'heading' ? text : undefined,
       preview: text.slice(0, 220),
-      words: kind == 'heading' ? 0 : countWords(text),
     })
   })
   const seen = new Set<string>()
@@ -475,68 +224,8 @@ const measure = (root: HTMLElement): Shape => {
   return { blocks, highlights, height: root.scrollHeight }
 }
 
-// The article's sections, one per heading, plus the opening before the
-// first. None unless there are at least two headings.
-const findSections = (shape: Shape): Section[] => {
-  const sections: Section[] = []
-  let number = 0
-  shape.blocks.forEach((block) => {
-    if (block.kind == 'heading') {
-      number += 1
-      sections.push({
-        number,
-        label: block.label ?? '',
-        short: '',
-        top: block.top,
-        end: shape.height,
-        words: 0,
-        highlights: 0,
-        preview: '',
-      })
-      return
-    }
-    if (!sections.length) {
-      sections.push({
-        number: 0,
-        label: 'Opening',
-        short: 'Opening',
-        top: 0,
-        end: shape.height,
-        words: 0,
-        highlights: 0,
-        preview: '',
-      })
-    }
-    const section = sections[sections.length - 1]
-    section.words += block.words
-    if (!section.preview && block.kind != 'picture') {
-      section.preview = block.preview
-    }
-  })
-  if (number < 2) return []
-  sections.forEach((section, index) => {
-    section.end = sections[index + 1]?.top ?? shape.height
-  })
-  shape.highlights.forEach((y) => {
-    const section = sections.filter((s) => s.top <= y + 1).pop()
-    if (section) section.highlights += 1
-  })
-  const headed = sections.filter((section) => section.number > 0)
-  const shorts = shortNames(headed.map((section) => section.label))
-  headed.forEach((section, index) => {
-    section.short = shorts[index]
-  })
-  return sections
-}
-
 // A paragraph's last line is a little short, the way text really ends.
 const lastLine = (index: number) => 40 + ((index * 37) % 50)
-
-const finishTime = (minutes: number) =>
-  new Date(Date.now() + minutes * 60000).toLocaleTimeString([], {
-    hour: 'numeric',
-    minute: '2-digit',
-  })
 
 type MarginMapProps = {
   contentRef: MutableRefObject<HTMLDivElement | null>
@@ -552,13 +241,9 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
   const [scroll, setScroll] = useState({ y: 0, view: 800, top: 0 })
   const [awake, setAwake] = useState(false)
   const [hover, setHover] = useState<number | undefined>()
-  // The contents: unfolded beside the map, or as a sheet on a phone.
-  const [unfolded, setUnfolded] = useState(false)
-  const [sheet, setSheet] = useState(false)
   const [resume] = useState(() => props.resumeProgress ?? 0)
   const dragging = useRef(false)
   const trackRef = useRef<HTMLDivElement | null>(null)
-  const unfoldTimer = useRef(0)
 
   // Measure the article, and again whenever it changes size.
   useEffect(() => {
@@ -596,9 +281,8 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
   }, [props.contentRef, props.contentKey])
 
   // Follow the scroll; on a phone, wake up only for a quick scroll.
-  const measured = !!shape
   useEffect(() => {
-    if (!measured) return
+    if (mode == 'none') return
     let last = { y: window.scrollY, at: performance.now() }
     let sleep = 0
     const onScroll = () => {
@@ -628,97 +312,14 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
       clearTimeout(sleep)
       window.removeEventListener('scroll', onScroll)
     }
-  }, [mode, props.contentRef, measured])
-
-  const sections = useMemo(() => (shape ? findSections(shape) : []), [shape])
-
-  // Asked for the contents from elsewhere (the top bar, or the app).
-  useEffect(() => {
-    if (!sections.length) return
-    const open = () => {
-      if (mode == 'wide') setUnfolded(true)
-      else setSheet(true)
-    }
-    window.addEventListener(CONTENTS_EVENT, open)
-    return () => window.removeEventListener(CONTENTS_EVENT, open)
-  }, [sections.length, mode])
-
-  useEffect(() => {
-    if (!sheet && !unfolded) return
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key != 'Escape') return
-      setSheet(false)
-      setUnfolded(false)
-    }
-    // Opened from the top bar, the contents close on a click elsewhere.
-    const onPointer = (event: PointerEvent) => {
-      const target = event.target as HTMLElement | null
-      if (!target?.closest('[data-margin-map]')) setUnfolded(false)
-    }
-    window.addEventListener('keydown', onKey)
-    document.addEventListener('pointerdown', onPointer)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      document.removeEventListener('pointerdown', onPointer)
-    }
-  }, [sheet, unfolded])
-
-  useEffect(() => () => window.clearTimeout(unfoldTimer.current), [])
-
-  const showsMap =
-    !!shape && mode != 'none' && shape.height >= 2.5 * scroll.view
+  }, [mode, props.contentRef])
 
   const height = useMemo(() => {
     if (!shape) return 0
-    const room =
-      window.innerHeight -
-      (mode == 'phone' ? 220 : 190) -
-      (mode == 'wide' && sections.length ? 50 : 0)
+    const room = window.innerHeight - (mode == 'phone' ? 220 : 190)
     return Math.max(80, Math.min(room, shape.height * 0.2))
-  }, [shape, mode, sections.length])
+  }, [shape, mode])
   const scale = shape ? height / Math.max(1, shape.height) : 0
-
-  // Where you're reading, in the article's own coordinates.
-  const eye = scroll.y - scroll.top + scroll.view * EYE
-  const readEnd = scroll.y + scroll.view - scroll.top
-  const current = sections.filter((section) => section.top <= eye).pop()
-
-  // Tell the top bar (and the app) about the sections and where you are.
-  const marksKey = useMemo(() => {
-    if (!sections.length || typeof document == 'undefined') return ''
-    const max = document.documentElement.scrollHeight - scroll.view
-    if (max <= 0) return ''
-    return sections
-      .filter((section) => section.number > 0)
-      .map((section) =>
-        Math.min(
-          1,
-          Math.max(0, (scroll.top + section.top - scroll.view * EYE) / max)
-        ).toFixed(4)
-      )
-      .join(',')
-  }, [sections, scroll.top, scroll.view, shape?.height])
-  const headed = sections.filter((section) => section.number > 0).length
-  const currentNumber = current?.number
-  const currentLabel = current?.label
-  useEffect(() => {
-    const detail: SectionsDetail = {
-      count: headed,
-      current:
-        currentNumber && currentLabel
-          ? { number: currentNumber, label: currentLabel }
-          : undefined,
-      marks: marksKey ? marksKey.split(',').map(Number) : [],
-    }
-    window.dispatchEvent(new CustomEvent(SECTIONS_EVENT, { detail }))
-  }, [headed, currentNumber, currentLabel, marksKey])
-  useEffect(
-    () => () => {
-      const detail: SectionsDetail = { count: 0, marks: [] }
-      window.dispatchEvent(new CustomEvent(SECTIONS_EVENT, { detail }))
-    },
-    []
-  )
 
   const lines = useMemo(() => {
     if (!shape) return []
@@ -746,26 +347,15 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
   const labels = useMemo(() => {
     if (!shape || mode == 'phone') return []
     let floor = -Infinity
-    const headed = sections.filter((section) => section.number > 0)
-    const source = headed.length
-      ? headed.map((section) => ({
-          y: section.top * scale,
-          number: section.number,
-          text: `${sectionNumber(section.number)} ${section.short}`,
-        }))
-      : shape.blocks
-          .filter((block) => block.kind == 'heading')
-          .map((block) => ({
-            y: block.top * scale,
-            number: 0,
-            text: block.label ?? '',
-          }))
-    return source.filter((label) => {
-      if (label.y < floor) return false
-      floor = label.y + 12
-      return true
-    })
-  }, [shape, sections, scale, mode])
+    return shape.blocks
+      .filter((block) => block.kind == 'heading')
+      .map((block) => ({ y: block.top * scale, text: block.label ?? '' }))
+      .filter((label) => {
+        if (label.y < floor) return false
+        floor = label.y + 12
+        return true
+      })
+  }, [shape, scale, mode])
 
   const travel = useCallback(
     (clientY: number, smooth: boolean) => {
@@ -773,21 +363,12 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
       if (!track || !scale) return
       const y = (clientY - track.getBoundingClientRect().top) / scale
       window.scrollTo({
-        top: scroll.top + y - window.innerHeight * EYE,
+        top: scroll.top + y - window.innerHeight * 0.3,
         behavior: smooth ? 'smooth' : 'auto',
       })
     },
     [scale, scroll.top]
   )
-
-  // Go to a section: its heading lands just under the top bar.
-  const goTo = (section: Section) => {
-    const top =
-      section.number == 0 ? scroll.top - 120 : scroll.top + section.top
-    window.scrollTo({ top: Math.max(0, top - 84), behavior: 'smooth' })
-    setSheet(false)
-    setUnfolded(false)
-  }
 
   useEffect(() => {
     const move = (event: PointerEvent) => {
@@ -804,114 +385,27 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
     }
   }, [travel])
 
-  if (!shape || (!showsMap && !sheet)) {
+  if (!shape || mode == 'none' || shape.height < 2.5 * scroll.view) {
     return null
-  }
-
-  const total = readingMinutes(props.wordsCount)
-  const done = Math.min(1, Math.max(0, readEnd / shape.height))
-  const leftMinutes =
-    total !== undefined ? Math.round(total * (1 - done)) : undefined
-  const left = formatMinutes(leftMinutes)
-  const allWords = sections.reduce((sum, section) => sum + section.words, 0)
-  // Each section's share of the reading time, rounded so they add up.
-  const shares = sections.map((section) =>
-    total && allWords ? (total * section.words) / allWords : 0
-  )
-  const whole = shares.map(Math.floor)
-  let spare = (total ?? 0) - whole.reduce((sum, n) => sum + n, 0)
-  shares
-    .map((share, index) => ({ index, rest: share - Math.floor(share) }))
-    .sort((a, b) => b.rest - a.rest)
-    .forEach(({ index }) => {
-      if (spare-- > 0) whole[index] += 1
-    })
-  const sectionMinutes = (section: Section) => {
-    const minutes = whole[sections.indexOf(section)]
-    if (!section.words || minutes === undefined) return ''
-    return minutes < 1 ? '<1 min' : `${minutes} min`
-  }
-
-  // What's under the pointer, as a place in the article.
-  const hoverY = hover !== undefined && scale ? hover / scale : undefined
-  const hovered =
-    hoverY !== undefined
-      ? sections.filter((section) => section.top <= hoverY).pop()
-      : undefined
-
-  const contents = (phone: boolean) => (
-    <>
-      <ContentsTop>
-        <span>Contents · {headed} sections</span>
-        <span>{total !== undefined ? `${total} min` : ''}</span>
-      </ContentsTop>
-      <Rows>
-        {sections.map((section) => {
-          const span = Math.max(1, section.end - section.top)
-          const read = Math.min(1, Math.max(0, (readEnd - section.top) / span))
-          const isCurrent = section === current
-          const isHovered = !phone && section === hovered
-          return (
-            <Row
-              key={`${section.number}-${section.top}`}
-              type="button"
-              data-current={isCurrent ? '' : undefined}
-              data-read={read >= 0.98 ? '' : undefined}
-              data-hover={isHovered && !isCurrent ? '' : undefined}
-              onClick={() => goTo(section)}
-            >
-              <RowNumber>{sectionNumber(section.number)}</RowNumber>
-              <RowTitle>{section.label}</RowTitle>
-              <RowMinutes>{sectionMinutes(section)}</RowMinutes>
-              <RowLine aria-hidden="true">
-                <RowRead>
-                  <span style={{ width: `${Math.round(read * 100)}%` }} />
-                </RowRead>
-                {Array.from({ length: Math.min(5, section.highlights) }).map(
-                  (_, index) => (
-                    <Dot key={index} />
-                  )
-                )}
-              </RowLine>
-              {isHovered && section.preview && (
-                <RowPreview>{section.preview}</RowPreview>
-              )}
-            </Row>
-          )
-        })}
-      </Rows>
-      {leftMinutes !== undefined && (
-        <ContentsFoot>
-          {done >= 0.99
-            ? 'Done'
-            : `${left} left · done around ${finishTime(leftMinutes)}`}
-        </ContentsFoot>
-      )}
-    </>
-  )
-
-  const sheetView = sheet && sections.length > 0 && (
-    <>
-      <Scrim onClick={() => setSheet(false)} />
-      <Sheet role="dialog" aria-label="Contents">
-        <Grabber aria-hidden="true" />
-        {contents(true)}
-      </Sheet>
-    </>
-  )
-
-  if (!showsMap) {
-    return sheetView || null
   }
 
   const bracketTop = Math.max(0, (scroll.y - scroll.top + 84) * scale)
   const bracketHeight = Math.max(8, (scroll.view - 84) * scale)
   const readTo = Math.min(height, bracketTop + bracketHeight)
+  const done = Math.min(
+    1,
+    Math.max(0, (scroll.y + scroll.view - scroll.top) / shape.height)
+  )
+  const total = readingMinutes(props.wordsCount)
+  const left =
+    total !== undefined
+      ? formatMinutes(Math.round(total * (1 - done)))
+      : undefined
 
-  // Without sections, the pointer previews its section and opening words.
+  // What's under the pointer: its section and its opening words.
   let preview: { section: string; text: string; at: string } | undefined
-  if (hoverY !== undefined && mode == 'wide' && !sections.length) {
-    const y = hoverY
+  if (hover !== undefined && mode == 'wide') {
+    const y = hover / scale
     const block =
       shape.blocks.find((b) => b.top <= y && y <= b.top + b.height + 16) ??
       shape.blocks.find((b) => b.top >= y)
@@ -972,126 +466,75 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
   )
 
   const hidden = mode == 'phone' && !awake
-  const unfolds = mode == 'wide' && sections.length > 0
 
   return (
-    <>
-      <Root
-        data-margin-map=""
-        data-phone={mode == 'phone' ? '' : undefined}
-        data-hidden={hidden ? '' : undefined}
-        onMouseEnter={() => {
-          if (!unfolds) return
-          window.clearTimeout(unfoldTimer.current)
-          unfoldTimer.current = window.setTimeout(() => {
-            if (!dragging.current) setUnfolded(true)
-          }, 300)
+    <Root
+      data-phone={mode == 'phone' ? '' : undefined}
+      data-hidden={hidden ? '' : undefined}
+      aria-hidden="true"
+    >
+      <Track
+        ref={trackRef}
+        style={{ height: `${height}px` }}
+        onPointerDown={(event: ReactMouseEvent<HTMLDivElement>) => {
+          dragging.current = true
+          travel(event.clientY, mode == 'wide')
         }}
-        onMouseLeave={() => {
-          window.clearTimeout(unfoldTimer.current)
-          unfoldTimer.current = window.setTimeout(() => setUnfolded(false), 200)
-        }}
+        onMouseMove={(event) =>
+          setHover(
+            event.clientY - event.currentTarget.getBoundingClientRect().top
+          )
+        }
+        onMouseLeave={() => setHover(undefined)}
       >
-        {unfolds && current && current.number > 0 && (
-          <Head
-            aria-hidden="true"
-            // The contents cover it while open; it keeps its room.
-            style={{ visibility: unfolded ? 'hidden' : undefined }}
-          >
-            <HeadCount>
-              {sectionNumber(current.number)} of {sectionNumber(headed)}
-            </HeadCount>
-            <HeadTitle>{current.label}</HeadTitle>
-          </Head>
+        {draw(
+          'color-mix(in srgb, var(--font-color) 16%, transparent)',
+          'color-mix(in srgb, var(--font-color) 40%, transparent)'
         )}
-        {unfolds && (!current || current.number == 0) && (
-          <Head
-            aria-hidden="true"
-            // The contents cover it while open; it keeps its room.
-            style={{ visibility: unfolded ? 'hidden' : undefined }}
-          >
-            <HeadCount>{headed} sections</HeadCount>
-          </Head>
-        )}
-        <Track
-          ref={trackRef}
-          aria-hidden="true"
-          style={{ height: `${height}px` }}
-          onPointerDown={(event: ReactMouseEvent<HTMLDivElement>) => {
-            dragging.current = true
-            travel(event.clientY, mode == 'wide')
-          }}
-          onMouseMove={(event) =>
-            setHover(
-              event.clientY - event.currentTarget.getBoundingClientRect().top
-            )
-          }
-          onMouseLeave={() => setHover(undefined)}
-        >
+        <Read style={{ height: `${readTo}px` }}>
           {draw(
-            'color-mix(in srgb, var(--font-color) 16%, transparent)',
-            'color-mix(in srgb, var(--font-color) 40%, transparent)'
+            'color-mix(in srgb, var(--font-color) 42%, transparent)',
+            'var(--font-color)'
           )}
-          <Read style={{ height: `${readTo}px` }}>
-            {draw(
-              'color-mix(in srgb, var(--font-color) 42%, transparent)',
-              'var(--font-color)'
-            )}
-          </Read>
-          <Bracket
-            style={{
-              top: `${bracketTop - 3}px`,
-              height: `${bracketHeight + 6}px`,
-            }}
-          />
-          {labels.map((label, index) => (
-            <Label
-              key={index}
-              style={{ top: `${label.y + 3}px` }}
-              data-current={
-                label.number && label.number === current?.number
-                  ? ''
-                  : undefined
-              }
-              data-read={label.y < readTo || !sections.length ? '' : undefined}
-            >
-              {label.text}
-            </Label>
-          ))}
-          {resume >= 3 && resume <= 97 && mode == 'wide' && (
-            <Place style={{ top: `${(resume / 100) * height - 4}px` }}>
-              <Ribbon width={7} height={16} />
-            </Place>
-          )}
-          {preview && hover !== undefined && (
-            <Preview style={{ top: `${hover}px` }}>
-              <PreviewMeta>{preview.at}</PreviewMeta>
-              <PreviewTitle>{preview.section}</PreviewTitle>
-              {preview.text && <PreviewText>{preview.text}</PreviewText>}
-            </Preview>
-          )}
-        </Track>
-        {mode == 'wide' && (
-          <Foot aria-hidden="true">
-            {left && (
-              <>
-                <b>{done >= 0.99 ? 'Done' : `${left} left`}</b>
-                <br />
-              </>
-            )}
-            {shape.highlights.length > 0 &&
-              `${shape.highlights.length} highlight${
-                shape.highlights.length == 1 ? '' : 's'
-              }`}
-          </Foot>
+        </Read>
+        {labels.map((label, index) => (
+          <Label key={index} style={{ top: `${label.y + 3}px` }}>
+            {label.text}
+          </Label>
+        ))}
+        <Bracket
+          style={{
+            top: `${bracketTop - 3}px`,
+            height: `${bracketHeight + 6}px`,
+          }}
+        />
+        {resume >= 3 && resume <= 97 && mode == 'wide' && (
+          <Place style={{ top: `${(resume / 100) * height - 4}px` }}>
+            <Ribbon width={7} height={16} />
+          </Place>
         )}
-        {unfolds && unfolded && (
-          <Panel role="dialog" aria-label="Contents">
-            {contents(false)}
-          </Panel>
+        {preview && hover !== undefined && (
+          <Preview style={{ top: `${hover}px` }}>
+            <PreviewMeta>{preview.at}</PreviewMeta>
+            <PreviewTitle>{preview.section}</PreviewTitle>
+            {preview.text && <PreviewText>{preview.text}</PreviewText>}
+          </Preview>
         )}
-      </Root>
-      {sheetView}
-    </>
+      </Track>
+      {mode == 'wide' && (
+        <Foot>
+          {left && (
+            <>
+              <b>{done >= 0.99 ? 'Done' : `${left} left`}</b>
+              <br />
+            </>
+          )}
+          {shape.highlights.length > 0 &&
+            `${shape.highlights.length} highlight${
+              shape.highlights.length == 1 ? '' : 's'
+            }`}
+        </Foot>
+      )}
+    </Root>
   )
 }
