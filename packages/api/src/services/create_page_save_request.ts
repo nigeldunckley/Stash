@@ -9,7 +9,7 @@ import {
 } from '../generated/graphql'
 import { createPubSubClient, PubsubClient } from '../pubsub'
 import { redisDataSource } from '../redis_data_source'
-import { enqueueFetchContentJob } from '../utils/createTask'
+import { enqueueFetchContentJob, enqueueRescueSave } from '../utils/createTask'
 import { cleanUrl, generateSlug } from '../utils/helpers'
 import { logger } from '../utils/logger'
 import { createOrUpdateLibraryItem } from './library_item'
@@ -179,6 +179,16 @@ export const createPageSaveRequest = async ({
     publishedAt: publishedAt?.toISOString(),
     rssFeedUrl: subscription,
   })
+
+  // Feeds read pages directly already; saved links get the same fallback
+  // in case the browser fetch never lands.
+  if (!subscription) {
+    try {
+      await enqueueRescueSave({ userId, libraryItemId: libraryItem.id })
+    } catch (error) {
+      logger.error('failed to enqueue rescue-save', { url, error })
+    }
+  }
 
   return libraryItem
 }
