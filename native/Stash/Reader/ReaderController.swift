@@ -13,6 +13,8 @@ final class ReaderController: NSObject {
   private(set) var actionError: String?
   private(set) var navigationError: String?
   private(set) var loadGeneration = 0
+  /// The article's sections, from the reader's margin map, for the iPhone top bar.
+  private(set) var sections: ReaderSections?
   @ObservationIgnored private var failedAction: (String, [String: Any])?
   @ObservationIgnored private var html: String?
   /// What the reader picked in the colophon: "next", "archiveNext", "archive" or "close".
@@ -32,6 +34,22 @@ final class ReaderController: NSObject {
       injectionTime: .atDocumentEnd,
       forMainFrameOnly: true
     ))
+    // The margin map announces the sections and which one you're in; pass that on.
+    controller.addUserScript(WKUserScript(
+      source: """
+      window.addEventListener('stash:sections', function (e) {
+        var d = e.detail || {};
+        window.webkit.messageHandlers.stashSections.postMessage({
+          count: d.count || 0,
+          number: d.current ? d.current.number : 0,
+          label: d.current ? d.current.label : '',
+          marks: d.marks || []
+        });
+      });
+      """,
+      injectionTime: .atDocumentStart,
+      forMainFrameOnly: true
+    ))
     config.userContentController = controller
     webView = WKWebView(frame: .zero, configuration: config)
     super.init()
@@ -40,6 +58,7 @@ final class ReaderController: NSObject {
     controller.add(proxy, name: "stashAction")
     controller.add(proxy, name: "readingProgressUpdate")
     controller.add(proxy, name: "stashColophon")
+    controller.add(proxy, name: "stashSections")
     webView.navigationDelegate = self
     webView.isInspectable = true
     #if os(iOS)
@@ -77,6 +96,7 @@ final class ReaderController: NSObject {
     loadGeneration += 1
     isReady = false
     progress = 0
+    sections = nil
     failedAction = nil
     actionError = nil
     navigationError = nil
@@ -86,6 +106,21 @@ final class ReaderController: NSObject {
   func send(_ event: String, _ values: [String: Any]) {
     let script = ReaderPage.event(event, values)
     webView.evaluateJavaScript("window.stashPreservePosition ? window.stashPreservePosition(() => { \(script) }) : \(script)", completionHandler: nil)
+  }
+
+  /// Opens the reader's contents (a sheet inside the page on iPhone).
+  func openContents() {
+    webView.evaluateJavaScript("window.dispatchEvent(new Event('stash:contents'))", completionHandler: nil)
+  }
+
+  fileprivate func handleSections(_ body: Any) {
+    guard let values = body as? [String: Any] else { return }
+    let count = (values["count"] as? NSNumber)?.intValue ?? 0
+    let marks = (values["marks"] as? [NSNumber])?.map(\.doubleValue) ?? []
+    let number = (values["number"] as? NSNumber)?.intValue ?? 0
+    let label = values["label"] as? String ?? ""
+    let next = ReaderSections(count: count, number: number, label: label, marks: marks)
+    if next != sections { sections = next }
   }
 
   fileprivate func handleProgress(_ body: Any) {
@@ -199,9 +234,26 @@ private final class MessageProxy: NSObject, WKScriptMessageHandler {
   func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
     switch message.name {
     case "stashAction": owner?.handleAction(message.body)
+    case "stashSections": owner?.handleSections(message.body)
     case "stashColophon":
       if let choice = (message.body as? [String: Any])?["choice"] as? String { owner?.onColophon?(choice) }
     default: owner?.handleProgress(message.body)
     }
+  }
+}
+
+/// The article's sections as the margin map sees them.
+struct ReaderSections: Equatable {
+  let count: Int
+  /// The section you're in (from 1), or 0 before the first.
+  let number: Int
+  let label: String
+  /// Where each section starts, as a fraction of the page's scroll.
+  let marks: [Double]
+
+  /// "03 USING THE EXPANSION CARDS", once there's more than one section.
+  var line: String? {
+    guard count > 1, number > 0, !label.isEmpty else { return nil }
+    return String(format: "%02d ", number) + label.uppercased()
   }
 }

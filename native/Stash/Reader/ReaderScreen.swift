@@ -72,6 +72,17 @@ struct ReaderScreen: View {
           Rectangle()
             .fill(Color.stAccent)
             .frame(width: geometry.size.width * reader.progress, height: 2)
+          #if os(iOS)
+          // A notch where each section starts.
+          if let marks = reader.sections?.marks, (reader.sections?.count ?? 0) > 1 {
+            ForEach(Array(marks.enumerated()), id: \.offset) { _, mark in
+              Rectangle()
+                .fill(Color.stMuted.opacity(0.6))
+                .frame(width: 1, height: 6)
+                .offset(x: geometry.size.width * min(max(mark, 0), 1))
+            }
+          }
+          #endif
         }
         .frame(height: 2)
         .opacity(reader.isReady ? 1 : 0)
@@ -143,6 +154,32 @@ struct ReaderScreen: View {
 
   @ToolbarContentBuilder
   private var toolbar: some ToolbarContent {
+    #if os(iOS)
+    // The source, and under it the section you're in; tap for the contents.
+    ToolbarItem(placement: .principal) {
+      Button { reader?.openContents() } label: {
+        VStack(spacing: 1) {
+          Text(current.source)
+            .font(.ui(15, .semibold))
+            .foregroundStyle(Color.stInk)
+            .lineLimit(1)
+          if let line = reader?.sections?.line {
+            Text(line)
+              .font(.mono(10))
+              .tracking(0.5)
+              .foregroundStyle(Color.stMuted)
+              .lineLimit(1)
+              .transition(.opacity)
+          }
+        }
+        .frame(maxWidth: 240)
+        .animation(StashMotion.fade, value: reader?.sections?.line)
+      }
+      .buttonStyle(.plain)
+      .disabled((reader?.sections?.count ?? 0) < 2)
+      .accessibilityLabel(reader?.sections?.line.map { "\(current.source), \($0). Show contents" } ?? current.source)
+    }
+    #endif
     ToolbarItemGroup(placement: .primaryAction) {
       ForEach(currentActions, id: \.self) { action in
         Button(role: action == .delete ? .destructive : nil) {
