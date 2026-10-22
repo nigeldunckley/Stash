@@ -1,4 +1,5 @@
-import { LibraryItemState } from '../entity/library_item'
+import { LibraryItem, LibraryItemState } from '../entity/library_item'
+import { authTrx } from '../repository'
 import { findLibraryItemById } from '../services/library_item'
 import { savePage, shouldParseInBackend } from '../services/save_page'
 import { findActiveUser } from '../services/user'
@@ -68,23 +69,37 @@ export const rescueSave = async ({
     return
   }
 
-  // The browser may have landed while the page was read.
-  const latest = await findLibraryItemById(libraryItemId, userId, {
-    select: ['id', 'state'],
-  })
-  if (latest?.state !== LibraryItemState.Processing) {
+  // Claim the item on the primary so a browser fetch that landed while the
+  // page was read is never overwritten by this plainer copy.
+  const setState = (from: LibraryItemState, to: LibraryItemState) =>
+    authTrx(
+      (tx) =>
+        tx
+          .getRepository(LibraryItem)
+          .update({ id: item.id, state: from }, { state: to }),
+      { uid: userId, replicationMode: 'primary' }
+    )
+  const claimed = await setState(
+    LibraryItemState.Processing,
+    LibraryItemState.Succeeded
+  )
+  if (!claimed.affected) {
     return
   }
 
-  const user = await findActiveUser(userId)
-  if (!user) {
-    return
+  try {
+    const user = await findActiveUser(userId)
+    if (!user) {
+      throw new Error('user not found')
+    }
+    const result = await savePage({ ...input, originalContent: html }, user)
+    if (result.__typename === 'SaveError') {
+      throw new Error(result.message || 'save failed')
+    }
+    logger.info('rescue-save: saved from the page', { url, words })
+  } catch (error) {
+    // Hand the item back, so it still reads as unparsed and can be retried.
+    logger.error('rescue-save: save failed', { url, error })
+    await setState(LibraryItemState.Succeeded, LibraryItemState.Processing)
   }
-
-  const result = await savePage({ ...input, originalContent: html }, user)
-  if (result.__typename === 'SaveError') {
-    logger.error('rescue-save: save failed', { url, result })
-    return
-  }
-  logger.info('rescue-save: saved from the page', { url, words })
 }

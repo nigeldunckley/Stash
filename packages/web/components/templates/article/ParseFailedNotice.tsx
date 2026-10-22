@@ -85,7 +85,7 @@ export function ParseFailedNotice(props: ParseFailedNoticeProps): JSX.Element {
   const retry = async () => {
     setRetrying(true)
     const result = await saveUrlMutation(props.url)
-    if (!result) {
+    if (!result?.clientRequestId) {
       setRetrying(false)
       showErrorToast('Could not try again. Check your connection.')
       return
