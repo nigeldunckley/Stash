@@ -60,6 +60,9 @@ services:
   api:
     <<: *restart
     image: "${API_IMAGE:-ghcr.io/omnivore-app/sh-backend:latest}"
+    # Stash's own images are built for Intel only. Naming the platform lets
+    # an Apple Silicon Mac run them through Rosetta instead of failing.
+    platform: linux/amd64
     container_name: reader-api
     healthcheck:
       test: ["CMD-SHELL", "nc -z 0.0.0.0 8080 || exit 1"]
@@ -76,6 +79,7 @@ services:
   queue-processor:
     <<: *restart
     image: "${QUEUE_IMAGE:-ghcr.io/omnivore-app/sh-queue-processor:latest}"
+    platform: linux/amd64
     # Stash runs the queue from its API image, so name the command here.
     command: ["yarn", "workspace", "@omnivore/api", "start_queue_processor"]
     container_name: reader-queue-processor
@@ -92,6 +96,7 @@ services:
   web:
     <<: *restart
     image: "${WEB_IMAGE:-ghcr.io/omnivore-app/sh-web:latest}"
+    platform: linux/amd64
     container_name: reader-web
     env_file: .env
     environment:
