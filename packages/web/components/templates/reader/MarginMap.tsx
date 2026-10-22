@@ -49,7 +49,7 @@ const HOLD = 280
 const LINGER = 1200
 
 const BLOCKS =
-  'p, h1, h2, h3, h4, blockquote, figure, img, pre, ul, ol, table, iframe'
+  'p, h1, h2, h3, h4, blockquote, figure, img, pre, ul, ol, table, iframe, video'
 
 type Block = {
   kind: 'text' | 'heading' | 'picture' | 'embed' | 'quote'
@@ -580,6 +580,7 @@ const measure = (root: HTMLElement): Shape => {
       : tag == 'BLOCKQUOTE'
       ? 'quote'
       : tag == 'IFRAME' ||
+        tag == 'VIDEO' ||
         (tag == 'FIGURE' && !image && element.querySelector('iframe, video'))
       ? 'embed'
       : tag == 'FIGURE' || tag == 'IMG' || (!text && image)
