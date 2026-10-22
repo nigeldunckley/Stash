@@ -46,6 +46,10 @@ final class ReaderController: NSObject {
           marks: d.marks || []
         });
       });
+      // A tick each time a scrub of the map crosses into another section.
+      window.addEventListener('stash:tick', function () {
+        window.webkit.messageHandlers.stashTick.postMessage({});
+      });
       """,
       injectionTime: .atDocumentStart,
       forMainFrameOnly: true
@@ -59,6 +63,7 @@ final class ReaderController: NSObject {
     controller.add(proxy, name: "readingProgressUpdate")
     controller.add(proxy, name: "stashColophon")
     controller.add(proxy, name: "stashSections")
+    controller.add(proxy, name: "stashTick")
     webView.navigationDelegate = self
     webView.isInspectable = true
     #if os(iOS)
@@ -111,6 +116,21 @@ final class ReaderController: NSObject {
   /// Opens the reader's contents (a sheet inside the page on iPhone).
   func openContents() {
     webView.evaluateJavaScript("window.dispatchEvent(new Event('stash:contents'))", completionHandler: nil)
+  }
+
+  #if os(iOS)
+  /// One generator, kept prepared, so the ticks land as the scrub crosses each heading.
+  @ObservationIgnored private var tickGenerator: UIImpactFeedbackGenerator?
+  #endif
+
+  /// A light tap as a scrub of the reading map crosses into another section (iPhone only).
+  fileprivate func tick() {
+    #if os(iOS)
+    let generator = tickGenerator ?? UIImpactFeedbackGenerator(style: .light)
+    tickGenerator = generator
+    generator.impactOccurred(intensity: 0.7)
+    generator.prepare()
+    #endif
   }
 
   fileprivate func handleSections(_ body: Any) {
@@ -235,6 +255,7 @@ private final class MessageProxy: NSObject, WKScriptMessageHandler {
     switch message.name {
     case "stashAction": owner?.handleAction(message.body)
     case "stashSections": owner?.handleSections(message.body)
+    case "stashTick": owner?.tick()
     case "stashColophon":
       if let choice = (message.body as? [String: Any])?["choice"] as? String { owner?.onColophon?(choice) }
     default: owner?.handleProgress(message.body)
