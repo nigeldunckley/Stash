@@ -1,10 +1,14 @@
 // The reader's sections, as the margin map finds them, shared with the
-// reader's top bar (and Stash's own app) through two window events.
+// reader's top bar (and Stash's own app) through window events.
 
 // Sent by the map whenever the sections or the one you're in change.
 export const SECTIONS_EVENT = 'stash:sections'
 // Sent to the map to open its contents (the sheet on a phone).
 export const CONTENTS_EVENT = 'stash:contents'
+
+// Sent by the map as a scrub crosses a heading, so the app can play a
+// light haptic tick.
+export const TICK_EVENT = 'stash:tick'
 
 export type SectionsDetail = {
   count: number
@@ -18,6 +22,13 @@ export const sectionNumber = (number: number): string =>
 
 export const openContents = (): void => {
   window.dispatchEvent(new Event(CONTENTS_EVENT))
+}
+
+// A tick you can feel: the app's haptics, or a short buzz where the
+// browser can (not Safari).
+export const tick = (): void => {
+  window.dispatchEvent(new Event(TICK_EVENT))
+  navigator.vibrate?.(8)
 }
 
 const ARTICLE = /^(the|a|an)$/i
