@@ -1,4 +1,8 @@
 import React from 'react'
+import {
+  readingTrailQuery,
+  saveReadingTrailMutation,
+} from '../../../lib/networking/mutations/readingTrail'
 import { PrimaryLayout } from '../../../components/templates/PrimaryLayout'
 import { LoadingView } from '../../../components/patterns/LoadingView'
 import { useRouter } from 'next/router'
@@ -783,6 +787,8 @@ export default function Reader(): JSX.Element {
                   }
                   return true
                 },
+                readingTrailQuery,
+                saveReadingTrailMutation,
               }}
             />
           ) : (

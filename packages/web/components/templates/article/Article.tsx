@@ -443,6 +443,9 @@ export function Article(props: ArticleProps): JSX.Element {
           wordsCount={props.wordsCount}
           resumeProgress={props.resumeProgress}
           notes={props.highlightNotes}
+          itemId={props.articleId}
+          loadTrail={props.articleMutations.readingTrailQuery}
+          saveTrail={props.articleMutations.saveReadingTrailMutation}
         />
       )}
       <PlaceMarker
