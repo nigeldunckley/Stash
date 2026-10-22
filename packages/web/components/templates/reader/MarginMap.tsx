@@ -16,6 +16,7 @@ import {
   SectionsDetail,
   sectionNumber,
   shortNames,
+  tick,
 } from '../../../lib/readerSections'
 
 // The margin map: the whole article drawn small down the right edge of the
@@ -25,9 +26,11 @@ import {
 // section you're in. Rest the pointer on it and it unfolds into contents;
 // click or drag to travel.
 //
-// On a wide window it is always there. On a phone it appears while you
-// scroll quickly, as a scrubber, and steps away when you stop; the contents
-// open as a sheet from the reader's top bar.
+// On a wide window it is always there. On a phone, touch and hold near the
+// right edge and it slides in as a drawer with its labels; drag to scrub,
+// with a bubble naming the section and a tick at each heading. A quick
+// flick brings up the small map too. The contents open as a sheet from the
+// reader's top bar.
 
 // Width the map takes from the right margin, so margin notes and pull
 // quotes can leave room for it.
@@ -38,6 +41,11 @@ const WIDTH = 56
 const LINE_GAP = 3
 // How far down the screen counts as "where you're reading".
 const EYE = 0.3
+// On a phone: how close to the right edge, and how long, to call the drawer.
+const EDGE = 28
+const HOLD = 280
+// How long the drawer stays after you let go.
+const LINGER = 1200
 
 const BLOCKS =
   'p, h1, h2, h3, h4, blockquote, figure, img, pre, ul, ol, table, iframe'
@@ -95,7 +103,66 @@ const Root = styled('div', {
     borderRadius: '8px',
     boxShadow: '0 8px 20px rgba(9, 9, 11, 0.08)',
   },
+  '&[data-drawer]': {
+    top: '84px',
+    right: 0,
+    bottom: '64px',
+    width: '112px',
+    boxSizing: 'border-box',
+    padding: '14px 0 0 14px',
+    background: '$readerBg',
+    border: 'none',
+    borderLeft: '1px solid $stLine',
+    borderRadius: 0,
+    boxShadow: '-12px 0 28px rgba(9, 9, 11, 0.08)',
+    animation: 'stashMapDrawer 220ms cubic-bezier(0.2, 0, 0, 1)',
+    '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+  },
+  '@keyframes stashMapDrawer': {
+    from: { transform: 'translateX(100%)' },
+    to: { transform: 'none' },
+  },
   '&[data-hidden]': { opacity: 0, pointerEvents: 'none' },
+})
+
+// The drawer's "8 min left" over the map.
+const DrawerHead = styled('div', {
+  marginBottom: '10px',
+  fontFamily: '$mono',
+  fontSize: '8px',
+  letterSpacing: '0.1em',
+  textTransform: 'uppercase',
+  color: 'var(--font-color-muted)',
+})
+
+// Beside your finger while you scrub: the section, and how far in.
+const Bubble = styled('div', {
+  position: 'absolute',
+  right: 'calc(100% + 24px)',
+  width: '150px',
+  transform: 'translateY(-50%)',
+  display: 'grid',
+  gap: '3px',
+  padding: '9px 12px',
+  borderRadius: '10px',
+  // Ink on paper, flipped: dark on a light page, light on a dark one.
+  background: 'var(--font-color)',
+  color: '$readerBg',
+  boxShadow: '0 10px 24px rgba(9, 9, 11, 0.2)',
+  pointerEvents: 'none',
+  span: {
+    fontFamily: '$mono',
+    fontSize: '9px',
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+    color: '$stAccent',
+  },
+  b: {
+    fontFamily: '$inter',
+    fontSize: '13px',
+    fontWeight: 500,
+    lineHeight: 1.25,
+  },
 })
 
 // The section you're in, over the map: "03 of 08" and its full name.
@@ -134,6 +201,7 @@ const Track = styled('div', {
   position: 'relative',
   cursor: 'pointer',
   touchAction: 'none',
+  '[data-drawer] &': { width: '40px' },
 })
 
 const Lines = styled('svg', {
@@ -169,6 +237,7 @@ const Label = styled('div', {
   pointerEvents: 'none',
   '&[data-read]': { color: 'var(--font-color)' },
   '&[data-current]': { color: '$stAccent', fontWeight: 600 },
+  '[data-drawer] &': { right: '-54px' },
 })
 
 const Bracket = styled('div', {
@@ -179,6 +248,10 @@ const Bracket = styled('div', {
   borderRadius: '3px',
   background: 'color-mix(in srgb, var(--font-color) 4%, transparent)',
   pointerEvents: 'none',
+  '&[data-scrub]': {
+    borderColor: '$stAccent',
+    background: 'color-mix(in srgb, var(--colors-stAccent) 6%, transparent)',
+  },
 })
 
 const Place = styled('div', {
@@ -555,6 +628,12 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
   // The contents: unfolded beside the map, or as a sheet on a phone.
   const [unfolded, setUnfolded] = useState(false)
   const [sheet, setSheet] = useState(false)
+  // On a phone: the drawer, and whether a finger is scrubbing it.
+  const [drawer, setDrawer] = useState(false)
+  const [scrubbing, setScrubbing] = useState(false)
+  const scrub = useRef<{ y: number; scroll: number } | undefined>()
+  const linger = useRef(0)
+  const ticked = useRef<number | undefined>()
   const [resume] = useState(() => props.resumeProgress ?? 0)
   const dragging = useRef(false)
   const trackRef = useRef<HTMLDivElement | null>(null)
@@ -663,7 +742,13 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
     }
   }, [sheet, unfolded])
 
-  useEffect(() => () => window.clearTimeout(unfoldTimer.current), [])
+  useEffect(
+    () => () => {
+      window.clearTimeout(unfoldTimer.current)
+      window.clearTimeout(linger.current)
+    },
+    []
+  )
 
   const showsMap =
     !!shape && mode != 'none' && shape.height >= 2.5 * scroll.view
@@ -677,6 +762,76 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
     return Math.max(80, Math.min(room, shape.height * 0.2))
   }, [shape, mode, sections.length])
   const scale = shape ? height / Math.max(1, shape.height) : 0
+
+  // Let go of a scrub: land, and the drawer slides away a moment later.
+  const release = useCallback(() => {
+    scrub.current = undefined
+    dragging.current = false
+    setScrubbing(false)
+    window.clearTimeout(linger.current)
+    linger.current = window.setTimeout(() => setDrawer(false), LINGER)
+  }, [])
+
+  // On a phone: hold near the right edge for the drawer, then drag to
+  // scrub. The page moves with your finger at the map's scale, so it
+  // doesn't jump when the scrub starts.
+  useEffect(() => {
+    if (mode != 'phone' || !showsMap || !scale) return
+    let hold = 0
+    let start: { x: number; y: number } | undefined
+    const onStart = (event: TouchEvent) => {
+      const touch = event.touches[0]
+      if (event.touches.length != 1 || !touch) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('[data-margin-map]')) return
+      if (touch.clientX < window.innerWidth - EDGE) return
+      const at = { x: touch.clientX, y: touch.clientY }
+      start = at
+      window.clearTimeout(hold)
+      hold = window.setTimeout(() => {
+        window.clearTimeout(linger.current)
+        scrub.current = { y: at.y, scroll: window.scrollY }
+        dragging.current = true
+        setDrawer(true)
+        setScrubbing(true)
+        tick()
+      }, HOLD)
+    }
+    const onMove = (event: TouchEvent) => {
+      const touch = event.touches[0]
+      if (!touch) return
+      if (scrub.current) {
+        event.preventDefault()
+        window.scrollTo({
+          top: scrub.current.scroll + (touch.clientY - scrub.current.y) / scale,
+        })
+        return
+      }
+      if (
+        start &&
+        Math.hypot(touch.clientX - start.x, touch.clientY - start.y) > 10
+      ) {
+        window.clearTimeout(hold)
+        start = undefined
+      }
+    }
+    const onEnd = () => {
+      window.clearTimeout(hold)
+      start = undefined
+      if (scrub.current) release()
+    }
+    document.addEventListener('touchstart', onStart, { passive: true })
+    document.addEventListener('touchmove', onMove, { passive: false })
+    document.addEventListener('touchend', onEnd)
+    document.addEventListener('touchcancel', onEnd)
+    return () => {
+      window.clearTimeout(hold)
+      document.removeEventListener('touchstart', onStart)
+      document.removeEventListener('touchmove', onMove)
+      document.removeEventListener('touchend', onEnd)
+      document.removeEventListener('touchcancel', onEnd)
+    }
+  }, [mode, showsMap, scale, release])
 
   // Where you're reading, in the article's own coordinates.
   const eye = scroll.y - scroll.top + scroll.view * EYE
@@ -712,6 +867,17 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
     }
     window.dispatchEvent(new CustomEvent(SECTIONS_EVENT, { detail }))
   }, [headed, currentNumber, currentLabel, marksKey])
+  // A tick each time a scrub crosses into another section.
+  useEffect(() => {
+    if (!scrubbing) {
+      ticked.current = undefined
+      return
+    }
+    if (ticked.current !== undefined && ticked.current !== currentNumber) {
+      tick()
+    }
+    ticked.current = currentNumber
+  }, [scrubbing, currentNumber])
   useEffect(
     () => () => {
       const detail: SectionsDetail = { count: 0, marks: [] }
@@ -744,7 +910,7 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
   }, [shape, scale])
 
   const labels = useMemo(() => {
-    if (!shape || mode == 'phone') return []
+    if (!shape || (mode == 'phone' && !drawer)) return []
     let floor = -Infinity
     const headed = sections.filter((section) => section.number > 0)
     const source = headed.length
@@ -765,7 +931,7 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
       floor = label.y + 12
       return true
     })
-  }, [shape, sections, scale, mode])
+  }, [shape, sections, scale, mode, drawer])
 
   const travel = useCallback(
     (clientY: number, smooth: boolean) => {
@@ -794,7 +960,9 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
       if (dragging.current) travel(event.clientY, false)
     }
     const up = () => {
+      if (!dragging.current) return
       dragging.current = false
+      if (mode == 'phone') release()
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
@@ -802,7 +970,7 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
     }
-  }, [travel])
+  }, [travel, mode, release])
 
   if (!shape || (!showsMap && !sheet)) {
     return null
@@ -971,7 +1139,9 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
     </Lines>
   )
 
-  const hidden = mode == 'phone' && !awake
+  const hidden = mode == 'phone' && !awake && !drawer
+  const minutesIn =
+    total !== undefined ? Math.round((total * eye) / shape.height) : undefined
   const unfolds = mode == 'wide' && sections.length > 0
 
   return (
@@ -979,6 +1149,7 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
       <Root
         data-margin-map=""
         data-phone={mode == 'phone' ? '' : undefined}
+        data-drawer={mode == 'phone' && drawer ? '' : undefined}
         data-hidden={hidden ? '' : undefined}
         onMouseEnter={() => {
           if (!unfolds) return
@@ -1013,12 +1184,22 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
             <HeadCount>{headed} sections</HeadCount>
           </Head>
         )}
+        {mode == 'phone' && drawer && left && (
+          <DrawerHead aria-hidden="true">
+            {done >= 0.99 ? 'Done' : `${left} left`}
+          </DrawerHead>
+        )}
         <Track
           ref={trackRef}
           aria-hidden="true"
           style={{ height: `${height}px` }}
           onPointerDown={(event: ReactMouseEvent<HTMLDivElement>) => {
             dragging.current = true
+            if (mode == 'phone') {
+              window.clearTimeout(linger.current)
+              setDrawer(true)
+              setScrubbing(true)
+            }
             travel(event.clientY, mode == 'wide')
           }}
           onMouseMove={(event) =>
@@ -1039,6 +1220,7 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
             )}
           </Read>
           <Bracket
+            data-scrub={mode == 'phone' && scrubbing ? '' : undefined}
             style={{
               top: `${bracketTop - 3}px`,
               height: `${bracketHeight + 6}px`,
@@ -1062,6 +1244,26 @@ export function MarginMap(props: MarginMapProps): JSX.Element | null {
             <Place style={{ top: `${(resume / 100) * height - 4}px` }}>
               <Ribbon width={7} height={16} />
             </Place>
+          )}
+          {mode == 'phone' && scrubbing && (
+            <Bubble
+              aria-hidden="true"
+              style={{ top: `${Math.min(height, Math.max(0, eye * scale))}px` }}
+            >
+              <span>
+                {[
+                  current && current.number > 0
+                    ? sectionNumber(current.number)
+                    : undefined,
+                  minutesIn ? `${minutesIn} min in` : 'The start',
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+              {current && (
+                <b>{current.number > 0 ? current.label : 'Opening'}</b>
+              )}
+            </Bubble>
           )}
           {preview && hover !== undefined && (
             <Preview style={{ top: `${hover}px` }}>
