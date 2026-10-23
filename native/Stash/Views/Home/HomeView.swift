@@ -21,6 +21,22 @@ struct HomeView: View {
   @State private var leadTitle: String?
   /// The item open in the preview, and which list it came from, for moving up and down.
   @State private var peek: LibraryItem?
+  /// Home is scrolled to (near) the top, where new posts can drop in without moving what you're
+  /// reading. On iPhone, the feed's heading is in view, which it reports once it's laid out.
+  #if os(macOS)
+  @State private var atTop = true
+  #else
+  @State private var atTop = false
+  #endif
+  /// Mid-scroll, or (on Mac) the pointer resting on the lead or the grid: new posts wait until you stop.
+  @State private var scrolling = false
+  @State private var hoveringLead = false
+  @State private var hoveringGrid = false
+  /// "N new" was tapped while scrolled down: they drop in once Home reaches the top.
+  @State private var revealOnTop = false
+  @State private var scrollTopTick = 0
+  /// Lets a story that loses the lead slide into its new place rather than jump.
+  @Namespace private var frontSpace
   @State private var peekSource: PeekSource = .feeds
   /// Items and searches opened full size from Home.
   @State private var path = NavigationPath()
@@ -73,21 +89,24 @@ struct HomeView: View {
         #else
         .toolbar(.hidden, for: .navigationBar)
         #endif
-        // New feed posts every couple of minutes while Home is showing, offered as "N new".
+        // New feed posts every minute while Home is showing. At the top of Home they drop
+        // straight in; scrolled down, they wait behind "N new".
         .task(id: "\(feedsQuery)|\(isActivePage)") {
           guard isActivePage else { return }
           while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(120))
+            try? await Task.sleep(for: .seconds(60))
             guard !Task.isCancelled else { return }
-            await feeds.checkNew(feedsQuery)
+            await checkAndArrive()
           }
         }
         .onChange(of: scenePhase) { _, phase in
-          if phase == .active, isActivePage { Task { await feeds.checkNew(feedsQuery) } }
+          if phase == .active, isActivePage { Task { await checkAndArrive() } }
         }
         .onChange(of: isActivePage) { _, active in
-          if active { Task { await feeds.checkNew(feedsQuery) } }
+          if active { Task { await checkAndArrive() } }
         }
+        .onChange(of: atTop) { _, _ in settle() }
+        .onChange(of: busy) { _, _ in settle() }
         .task(id: feedsQuery) {
           await feeds.load(feedsQuery)
         }
@@ -229,6 +248,7 @@ struct HomeView: View {
           FolioView(content: Self.folio)
             .padding(.top, 2)
             .padding(.bottom, 10)
+            .id(Self.topID)
           FrontMasthead(
             summary: mastheadSummary,
             capture: $capture, focus: $captureFocused,
@@ -243,6 +263,11 @@ struct HomeView: View {
         .frame(maxWidth: .infinity)
       }
       .scrollContentBackground(.hidden)
+      .onScrollGeometryChange(for: Bool.self) { Self.isAtTop($0) } action: { _, top in atTop = top }
+      .onScrollPhaseChange { _, phase in scrolling = phase != .idle }
+      .onChange(of: scrollTopTick) {
+        withAnimation(reduceMotion ? nil : StashMotion.change) { proxy.scrollTo(Self.topID, anchor: .top) }
+      }
       .focusable()
       .focused($listFocused)
       .focusEffectDisabled()
@@ -300,6 +325,12 @@ struct HomeView: View {
     return (lead, secondary, grid, river)
   }
 
+  /// Where a new post comes in its batch, so they fall one after another, newest first.
+  private func arrivalOrder(_ item: LibraryItem) -> Int {
+    guard feeds.arrivals[item.id] != nil else { return 0 }
+    return feedItems.prefix(30).firstIndex(of: item) ?? 0
+  }
+
   /// The front page's stories in the order they appear, for the arrow keys.
   private var frontOrder: [LibraryItem] {
     let front = frontStories
@@ -312,12 +343,13 @@ struct HomeView: View {
   private var frontPage: some View {
     let front = frontStories
     leadRow(front.lead, secondary: front.secondary)
+      .onHover { hoveringLead = $0 }
       .padding(.vertical, 28)
     shelfBand
     if !front.grid.isEmpty || !feeds.waiting.isEmpty {
       sectionHeading("Read", detail: front.lead.map { dayGroup($0.date) }, link: "All feeds", target: .feeds) {
         if !feeds.waiting.isEmpty {
-          Button { withAnimation(reduceMotion ? nil : StashMotion.change) { feeds.showWaiting() } } label: {
+          Button(action: showNew) {
             Label("\(feeds.waiting.count) new", systemImage: "arrow.up")
           }
           .buttonStyle(.textProminent)
@@ -330,9 +362,11 @@ struct HomeView: View {
             item: item, source: channelName(item) ?? item.source, unseen: feeds.isUnseen(item),
             open: { openFromHome(item) }, perform: perform
           )
+          .arriving(item, feeds: feeds, order: arrivalOrder(item), in: frontSpace)
           .id(item.id)
         }
       }
+      .onHover { hoveringGrid = $0 }
       .padding(.bottom, 36)
     }
     if !videos.isEmpty {
@@ -360,6 +394,7 @@ struct HomeView: View {
         item: lead, source: channelName(lead) ?? lead.source, unseen: feeds.isUnseen(lead),
         open: { openFromHome(lead) }, perform: perform
       )
+      .arriving(lead, feeds: feeds, order: arrivalOrder(lead), in: frontSpace)
       .id(lead.id)
       if secondary.isEmpty {
         story
@@ -376,6 +411,7 @@ struct HomeView: View {
               SecondaryStory(item: item, source: channelName(item) ?? item.source, unseen: feeds.isUnseen(item)) {
                 openFromHome(item)
               }
+              .arriving(item, feeds: feeds, order: arrivalOrder(item), in: frontSpace)
               .id(item.id)
               .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
             }
@@ -476,6 +512,7 @@ struct HomeView: View {
               HeadlineRow(item: item, source: channelName(item) ?? item.source, unseen: feeds.isUnseen(item)) {
                 openFromHome(item)
               }
+              .arrival(feeds.arrivals[item.id], order: arrivalOrder(item))
               .id(item.id)
               .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
             }
@@ -620,47 +657,57 @@ struct HomeView: View {
   #if os(iOS)
   /// A List, so rows swipe: right to save, left to archive.
   private var content: some View {
-    List {
-      FolioView(content: Self.folio).plainListRow(top: 8)
-      iPhoneHeader.plainListRow(top: 12)
-      continuationSection.plainListRow(top: 18)
-      if showsEditionStrip {
-        editionStrip
-          .editionDelivery(date: edition.status?.date, fresh: edition.isFresh)
-          .plainListRow(top: 18)
-      }
-      if !videos.isEmpty { latestVideos.plainListRow(top: 20) }
-      if !upNext.isEmpty { savedSuggestions.plainListRow(top: 20) }
-      feedsHeading.plainListRow(top: 22, bottom: 10)
+    ScrollViewReader { proxy in
+      List {
+        FolioView(content: Self.folio).plainListRow(top: 8)
+        iPhoneHeader.plainListRow(top: 12)
+        continuationSection.plainListRow(top: 18)
+        if showsEditionStrip {
+          editionStrip
+            .editionDelivery(date: edition.status?.date, fresh: edition.isFresh)
+            .plainListRow(top: 18)
+        }
+        if !videos.isEmpty { latestVideos.plainListRow(top: 20) }
+        if !upNext.isEmpty { savedSuggestions.plainListRow(top: 20) }
+        feedsHeading
+          .id(Self.topID)
+          // The feed starts here, so "at the top" means this heading is in view.
+          .onScrollVisibilityChange(threshold: 0.5) { atTop = $0 }
+          .plainListRow(top: 22, bottom: 10)
 
-      let items = feedItems
-      if items.isEmpty {
-        feedsEmpty.plainListRow()
-      } else {
-        ForEach(groups(items), id: \.label) { group in
-          DayBand(label: group.label).stashListRow()
-          ForEach(group.items) { item in
-            Button { open(item, from: .feeds) } label: {
-              if Watch.isVideo(item) {
-                VideoRow(item: item)
-              } else {
-                ItemRow(item: item, subscriptionName: channelName(item), unseen: feeds.isUnseen(item))
+        let items = feedItems
+        if items.isEmpty {
+          feedsEmpty.plainListRow()
+        } else {
+          ForEach(groups(items), id: \.label) { group in
+            DayBand(label: group.label).stashListRow()
+            ForEach(group.items) { item in
+              Button { open(item, from: .feeds) } label: {
+                if Watch.isVideo(item) {
+                  VideoRow(item: item)
+                } else {
+                  ItemRow(item: item, subscriptionName: channelName(item), unseen: feeds.isUnseen(item))
+                }
               }
+              .buttonStyle(.plain)
+              .arrival(feeds.arrivals[item.id], order: items.prefix(30).firstIndex(of: item) ?? 0)
+              .stashListRow()
+              .itemSwipes(item, unseen: feeds.isUnseen(item), perform: perform)
+              .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
             }
-            .buttonStyle(.plain)
-            .arrival(feeds.arrivals[item.id], order: items.prefix(30).firstIndex(of: item) ?? 0)
-            .stashListRow()
-            .itemSwipes(item, unseen: feeds.isUnseen(item), perform: perform)
-            .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
+          }
+          if (feeds.total ?? 0) > items.count {
+            moreRow(items.count).stashListRow()
           }
         }
-        if (feeds.total ?? 0) > items.count {
-          moreRow(items.count).stashListRow()
-        }
+      }
+      .stashList()
+      .refreshable { await reload() }
+      .onScrollPhaseChange { _, phase in scrolling = phase != .idle }
+      .onChange(of: scrollTopTick) {
+        withAnimation(reduceMotion ? nil : StashMotion.change) { proxy.scrollTo(Self.topID, anchor: .top) }
       }
     }
-    .stashList()
-    .refreshable { await reload() }
   }
 
   /// "Home" with a + for saving a link, and the date under it.
@@ -831,7 +878,7 @@ struct HomeView: View {
   private var feedsHeading: some View {
     SectionHeading(title: "From your feeds") {
       if !feeds.waiting.isEmpty {
-        Button { withAnimation(reduceMotion ? nil : StashMotion.change) { feeds.showWaiting() } } label: {
+        Button(action: showNew) {
           Label("\(feeds.waiting.count) new", systemImage: "arrow.up")
         }
         .buttonStyle(.textProminent)
@@ -893,6 +940,72 @@ struct HomeView: View {
       }
     }
     return result
+  }
+
+  // MARK: New posts arriving
+
+  /// Where "N new" scrolls to: the top of the front page on Mac, the feed's heading on iPhone.
+  private static let topID = "home-top"
+
+  /// On Mac, within about 120pt of the top counts as the top, as on the web.
+  private static func isAtTop(_ geometry: ScrollGeometry) -> Bool {
+    geometry.contentOffset.y + geometry.contentInsets.top <= 120
+  }
+
+  /// Something's in progress that new posts shouldn't move under: a scroll, the pointer
+  /// resting on the stories, or a story open over Home.
+  private var busy: Bool {
+    #if os(macOS)
+    let hovering = hoveringLead || hoveringGrid
+    #else
+    let hovering = false
+    #endif
+    return scrolling || hovering || peek != nil || !path.isEmpty || searching || capturing
+  }
+
+  /// Something changed that might let waiting posts in: reaching the top, or finishing a scroll.
+  private func settle() {
+    if revealOnTop, atTop, !scrolling {
+      revealNew()
+    } else {
+      arriveIfIdle()
+    }
+  }
+
+  private func checkAndArrive() async {
+    await feeds.checkNew(feedsQuery)
+    arriveIfIdle()
+  }
+
+  /// New posts drop in on their own when you're at the top of Home and not in the middle of
+  /// something; otherwise they wait behind "N new".
+  private func arriveIfIdle() {
+    guard !feeds.waiting.isEmpty, atTop, !busy, scenePhase == .active, isActivePage else { return }
+    revealNew()
+  }
+
+  /// The gap opens, then the new posts fall into it one after another.
+  private func revealNew() {
+    revealOnTop = false
+    guard !feeds.waiting.isEmpty else { return }
+    let count = withAnimation(reduceMotion ? StashMotion.fade : .smooth(duration: 0.38)) { feeds.showWaiting() }
+    #if os(iOS)
+    guard count > 0, !reduceMotion else { return }
+    Task {
+      try? await Task.sleep(for: .seconds(ArrivalDrop.gapTime + 0.3))
+      Feedback.arrived()
+    }
+    #endif
+  }
+
+  /// "N new": drops them in now at the top, or scrolls up and drops them in on arrival.
+  private func showNew() {
+    if atTop {
+      revealNew()
+    } else {
+      revealOnTop = true
+      scrollTopTick += 1
+    }
   }
 
   // MARK: Loading

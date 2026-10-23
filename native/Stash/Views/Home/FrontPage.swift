@@ -26,6 +26,7 @@ struct FrontMasthead: View {
             .font(.reading(19, .regular, italic: true))
             .foregroundStyle(Color.stMuted)
             .lineLimit(1)
+            .rolls(summary)
         }
         Spacer(minLength: 16)
         CaptureField(text: $capture, prompt: "Search Stash", focus: focus, onSubmit: onSubmit)

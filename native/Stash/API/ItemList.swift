@@ -159,15 +159,17 @@ final class ItemList {
     waiting = fresh + waiting
   }
 
-  /// Puts the waiting items at the top of the list.
-  func showWaiting() {
-    guard !waiting.isEmpty else { return }
+  /// Puts the waiting items at the top of the list, and says how many were actually new.
+  @discardableResult
+  func showWaiting() -> Int {
+    guard !waiting.isEmpty else { return 0 }
     let known = Set(items.map(\.id))
     let fresh = waiting.filter { !known.contains($0.id) }
     for item in fresh { arrivals[item.id] = .now }
     items = fresh + items
     if let count = total { total = count + fresh.count }
     waiting = []
+    return fresh.count
   }
 
   private func adjustPendingCount() {

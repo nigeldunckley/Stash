@@ -1,29 +1,52 @@
 import SwiftUI
 
 /// New stories dropping in from the top, one after another, when they're put at the top of a
-/// list (the "N new" pill, or the Wire), rather than all appearing at once.
+/// list (as they arrive on Home, the "N new" pill, or the Wire), rather than all appearing at
+/// once. The list opens the gap first; then each row falls in from above, overshoots a touch and
+/// settles, with a fine accent edge that holds for a moment and fades. Reduce Motion fades.
 struct ArrivalDrop: ViewModifier {
   /// Where the item sits among the new ones, so each lands just after the one above it.
   let order: Int
 
   @State private var landed: Bool
+  @State private var marked: Bool
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// How long after the gap starts opening the first row begins to fall.
+  static let gapTime = 0.17
+  /// Between one row and the next.
+  static let stagger = 0.06
 
   init(arrived: Date?, order: Int) {
     self.order = order
     // Only items that have only just arrived drop in; ones scrolled to later are simply there.
-    _landed = State(initialValue: arrived.map { Date.now.timeIntervalSince($0) > 1.5 } ?? true)
+    let fresh = arrived.map { Date.now.timeIntervalSince($0) <= 1.5 } ?? false
+    _landed = State(initialValue: !fresh)
+    _marked = State(initialValue: fresh)
   }
 
   func body(content: Content) -> some View {
     content
+      .overlay(alignment: .leading) {
+        Rectangle()
+          .fill(Color.stAccent)
+          .frame(width: 2)
+          .opacity(marked && landed ? 1 : 0)
+          .allowsHitTesting(false)
+      }
       .opacity(landed ? 1 : 0)
-      .offset(y: landed || reduceMotion ? 0 : -18)
+      .offset(y: landed || reduceMotion ? 0 : -26)
       .onAppear {
         guard !landed else { return }
-        let delay = reduceMotion ? 0 : Double(min(order, 8)) * 0.055
-        withAnimation((reduceMotion ? StashMotion.fade : .smooth(duration: 0.5, extraBounce: 0.12)).delay(delay)) {
+        let delay = reduceMotion ? 0 : Self.gapTime + Double(min(order, 8)) * Self.stagger
+        withAnimation((reduceMotion ? StashMotion.fade : .spring(duration: 0.56, bounce: 0.2)).delay(delay)) {
           landed = true
+        }
+        // The accent edge holds for a second after landing, then fades slowly. Set later, not
+        // with a delayed animation, so the edge is actually there to see first.
+        Task {
+          try? await Task.sleep(for: .seconds(delay + 0.56 + 1))
+          withAnimation(.easeOut(duration: 1.6)) { marked = false }
         }
       }
   }
@@ -32,6 +55,13 @@ struct ArrivalDrop: ViewModifier {
 extension View {
   func arrival(_ arrived: Date?, order: Int) -> some View {
     modifier(ArrivalDrop(arrived: arrived, order: order))
+  }
+
+  /// A front page story: drops in when it's new, and slides to its new place when a newer
+  /// story pushes it along (the old lead into the grid, say).
+  func arriving(_ item: LibraryItem, feeds: ItemList, order: Int, in space: Namespace.ID) -> some View {
+    arrival(feeds.arrivals[item.id], order: order)
+      .matchedGeometryEffect(id: item.id, in: space)
   }
 }
 

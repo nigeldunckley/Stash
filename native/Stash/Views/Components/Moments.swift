@@ -627,6 +627,12 @@ enum Feedback {
   static func landed() {
     UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.6)
   }
+
+  /// New posts dropping into Home: one soft tap per batch, as the first row lands.
+  @MainActor
+  static func arrived() {
+    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+  }
   #endif
 
   @MainActor
