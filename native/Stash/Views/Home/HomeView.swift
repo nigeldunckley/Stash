@@ -30,6 +30,7 @@ struct HomeView: View {
   #if os(macOS)
   @State private var selectedID: String?
   @FocusState private var listFocused: Bool
+  @FocusState private var sourceFocused: Bool
   @AppStorage("sidebarHidden") private var sidebarHidden = false
   @Environment(\.autoHiddenSidebar) private var autoHiddenSidebar
   #endif
@@ -37,7 +38,12 @@ struct HomeView: View {
 
   private enum PeekSource { case feeds, videos, upNext, continuing }
 
+  /// Home's feed list is the main column on Mac, so it shows more there.
+  #if os(macOS)
+  private static let feedLimit = 20
+  #else
   private static let feedLimit = 6
+  #endif
   /// The widest the page's content gets, as on the web.
   private static let maxWidth: CGFloat = 1180
 
@@ -101,7 +107,7 @@ struct HomeView: View {
         .onChange(of: LibraryChanges.shared.revision) { _, _ in
           Task { await loadVideos(); await loadUpNext() }
         }
-        .pageTop { path = NavigationPath() }
+        .pageTop { path = NavigationPath(); close() }
         .navigationDestination(for: HomeSearch.self) { search in
           HomeSearchResults(search: search).pageBack(["Home"])
         }
@@ -189,57 +195,71 @@ struct HomeView: View {
   // MARK: Mac layout
 
   #if os(macOS)
-  /// The header pinned at the top, the page scrolling under it, and the preview floating over both.
+  /// Wide enough for the feed list with a column beside it; narrower, Home is one column as on iPhone.
+  private var wide: Bool { contentWidth >= 1000 }
+  /// With the sidebar hidden, keep clear of the window buttons and sidebar button.
+  private var sidebarInset: CGFloat { (sidebarHidden || autoHiddenSidebar) ? 84 : 0 }
+
+  /// Home, or an item opened from it beside the list it came from. Home stays alive underneath,
+  /// so going back (Esc, ⌘[, "‹ Home") finds it scrolled where you left it.
   private var content: some View {
     ZStack {
-      VStack(spacing: 0) {
-        VStack(alignment: .leading, spacing: 18) {
-          FolioView(content: Self.folio)
-          HomeHeader(capture: $capture, focus: $captureFocused, onSubmit: submitCapture, onAdd: { capturing = true })
-        }
-          .padding(.horizontal, 40)
-          // With the sidebar hidden, keep clear of the window buttons and sidebar button.
-          .padding(.leading, (sidebarHidden || autoHiddenSidebar) ? 84 : 0)
-          .padding(.top, 2)
-          .padding(.bottom, 20)
-          .frame(maxWidth: Self.maxWidth + 80 + ((sidebarHidden || autoHiddenSidebar) ? 84 : 0))
-          .frame(maxWidth: .infinity)
-        page
-      }
+      home
+        .opacity(peek == nil ? 1 : 0)
+        .allowsHitTesting(peek == nil)
+        .accessibilityHidden(peek != nil)
       if let peek {
-        Color.black.opacity(0.18)
-          .ignoresSafeArea()
-          .onTapGesture { close() }
+        openItem(peek)
           .transition(.opacity)
-        GeometryReader { geometry in
-          peekCard(peek, inSheet: false)
-            .frame(width: min(860, geometry.size.width - 64), height: max(320, geometry.size.height - 48))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .transition(.asymmetric(
-          insertion: reduceMotion ? .opacity : .scale(scale: 0.98).combined(with: .opacity),
-          removal: .opacity
-        ))
       }
     }
     .animation(reduceMotion ? StashMotion.fade : StashMotion.change, value: peek == nil)
+    .background {
+      Color.clear.pageBack(["Home"], enabled: peek != nil, action: close)
+    }
   }
 
-  /// Content 40pt from the edges, at most 1,180pt wide and centred. Rows are selected with a
-  /// click or the arrow keys; Delete archives and S saves the selected row.
+  /// The header pinned at the top and the page scrolling under it.
+  private var home: some View {
+    VStack(spacing: 0) {
+      VStack(alignment: .leading, spacing: 18) {
+        FolioView(content: Self.folio)
+        HomeHeader(capture: $capture, focus: $captureFocused, onSubmit: submitCapture, onAdd: { capturing = true })
+      }
+      .padding(.horizontal, 40)
+      .padding(.leading, sidebarInset)
+      .padding(.top, 2)
+      .padding(.bottom, 20)
+      .frame(maxWidth: Self.maxWidth + 80 + sidebarInset)
+      .frame(maxWidth: .infinity)
+      page
+    }
+  }
+
+  /// Content 40pt from the edges, at most 1,180pt wide and centred: the feed list down the
+  /// middle with everything else in a column on the right, in the iPhone's order. Rows are
+  /// selected with a click or the arrow keys; Delete archives and S saves the selected row.
   private var page: some View {
     ScrollViewReader { proxy in
       ScrollView {
-        VStack(alignment: .leading, spacing: 28) {
-          continuationSection
-          freshPanels
-          savedSuggestions
-          if showsEditionStrip { editionStrip }
+        Group {
+          if wide {
+            HStack(alignment: .top, spacing: 36) {
+              feedColumn.frame(maxWidth: .infinity, alignment: .topLeading)
+              VStack(alignment: .leading, spacing: 28) { railSections }
+                .frame(width: 340)
+            }
+          } else {
+            VStack(alignment: .leading, spacing: 28) {
+              railSections
+              feedColumn
+            }
+          }
         }
         .padding(.horizontal, 40)
-        .padding(.leading, (sidebarHidden || autoHiddenSidebar) ? 84 : 0)
+        .padding(.leading, sidebarInset)
         .padding(.bottom, 40)
-        .frame(maxWidth: Self.maxWidth + 80 + ((sidebarHidden || autoHiddenSidebar) ? 84 : 0))
+        .frame(maxWidth: Self.maxWidth + 80 + sidebarInset)
         .frame(maxWidth: .infinity)
       }
       .scrollContentBackground(.hidden)
@@ -252,18 +272,114 @@ struct HomeView: View {
       .onKeyPress(.deleteForward) { performOnSelection(.archive) }
       .onKeyPress("s") { performOnSelection(.save) }
       .onKeyPress("/") {
+        guard peek == nil else { return .ignored }
         captureFocused = true
         return .handled
       }
       .onChange(of: selectedID) { _, id in
-        guard let id else { return }
+        // Moving through an open item's list leaves Home where it was.
+        guard let id, peek == nil else { return }
         withAnimation(reduceMotion ? nil : StashMotion.feedback) { proxy.scrollTo(id) }
-        // Arrow keys move the preview through the feed list, but not one opened elsewhere.
-        guard id != peek?.id, !(peek != nil && peekSource != .feeds),
-              let item = feedItems.first(where: { $0.id == id }) else { return }
+        // Arrow keys open each feed item in turn, but only while Home itself is showing.
+        guard let item = feedItems.first(where: { $0.id == id }) else { return }
         open(item, from: .feeds)
       }
     }
+  }
+
+  /// Everything but the feed list, in the order the iPhone shows it.
+  @ViewBuilder
+  private var railSections: some View {
+    continuationSection
+    if showsEditionStrip { editionStrip }
+    if !videos.isEmpty { latestVideos }
+    savedSuggestions
+  }
+
+  private var feedColumn: some View {
+    VStack(alignment: .leading, spacing: 12) { feedsHeading; feedBox }
+  }
+
+  // MARK: An item opened from Home
+
+  /// Wide enough to keep the list beside the item.
+  private var showsSourceColumn: Bool { contentWidth >= 760 }
+
+  /// The list the item came from on the left, the item in the reader or player across the rest.
+  private func openItem(_ item: LibraryItem) -> some View {
+    HStack(spacing: 0) {
+      if showsSourceColumn {
+        sourceColumn
+          .frame(width: 320 + sidebarInset)
+        Rectangle().fill(Color.stLine).frame(width: 1)
+      }
+      peekCard(item, inSheet: true)
+        .padding(.leading, showsSourceColumn ? 0 : sidebarInset)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    .background(Color.stPage)
+  }
+
+  private var sourceTitle: String {
+    switch peekSource {
+    case .feeds: return "From your feeds"
+    case .videos: return "New videos"
+    case .upNext: return "In Saved"
+    case .continuing: return "Continue watching"
+    }
+  }
+
+  /// "‹ HOME", the section's name, and its items, with the open one marked.
+  private var sourceColumn: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      BackBar(back: PageBack(crumbs: ["Home"], action: close))
+      Text(sourceTitle)
+        .font(.stSection)
+        .foregroundStyle(Color.stInk)
+      ScrollViewReader { proxy in
+        ScrollView {
+          ListBox {
+            let list = peekList
+            ForEach(list) { item in
+              sourceRow(item, divider: item.id != list.last?.id)
+            }
+          }
+          .padding(.bottom, 24)
+        }
+        .scrollContentBackground(.hidden)
+        .focusable()
+        .focused($sourceFocused)
+        .focusEffectDisabled()
+        .onKeyPress(.downArrow) { move(1); return .handled }
+        .onKeyPress(.upArrow) { move(-1); return .handled }
+        .onAppear { if let id = peek?.id { proxy.scrollTo(id, anchor: .center) } }
+        .onChange(of: peek?.id) { _, id in
+          guard let id else { return }
+          withAnimation(reduceMotion ? nil : StashMotion.feedback) { proxy.scrollTo(id) }
+        }
+      }
+    }
+    .padding(.leading, 16 + sidebarInset)
+    .padding(.trailing, 16)
+    .padding(.top, 12)
+  }
+
+  private func sourceRow(_ item: LibraryItem, divider: Bool) -> some View {
+    let selected = peek?.id == item.id
+    return Group {
+      if Watch.isVideo(item) {
+        VideoRow(item: item, selected: selected, divider: divider)
+      } else {
+        ItemRow(item: item, subscriptionName: channelName(item), unseen: feeds.isUnseen(item), selected: selected, divider: divider)
+      }
+    }
+    .id(item.id)
+    .contentShape(Rectangle())
+    .onTapGesture {
+      sourceFocused = true
+      show(item)
+    }
+    .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
   }
 
   /// The feed list as one bordered box: day bands, rows, then a "more" row.
@@ -394,7 +510,7 @@ struct HomeView: View {
     if article != nil || video != nil {
       VStack(alignment: .leading, spacing: 12) {
         SectionHeading(title: "Pick up where you left off")
-        let layout = contentWidth >= 900
+        let layout = continuationSideBySide
           ? AnyLayout(HStackLayout(alignment: .top, spacing: 20))
           : AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
         layout {
@@ -408,19 +524,6 @@ struct HomeView: View {
       }
     }
   }
-
-  #if os(macOS)
-  private var freshPanels: some View {
-    let layout = contentWidth >= 900
-      ? AnyLayout(HStackLayout(alignment: .top, spacing: 28))
-      : AnyLayout(VStackLayout(alignment: .leading, spacing: 28))
-    return layout {
-      VStack(alignment: .leading, spacing: 12) { feedsHeading; feedBox }.frame(maxWidth: .infinity)
-      if !videos.isEmpty { latestVideos.frame(maxWidth: .infinity) }
-    }
-  }
-
-  #endif
 
   private var latestVideos: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -458,43 +561,69 @@ struct HomeView: View {
     }
   }
 
+  /// The two "pick up" cards side by side, when there's room and they aren't in Mac's side column.
+  private var continuationSideBySide: Bool {
+    #if os(macOS)
+    !wide && contentWidth >= 700
+    #else
+    contentWidth >= 900
+    #endif
+  }
+
+  /// The Edition's strip stacks its two halves in Mac's side column.
+  private var editionStacked: Bool {
+    #if os(macOS)
+    wide
+    #else
+    false
+    #endif
+  }
+
   private var showsEditionStrip: Bool {
     edition.isOut && edition.state?.showOnHome != false
   }
 
   private var editionStrip: some View {
     Button { go(.edition) } label: {
-      HStack(spacing: 18) {
-        VStack(alignment: .leading, spacing: 4) {
-          (Text("The Edition") + Text(".").foregroundStyle(Color.stAccent))
-            .font(.ui(20, .bold, relativeTo: .title3))
-            .tracking(-0.8)
-          if let current = edition.current {
-            Kicker("No. \(current.number) · \(EditionSchedule.at(current.date, hour: 12).formatted(.dateTime.weekday(.wide).day().month(.wide)))")
-          } else {
-            Kicker("This week's issue is out")
+      HStack(alignment: editionStacked ? .top : .center, spacing: 18) {
+        let layout = editionStacked
+          ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
+          : AnyLayout(HStackLayout(spacing: 18))
+        layout {
+          VStack(alignment: .leading, spacing: 4) {
+            (Text("The Edition") + Text(".").foregroundStyle(Color.stAccent))
+              .font(.ui(20, .bold, relativeTo: .title3))
+              .tracking(-0.8)
+            if let current = edition.current {
+              Kicker("No. \(current.number) · \(EditionSchedule.at(current.date, hour: 12).formatted(.dateTime.weekday(.wide).day().month(.wide)))")
+            } else {
+              Kicker("This week's issue is out")
+            }
           }
-        }
-        .fixedSize()
-        if let leadTitle {
-          Rectangle().fill(Color.stLine).frame(width: 1, height: 34)
-          VStack(alignment: .leading, spacing: 2) {
-            Kicker("In this week's issue", accent: true)
-            Text(leadTitle)
-              .font(.reading(20, .medium, relativeTo: .title3))
-              .foregroundStyle(Color.stInk)
-              #if os(macOS)
-              .lineLimit(1)
-              #else
-              .lineLimit(2)
-              #endif
-              .multilineTextAlignment(.leading)
+          .fixedSize()
+          if let leadTitle {
+            if !editionStacked {
+              Rectangle().fill(Color.stLine).frame(width: 1, height: 34)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+              Kicker("In this week's issue", accent: true)
+              Text(leadTitle)
+                .font(.reading(20, .medium, relativeTo: .title3))
+                .foregroundStyle(Color.stInk)
+                #if os(macOS)
+                .lineLimit(editionStacked ? 3 : 1)
+                #else
+                .lineLimit(2)
+                #endif
+                .multilineTextAlignment(.leading)
+            }
           }
         }
         Spacer(minLength: 0)
         Image(systemName: "arrow.right")
           .font(.ui(13, .semibold))
           .foregroundStyle(Color.stMuted)
+          .padding(.top, editionStacked ? 6 : 0)
       }
       .padding(.vertical, 12)
       .overlay(alignment: .top) { Rectangle().fill(Color.stInk).frame(height: 2) }
@@ -636,19 +765,28 @@ struct HomeView: View {
   private func open(_ item: LibraryItem, from source: PeekSource) {
     peekSource = source
     show(item)
+    #if os(macOS)
+    // Home's key handling moves through the open item's list, wherever it was opened from.
+    listFocused = true
+    #endif
   }
 
   private func close() {
     peek = nil
     #if os(macOS)
     selectedID = nil
+    listFocused = true
     #endif
   }
 
   #if os(macOS)
-  /// Up and down arrows move through the feed list, opening each item in the preview.
+  /// Up and down arrows move through the feed list, opening each item; with an item open they
+  /// move through the list it came from.
   private func step(_ offset: Int) -> KeyPress.Result {
-    guard !(peek != nil && peekSource != .feeds) else { return .ignored }
+    if peek != nil {
+      move(offset)
+      return .handled
+    }
     let items = feedItems
     guard !items.isEmpty else { return .ignored }
     guard let id = selectedID, let index = items.firstIndex(where: { $0.id == id }) else {
