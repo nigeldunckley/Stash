@@ -127,7 +127,7 @@ final class Moments {
 extension View {
   /// Keeps the item's row position, so a save or archive can fly from it.
   func momentSource(_ item: LibraryItem) -> some View {
-    modifier(MomentSource(item: item))
+    MomentSource(item: item, content: self)
   }
 
   /// Marks a sidebar entry's icon as where saves, archives or deletes land. A folded group's
@@ -142,12 +142,13 @@ extension View {
 
 /// Only rows on the page you're looking at count, so a card never starts from a page kept
 /// hidden underneath, and a row that's gone is forgotten.
-private struct MomentSource: ViewModifier {
+private struct MomentSource<Content: View>: View {
   let item: LibraryItem
+  let content: Content
   @Environment(\.isActivePage) private var isActivePage
   @State private var frame: CGRect?
 
-  func body(content: Content) -> some View {
+  var body: some View {
     content
       .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { value in
         frame = value
