@@ -16,6 +16,7 @@ struct NewItemsPill: View {
             .font(.mono(11, .medium))
             .tracking(0.4)
             .monospacedDigit()
+            .rolls(count)
         }
         .foregroundStyle(Color.stOnAccent)
         .padding(.horizontal, 12)

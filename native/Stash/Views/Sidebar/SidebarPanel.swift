@@ -42,7 +42,7 @@ struct SidebarPanel: View {
             row("Highlights", "highlighter", .highlights)
             row("Discover", "safari", .discover) {
               if let discoverCount, discoverCount > 0 {
-                Text("\(discoverCount) new").font(.mono(11)).monospacedDigit().foregroundStyle(Color.stAccentText)
+                Text("\(discoverCount) new").font(.mono(11)).monospacedDigit().foregroundStyle(Color.stAccentText).rolls(discoverCount)
               }
             }
             SidebarRow(title: "Archive", symbol: "archivebox", landing: .archived, selected: section == .archive, action: { go(.archive) }) {

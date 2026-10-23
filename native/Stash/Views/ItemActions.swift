@@ -230,7 +230,14 @@ func runItemAction(
         Task {
           do {
             try await action.undo(on: item)
-            withAnimation(StashMotion.systemReduceMotion ? nil : StashMotion.change) { restore() }
+            // The card flies back out of the sidebar, and the list opens up just in time for it.
+            if action.removesItem, let kind = Moments.kind(for: action, item: item), !StashMotion.systemReduceMotion {
+              Moments.shared.returned(item, from: kind)
+              try? await Task.sleep(for: .seconds(max(0, Moments.flightTime - 0.34)))
+              withAnimation(StashMotion.closeGap) { restore() }
+            } else {
+              withAnimation(StashMotion.systemReduceMotion ? nil : StashMotion.change) { restore() }
+            }
             await refresh()
           } catch {
             toaster.show(error.localizedDescription)
