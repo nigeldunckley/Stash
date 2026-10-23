@@ -279,6 +279,8 @@ struct ItemListView<Tools: View>: View {
 
   private func row(_ item: LibraryItem) -> some View {
     rowBase(item)
+      // The Wire types its new rows in; other lists drop them in one after another.
+      .arrival(wire ? nil : list.arrivals[item.id], order: arrivalOrder(item))
       .id(item.id)
       #if os(macOS)
       .transition(.fold(reduceMotion: reduceMotion))
@@ -287,6 +289,12 @@ struct ItemListView<Tools: View>: View {
       .itemSwipes(item, unseen: showsUnseen && list.isUnseen(item), perform: perform)
       .itemMenu(item, unseen: showsUnseen && list.isUnseen(item), perform: perform)
       .task { await list.loadMore(after: item) }
+  }
+
+  /// Where a just-arrived item sits among the new ones at the top.
+  private func arrivalOrder(_ item: LibraryItem) -> Int {
+    guard list.arrivals[item.id] != nil else { return 0 }
+    return list.visibleItems.prefix(30).firstIndex(of: item) ?? 0
   }
 
   @ViewBuilder

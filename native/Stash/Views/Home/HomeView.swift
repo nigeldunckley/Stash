@@ -643,6 +643,7 @@ struct HomeView: View {
               }
             }
             .buttonStyle(.plain)
+            .arrival(feeds.arrivals[item.id], order: items.prefix(30).firstIndex(of: item) ?? 0)
             .stashListRow()
             .itemSwipes(item, unseen: feeds.isUnseen(item), perform: perform)
             .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
