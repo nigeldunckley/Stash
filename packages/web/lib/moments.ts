@@ -1,20 +1,21 @@
-// Saving and archiving, made physical. Every save or archive in Stash calls
-// announceMoment(), from the few places that actually save or archive. A
-// small card of the item then travels to Saved or Archive in the sidebar,
-// which answers with a dip or a tick when it lands, and an optional sound
+// Saving, archiving, trashing and filing, made physical. Each calls
+// announceMoment() from the few places that actually do it. The item's row
+// then sweeps into its place in the navigation (Saved, Archive, Trash or a
+// collection), which takes it in with a small settle, and an optional sound
 // plays. Undo never announces.
 //
 // The row the action came from is found from the last thing pressed or
 // focused, so callers don't have to pass it along.
 
-export type MomentKind = 'saved' | 'archived'
+export type MomentKind = 'saved' | 'archived' | 'trashed' | 'collected'
 
-// Sent on window when the card arrives (straight away when nothing flies).
+// Sent on window when the item arrives (straight away when nothing flies).
 export const MOMENT_LANDED = 'stash:moment-landed'
 
 export type MomentLanded = {
   kind: MomentKind
-  // Which sidebar row it landed on: 'saved', 'watch-saved' or 'archived'.
+  // Which navigation entry it landed on: 'saved', 'watch-saved', 'archived',
+  // 'trash' or 'collection-<id>'.
   target: string
 }
 
@@ -49,11 +50,12 @@ const reducedMotion = () =>
   typeof window !== 'undefined' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-const originRow = (): Element | undefined => {
+const originRow = (): HTMLElement | undefined => {
   const focused = document.activeElement?.closest?.(ROW)
-  if (focused?.isConnected) return focused
+  if (focused instanceof HTMLElement && focused.isConnected) return focused
   if (
     lastRow &&
+    lastRow.element instanceof HTMLElement &&
     lastRow.element.isConnected &&
     Date.now() - lastRow.at < ORIGIN_FOR_MS
   ) {
@@ -62,25 +64,62 @@ const originRow = (): Element | undefined => {
   return undefined
 }
 
-// A sidebar row counts only while the sidebar is on screen.
-const visibleTarget = (name: string): HTMLElement | undefined => {
-  const element = document.querySelector<HTMLElement>(
-    `[data-moment-target="${name}"]`
-  )
-  if (!element) return undefined
-  const rect = element.getBoundingClientRect()
-  if (rect.width == 0 || rect.right <= 0 || rect.left >= window.innerWidth) {
-    return undefined
+// Whether a scrolling container (the sidebar, when it holds many
+// collections) has scrolled the entry out of view.
+const clipped = (element: HTMLElement, rect: DOMRect): boolean => {
+  const middle = rect.top + rect.height / 2
+  for (
+    let parent = element.parentElement;
+    parent;
+    parent = parent.parentElement
+  ) {
+    const overflow = getComputedStyle(parent).overflowY
+    if (overflow == 'visible') continue
+    const box = parent.getBoundingClientRect()
+    if (middle < box.top || middle > box.bottom) return true
   }
-  if (getComputedStyle(element).visibility == 'hidden') return undefined
-  return element
+  return false
 }
+
+// A navigation entry counts only while it is on screen (the sidebar on Mac,
+// the top bar on iPhone, which hides as you scroll).
+const visibleTarget = (name: string): HTMLElement | undefined => {
+  for (const element of Array.from(
+    document.querySelectorAll<HTMLElement>(`[data-moment-target="${name}"]`)
+  )) {
+    const rect = element.getBoundingClientRect()
+    if (
+      rect.width == 0 ||
+      rect.right <= 0 ||
+      rect.bottom <= 0 ||
+      rect.left >= window.innerWidth ||
+      rect.top >= window.innerHeight ||
+      clipped(element, rect) ||
+      getComputedStyle(element).visibility == 'hidden'
+    ) {
+      continue
+    }
+    return element
+  }
+  return undefined
+}
+
+const watching = () => window.location.pathname.startsWith('/l/watch')
 
 const targetFor = (kind: MomentKind): string => {
   if (kind == 'archived') return 'archived'
-  return window.location.pathname.startsWith('/l/watch')
-    ? 'watch-saved'
-    : 'saved'
+  if (kind == 'trashed') return 'trash'
+  return watching() ? 'watch-saved' : 'saved'
+}
+
+// Where to go when the entry itself isn't on screen: on iPhone, Saved is a
+// pill under Read or Watch, and Archive and Trash live behind More.
+const fallbacksFor = (target: string): string[] => {
+  if (target == 'saved') return ['tab-read']
+  if (target == 'watch-saved' || target.startsWith('collection-')) {
+    return ['watch-saved', 'tab-watch']
+  }
+  return ['more']
 }
 
 const land = (kind: MomentKind, target: string) => {
@@ -92,125 +131,261 @@ const land = (kind: MomentKind, target: string) => {
 const css = (name: string) =>
   getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 
-const ghostFor = (rect: DOMRect, title: string): HTMLDivElement => {
-  const ghost = document.createElement('div')
+// ---------------------------------------------------------------------------
+// The swoosh. A copy of the row lifts off the list, sweeps along a curve to
+// the navigation entry, tilting and shrinking to a sliver as it goes, with a
+// fine accent trail behind it, and is drawn into the entry, which gives a
+// small settle. Rows that leave the list close the gap behind them.
+
+const LIFT_MS = 90
+const TRAVEL_MS = 470
+// Slow out of the lift, fast through the middle, drawn in at the end.
+const SWEEP = 'cubic-bezier(0.55, 0.05, 0.25, 1)'
+const STEPS = 24
+
+type Point = { x: number; y: number }
+
+const bezier = (a: Point, c: Point, b: Point, u: number): Point => ({
+  x: (1 - u) * (1 - u) * a.x + 2 * (1 - u) * u * c.x + u * u * b.x,
+  y: (1 - u) * (1 - u) * a.y + 2 * (1 - u) * u * c.y + u * u * b.y,
+})
+
+const centre = (rect: DOMRect): Point => ({
+  x: rect.left + rect.width / 2,
+  y: rect.top + rect.height / 2,
+})
+
+// Where in the entry the item goes: its icon, when it has one.
+const slotFor = (target: HTMLElement): Point => {
+  const icon = target.querySelector('svg')
+  const rect = icon?.getBoundingClientRect()
+  if (rect && rect.width > 0) return centre(rect)
+  return centre(target.getBoundingClientRect())
+}
+
+const ghostOf = (row: HTMLElement, rect: DOMRect): HTMLElement => {
+  const ghost = row.cloneNode(true) as HTMLElement
+  for (const element of [ghost, ...Array.from(ghost.querySelectorAll('*'))]) {
+    element.removeAttribute('id')
+    element.removeAttribute('data-stash-row')
+    element.removeAttribute('data-morph-title')
+    element.removeAttribute('data-moment-source')
+  }
   ghost.setAttribute('aria-hidden', 'true')
+  ghost.setAttribute('inert', '')
   Object.assign(ghost.style, {
     position: 'fixed',
     left: `${rect.left}px`,
     top: `${rect.top}px`,
     width: `${rect.width}px`,
     height: `${rect.height}px`,
+    margin: '0',
     zIndex: '1000',
     pointerEvents: 'none',
     boxSizing: 'border-box',
-    display: 'flex',
-    alignItems: 'center',
-    padding: '0 12px',
     overflow: 'hidden',
-    whiteSpace: 'nowrap',
-    textOverflow: 'ellipsis',
-    fontFamily: css('--fonts-serif') || 'serif',
-    fontSize: '13px',
-    fontWeight: '500',
-    color: css('--colors-stInk'),
     background: css('--colors-stSurface'),
-    border: `1px solid ${css('--colors-stLineStrong')}`,
-    borderRadius: '6px',
-    boxShadow: '0 6px 16px rgba(9, 9, 11, 0.12)',
-    transformOrigin: 'left center',
+    border: `1px solid ${css('--colors-stLine')}`,
+    borderRadius: '10px',
+    transformOrigin: 'center',
+    willChange: 'transform, opacity, filter',
+    visibility: 'visible',
   } as Partial<CSSStyleDeclaration>)
-  ghost.textContent = title
   document.body.appendChild(ghost)
   return ghost
 }
 
-const SPRING = 'cubic-bezier(0.32, 0.72, 0, 1)'
-const EASE = 'cubic-bezier(0.2, 0, 0, 1)'
+const SVG = 'http://www.w3.org/2000/svg'
 
-// A small card of the item drops into Saved.
-const flySave = async (from: DOMRect, title: string, to: DOMRect) => {
-  const width = Math.min(Math.max(from.width - 24, 120), 320)
-  const start = new DOMRect(
-    from.left + 12,
-    from.top + from.height / 2 - 18,
-    width,
-    36
-  )
-  const ghost = ghostFor(start, title)
-  const dx = to.left + 18 - start.left
-  const dy = to.top + to.height / 2 - (start.top + 18)
-  const animation = ghost.animate(
-    [
-      { transform: 'translate(0, 0) scale(1)', opacity: 1 },
-      {
-        transform: `translate(${dx * 0.55}px, ${dy * 0.45 - 28}px) scale(0.6)`,
-        opacity: 1,
-        offset: 0.55,
-      },
-      { transform: `translate(${dx}px, ${dy}px) scale(0.35)`, opacity: 0 },
-    ],
-    { duration: 360, easing: SPRING, fill: 'forwards' }
-  )
-  await animation.finished.catch(() => undefined)
-  ghost.remove()
+// A fine accent line that follows the item like a comet's tail.
+const trailFor = (a: Point, c: Point, b: Point): SVGSVGElement => {
+  const svg = document.createElementNS(SVG, 'svg')
+  svg.setAttribute('aria-hidden', 'true')
+  Object.assign(svg.style, {
+    position: 'fixed',
+    inset: '0',
+    width: '100vw',
+    height: '100vh',
+    zIndex: '999',
+    pointerEvents: 'none',
+    overflow: 'visible',
+  })
+  const path = document.createElementNS(SVG, 'path')
+  path.setAttribute('d', `M ${a.x} ${a.y} Q ${c.x} ${c.y} ${b.x} ${b.y}`)
+  path.setAttribute('fill', 'none')
+  path.setAttribute('stroke', css('--colors-stAccent') || '#FF4F00')
+  path.setAttribute('stroke-width', '2')
+  path.setAttribute('stroke-linecap', 'round')
+  svg.appendChild(path)
+  document.body.appendChild(svg)
+  return svg
 }
 
-// The row folds flat into an ink line, which files itself into Archive.
-const flyArchive = async (from: DOMRect, title: string, to: DOMRect) => {
-  const ghost = ghostFor(from, title)
-  ghost.style.borderRadius = '0'
-  ghost.style.boxShadow = 'none'
-  const ink = css('--colors-stInk')
-  const fold = ghost.animate(
+const sweep = async (
+  row: HTMLElement,
+  target: HTMLElement,
+  leaves: boolean
+): Promise<void> => {
+  const from = row.getBoundingClientRect()
+  const start = centre(from)
+  const end = slotFor(target)
+  const dx = end.x - start.x
+  // The curve rises before it falls into the entry, more so for long trips.
+  const control = {
+    x: start.x + dx * 0.3,
+    // Kept on screen when the entry is at the top, as on iPhone.
+    y: Math.max(16, Math.min(start.y, end.y) - 70 - Math.abs(dx) * 0.08),
+  }
+  const endScale = Math.max(0.04, 36 / Math.max(from.width, 1))
+  const tilt = dx < 0 ? -5 : 5
+
+  const ghost = ghostOf(row, from)
+  if (leaves) row.style.visibility = 'hidden'
+
+  const raised = '0 18px 40px -12px rgba(9, 9, 11, 0.32)'
+  const lift = ghost.animate(
     [
-      { height: `${from.height}px`, top: `${from.top}px` },
-      {
-        height: '1px',
-        top: `${from.top + from.height / 2}px`,
-        background: ink,
-        borderColor: ink,
-        color: 'transparent',
-        padding: '0',
-      },
+      { transform: 'scale(1)', boxShadow: '0 0 0 rgba(9, 9, 11, 0)' },
+      { transform: 'scale(1.025) translateY(-3px)', boxShadow: raised },
     ],
-    { duration: 160, easing: EASE, fill: 'forwards' }
+    {
+      duration: LIFT_MS,
+      easing: 'cubic-bezier(0.2, 0, 0, 1)',
+      fill: 'forwards',
+    }
   )
-  await fold.finished.catch(() => undefined)
-  const y = from.top + from.height / 2
-  const travel = ghost.animate(
+  await lift.finished.catch(() => undefined)
+
+  const frames: Keyframe[] = []
+  for (let i = 0; i <= STEPS; i++) {
+    const u = i / STEPS
+    const at = bezier(start, control, end, u)
+    // Holds its size through the lift of the curve, then is drawn in.
+    const scale = 1.025 + (endScale - 1.025) * Math.pow(u, 1.7)
+    const rotate = tilt * Math.sin(Math.PI * Math.min(u * 1.15, 1))
+    frames.push({
+      offset: u,
+      transform: `translate(${at.x - start.x}px, ${
+        at.y - start.y - 3 * (1 - u)
+      }px) rotate(${rotate}deg) scale(${scale})`,
+      filter: `blur(${(1.4 * Math.sin(Math.PI * u)).toFixed(2)}px)`,
+      opacity: u < 0.82 ? 1 : 1 - (u - 0.82) / 0.18,
+      boxShadow: raised,
+    })
+  }
+  const travel = ghost.animate(frames, {
+    duration: TRAVEL_MS,
+    easing: SWEEP,
+    fill: 'forwards',
+  })
+
+  const trail = trailFor(start, control, end)
+  const path = trail.firstChild as SVGPathElement
+  const length = path.getTotalLength()
+  const tail = Math.min(140, length * 0.4)
+  path.setAttribute('stroke-dasharray', `${tail} ${length + tail}`)
+  path.animate(
     [
-      { transform: 'translate(0, 0) scaleX(1)', opacity: 1 },
-      {
-        transform: `translate(${to.left + 16 - from.left}px, ${
-          to.top + to.height / 2 - y
-        }px) scaleX(${40 / from.width})`,
-        opacity: 0.2,
-      },
+      { strokeDashoffset: tail, opacity: 0 },
+      { strokeDashoffset: tail - length * 0.5, opacity: 0.7, offset: 0.5 },
+      { strokeDashoffset: tail - length, opacity: 0 },
     ],
-    { duration: 220, easing: SPRING, fill: 'forwards' }
+    { duration: TRAVEL_MS, easing: SWEEP, fill: 'forwards' }
   )
+
   await travel.finished.catch(() => undefined)
   ghost.remove()
+  trail.remove()
+  settle(target)
+  // If the row is still here (an undo, or the save didn't remove it),
+  // bring it back.
+  if (leaves) {
+    setTimeout(() => {
+      if (row.isConnected) row.style.visibility = ''
+    }, 900)
+  }
 }
 
-export function announceMoment(kind: MomentKind, title?: string): void {
+// The entry takes the item in: a brief accent wash and a small give.
+const settle = (target: HTMLElement) => {
+  const wash = `color-mix(in srgb, ${
+    css('--colors-stAccent') || '#FF4F00'
+  } 14%, transparent)`
+  target.animate(
+    [
+      { backgroundColor: wash, transform: 'scale(0.97)' },
+      { transform: 'scale(1.015)', offset: 0.45 },
+      { transform: 'scale(1)' },
+    ],
+    { duration: 420, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' }
+  )
+}
+
+// When the row leaves the list, the rows below slide up into its place
+// rather than jumping.
+const closeGap = (row: HTMLElement) => {
+  const rows = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-stash-row], [data-story]')
+  ).filter((element) => element != row)
+  const before = new Map(
+    rows.map((element) => [element, element.getBoundingClientRect()])
+  )
+  let done = false
+  const finish = () => {
+    if (done) return
+    done = true
+    observer.disconnect()
+    clearTimeout(timer)
+  }
+  const observer = new MutationObserver(() => {
+    if (row.isConnected) return
+    finish()
+    requestAnimationFrame(() => {
+      for (const [element, was] of Array.from(before.entries())) {
+        if (!element.isConnected) continue
+        const now = element.getBoundingClientRect()
+        const x = was.left - now.left
+        const y = was.top - now.top
+        if (Math.abs(x) < 1 && Math.abs(y) < 1) continue
+        if (now.bottom < 0 || now.top > window.innerHeight) continue
+        element.animate(
+          [
+            { transform: `translate(${x}px, ${y}px)` },
+            { transform: 'translate(0, 0)' },
+          ],
+          { duration: 340, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' }
+        )
+      }
+    })
+  })
+  observer.observe(document.body, { childList: true, subtree: true })
+  const timer = setTimeout(finish, 2500)
+}
+
+// Saving and archiving (and trashing, and filing a video in a collection)
+// call this from the few places that actually do it. Pass `target` for an
+// entry other than the kind's own, such as a collection.
+export function announceMoment(
+  kind: MomentKind,
+  title?: string,
+  target?: string
+): void {
   if (typeof window === 'undefined') return
   playMomentSound(kind)
-  const target = targetFor(kind)
+  const name = target ?? targetFor(kind)
   const row = originRow()
-  const to = visibleTarget(target)
+  const to =
+    visibleTarget(name) ??
+    fallbacksFor(name)
+      .map(visibleTarget)
+      .find((element) => element)
   if (!row || !to || reducedMotion()) {
-    land(kind, target)
+    land(kind, name)
     return
   }
-  const from = row.getBoundingClientRect()
-  const name =
-    title ?? row.querySelector('.row-title')?.textContent?.trim() ?? ''
-  const fly = kind == 'saved' ? flySave : flyArchive
-  void fly(from, name, to.getBoundingClientRect()).then(() =>
-    land(kind, target)
-  )
+  const leaves = kind != 'saved' && kind != 'collected'
+  if (leaves) closeGap(row)
+  void sweep(row, to, leaves).then(() => land(kind, name))
 }
 
 // ---------------------------------------------------------------------------
@@ -273,7 +448,7 @@ export function playMomentSound(kind: MomentKind, force = false): void {
     audio = audio ?? new Context()
     if (audio.state == 'suspended') void audio.resume()
     const now = audio.currentTime + 0.01
-    if (kind == 'saved') {
+    if (kind == 'saved' || kind == 'collected') {
       // A soft paper slip.
       burst(audio, now, 0.09, 'bandpass', 3800, 0.05)
     } else {

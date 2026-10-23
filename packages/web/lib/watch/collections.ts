@@ -4,6 +4,7 @@
 // put in one by giving it the label. Which labels are collections, and their
 // order, is kept with your account in the personalization settings.
 
+import { announceMoment } from '../moments'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
 import { gql } from 'graphql-request'
 import { useCallback, useMemo } from 'react'
@@ -295,6 +296,9 @@ export function useSetVideoCollection() {
             },
           ]
         : kept
+      if (collection) {
+        announceMoment('collected', undefined, `collection-${collection.id}`)
+      }
       try {
         await setLabels.mutateAsync({
           itemId: item.id,
