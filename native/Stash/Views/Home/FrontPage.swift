@@ -77,7 +77,9 @@ struct LeadStory: View {
   let open: () -> Void
   let perform: (ItemAction, LibraryItem) -> Void
 
-  var body: some View {
+  var body: some View { story.momentSource(item) }
+
+  private var story: some View {
     VStack(alignment: .leading, spacing: 14) {
       Button(action: open) {
         VStack(alignment: .leading, spacing: 14) {
@@ -129,7 +131,9 @@ struct StoryCard: View {
   let perform: (ItemAction, LibraryItem) -> Void
   @State private var hovering = false
 
-  var body: some View {
+  var body: some View { story.momentSource(item) }
+
+  private var story: some View {
     Button(action: open) {
       VStack(alignment: .leading, spacing: 10) {
         if let url = item.imageURL {
@@ -175,7 +179,9 @@ struct HeadlineRow: View {
   var read = false
   let open: () -> Void
 
-  var body: some View {
+  var body: some View { story.momentSource(item) }
+
+  private var story: some View {
     Button(action: open) {
       VStack(alignment: .leading, spacing: 5) {
         StoryKicker(source: source, detail: shortAge(item.date), unseen: unseen && !read)
@@ -250,7 +256,9 @@ struct PickUpRow: View {
   let watching: Bool
   let open: () -> Void
 
-  var body: some View {
+  var body: some View { story.momentSource(item) }
+
+  private var story: some View {
     Button(action: open) {
       HStack(alignment: .top, spacing: 14) {
         // The same width for an article and a video, so their titles line up.
@@ -320,7 +328,9 @@ struct NumberedRow: View {
   let divider: Bool
   let open: () -> Void
 
-  var body: some View {
+  var body: some View { story.momentSource(item) }
+
+  private var story: some View {
     Button(action: open) {
       HStack(alignment: .firstTextBaseline, spacing: 14) {
         Text("\(number)")
@@ -357,7 +367,9 @@ struct VideoTile: View {
   let open: () -> Void
   @State private var hovering = false
 
-  var body: some View {
+  var body: some View { story.momentSource(item) }
+
+  private var story: some View {
     Button(action: open) {
       VStack(alignment: .leading, spacing: 10) {
         Color.stSunken
@@ -406,7 +418,9 @@ struct SecondaryStory: View {
   let unseen: Bool
   let open: () -> Void
 
-  var body: some View {
+  var body: some View { story.momentSource(item) }
+
+  private var story: some View {
     Button(action: open) {
       HStack(alignment: .top, spacing: 14) {
         VStack(alignment: .leading, spacing: 6) {

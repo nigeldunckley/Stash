@@ -207,6 +207,8 @@ struct HomeView: View {
       home
         .opacity(peek == nil ? 1 : 0)
         .allowsHitTesting(peek == nil)
+        // Hidden while a story is open, so a save flies from the open list, not from here.
+        .environment(\.isActivePage, isActivePage && peek == nil)
         .accessibilityHidden(peek != nil)
       if let peek {
         openItem(peek)

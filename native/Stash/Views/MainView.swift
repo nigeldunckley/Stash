@@ -119,11 +119,8 @@ struct MainView: View {
   private var flightLayer: some View {
     GeometryReader { geometry in
       // iPad shows its tabs at the top or in a sidebar, so only iPhone's bottom bar is aimed at.
-      if horizontalSizeClass == .compact, let moment = Moments.shared.current {
-        let frame = geometry.frame(in: .global)
-        MomentFlight(moment: moment, target: tabTarget(moment.kind, in: frame), origin: frame.origin)
-          .id(moment.id)
-      }
+      let moment = horizontalSizeClass == .compact ? Moments.shared.current : nil
+      MomentFlight(moment: moment, target: moment.map { tabTarget($0.kind, in: geometry.frame(in: .global)) })
     }
     .allowsHitTesting(false)
   }

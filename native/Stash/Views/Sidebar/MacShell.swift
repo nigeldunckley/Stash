@@ -88,8 +88,8 @@ struct MacShell: View {
     .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
     .environment(\.autoHiddenSidebar, !sidebarVisible)
     .linkCapture(isPresented: $capturing)
-    // A saved card flying to Saved, or a hairline to Archive.
-    .overlay { flightLayer }
+    // A row swooshing into its place in the sidebar.
+    .overlay { MacFlightLayer(sidebarVisible: sidebarVisible) }
 
     .animation(StashMotion.layout(reduceMotion: reduceMotion), value: sidebarHidden)
     .animation(StashMotion.layout(reduceMotion: reduceMotion), value: readerFocus)
@@ -202,16 +202,6 @@ struct MacShell: View {
     }
   }
 
-  @ViewBuilder
-  private var flightLayer: some View {
-    GeometryReader { geometry in
-      if sidebarVisible, let moment = Moments.shared.current, let target = Moments.shared.targets[moment.kind] {
-        MomentFlight(moment: moment, target: target, origin: geometry.frame(in: .global).origin)
-          .id(moment.id)
-      }
-    }
-    .allowsHitTesting(false)
-  }
 
   /// The video you left, over the page. Drag it anywhere (it snaps to nearby edges) and drag a
   /// corner to resize it; it remembers both.
@@ -393,5 +383,15 @@ extension Notification.Name {
   static let stashCapture = Notification.Name("stashCapture")
   /// ⌘,: open Settings.
   static let stashOpenSettings = Notification.Name("stashOpenSettings")
+}
+
+/// The swoosh over the window, in its own view so a flight doesn't redraw the whole shell.
+private struct MacFlightLayer: View {
+  let sidebarVisible: Bool
+
+  var body: some View {
+    let moment = sidebarVisible ? Moments.shared.current : nil
+    MomentFlight(moment: moment, target: moment.flatMap { Moments.shared.targets[$0.kind] })
+  }
 }
 #endif
