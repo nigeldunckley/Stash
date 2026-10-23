@@ -389,6 +389,114 @@ export function announceMoment(
 }
 
 // ---------------------------------------------------------------------------
+// Arrivals. New posts that turn up at the top of a list don't just appear:
+// the rows already there glide down to open a gap, then each new post drops
+// into it from just above, one after another, and settles. A fine accent
+// edge marks them for a moment and fades. Take measureRows() just before the
+// new rows are put in, and pass it to dropIn() straight after.
+
+const DROP_MS = 560
+// The same curves as components/elements/stash/motion.ts.
+const spring = 'cubic-bezier(0.32, 0.72, 0, 1)'
+const ease = 'cubic-bezier(0.2, 0, 0, 1)'
+const DROP_STAGGER_MS = 60
+const GAP_MS = 380
+
+export type RowPositions = Map<Element, DOMRect>
+
+export function measureRows(list: HTMLElement): RowPositions {
+  return new Map(
+    Array.from(list.children).map((child) => [
+      child,
+      child.getBoundingClientRect(),
+    ])
+  )
+}
+
+const onScreen = (rect: DOMRect) =>
+  rect.bottom > 0 && rect.top < window.innerHeight
+
+export function dropIn(
+  list: HTMLElement,
+  before: RowPositions,
+  arrived: HTMLElement[]
+): void {
+  if (typeof window === 'undefined') return
+  // The list's own children, so a row wrapped for swiping moves as one.
+  const topLevel = (element: HTMLElement): Element | undefined => {
+    let node: Element | null = element
+    while (node && node.parentElement != list) node = node.parentElement
+    return node ?? undefined
+  }
+  const incoming = arrived
+    .map((row) => ({ row, element: topLevel(row) }))
+    .filter((entry): entry is { row: HTMLElement; element: Element } =>
+      Boolean(entry.element)
+    )
+  const fresh = new Set(incoming.map((entry) => entry.element))
+
+  if (reducedMotion()) {
+    for (const element of Array.from(list.children)) {
+      if (before.has(element)) continue
+      element.animate([{ opacity: 0 }, { opacity: 1 }], {
+        duration: 300,
+        easing: 'ease',
+      })
+    }
+    return
+  }
+
+  // The gap opens: everything already there slides down to where it now is.
+  for (const element of Array.from(list.children)) {
+    const was = before.get(element)
+    const now = element.getBoundingClientRect()
+    if (!was) {
+      // A new day heading, say, fades in with the first arrival.
+      if (!fresh.has(element) && onScreen(now)) {
+        element.animate([{ opacity: 0 }, { opacity: 1 }], {
+          duration: 320,
+          delay: GAP_MS / 2,
+          easing: 'ease',
+          fill: 'backwards',
+        })
+      }
+      continue
+    }
+    const y = was.top - now.top
+    if (Math.abs(y) < 1 || (!onScreen(was) && !onScreen(now))) continue
+    element.animate(
+      [{ transform: `translateY(${y}px)` }, { transform: 'translateY(0)' }],
+      { duration: GAP_MS, easing: spring }
+    )
+  }
+
+  // Then each new post drops in from above, overshoots a touch and settles.
+  const accent = css('--colors-stAccent') || '#FF4F00'
+  incoming.forEach(({ row, element }, index) => {
+    if (!onScreen(element.getBoundingClientRect())) return
+    const delay = GAP_MS * 0.45 + Math.min(index, 8) * DROP_STAGGER_MS
+    element.animate(
+      [
+        { opacity: 0, transform: 'translateY(-26px) scale(0.985)' },
+        { opacity: 1, offset: 0.55 },
+        { transform: 'translateY(3px) scale(1)', offset: 0.72 },
+        { opacity: 1, transform: 'translateY(0) scale(1)' },
+      ],
+      { duration: DROP_MS, delay, easing: ease, fill: 'backwards' }
+    )
+    // On the row itself, so its own background doesn't cover the edge.
+    row.animate(
+      [
+        { boxShadow: `inset 2px 0 0 ${accent}` },
+        { boxShadow: `inset 2px 0 0 ${accent}`, offset: 0.4 },
+        { boxShadow: 'inset 2px 0 0 transparent' },
+      ],
+      { duration: 2600, delay, easing: 'ease-out' }
+    )
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Sounds: off unless turned on in Settings › Account › This device. Both are
 // made on the fly from a little filtered noise, so there's nothing to load.
 

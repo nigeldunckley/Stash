@@ -3,6 +3,7 @@ import {
   Archive,
   ArrowRight,
   ArrowSquareOut,
+  ArrowUp,
   Bookmark,
   CaretRight,
   Checks,
@@ -18,6 +19,7 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -50,6 +52,7 @@ import {
 import { faviconFor, shortTimeAgo, siteName } from '../../../lib/textFormatting'
 import { showErrorToast, showSuccessToast } from '../../../lib/toastHelpers'
 import { navigateWithMorph } from '../../../lib/viewTransition'
+import { dropIn, measureRows, RowPositions } from '../../../lib/moments'
 import { TypeCover, typeCoverFor } from '../../elements/stash/TypeCover'
 import { dayGroup, isVideoItem } from '../../../lib/youtube'
 import {
@@ -70,6 +73,7 @@ import {
   UnseenDot,
 } from '../../elements/stash'
 import { Ribbon } from '../../elements/stash/Ribbon'
+import { Roll, useRoll } from '../../elements/stash/Roll'
 import { Folio, stashDay, useFeedsFolio } from '../../elements/stash/Folio'
 import { motion, pressable } from '../../elements/stash/motion'
 import { styled } from '../../tokens/stitches.config'
@@ -360,6 +364,42 @@ const Group = styled('div', {
   textTransform: 'uppercase',
   color: '$stMuted',
   background: '$stCanvas',
+})
+
+// "↑ 3 new" over the list, for posts that came in while you were further
+// down. Pressing it takes you to the top, where they drop in.
+const NewPill = styled('div', {
+  position: 'sticky',
+  top: '12px',
+  '@mdDown': {
+    top: 'calc(var(--topbar, 48px) + 12px + env(safe-area-inset-top, 0px))',
+  },
+  zIndex: 3,
+  display: 'flex',
+  justifyContent: 'center',
+  height: 0,
+  overflow: 'visible',
+  button: {
+    all: 'unset',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    height: '30px',
+    marginTop: '-15px',
+    padding: '0 12px',
+    borderRadius: '999px',
+    background: '$stInk',
+    color: '$stCanvas',
+    fontFamily: '$inter',
+    fontSize: '$caption',
+    fontWeight: 600,
+    cursor: 'pointer',
+    boxShadow: '0 6px 18px rgba(0, 0, 0, 0.18)',
+    transition: `transform ${motion.fast}`,
+    '&:hover': { transform: 'translateY(-1px)' },
+    '&:focus-visible': { outline: '2px solid $stAccent', outlineOffset: '2px' },
+    ...pressable,
+  },
 })
 
 const More = styled(Link, {
@@ -679,7 +719,9 @@ export function StashHome(): JSX.Element {
       includeCount: true,
     },
     true,
-    2 * 60 * 1000
+    // Every minute while Home is showing; React Query also checks when you
+    // come back to the tab, and pauses while it's hidden.
+    60 * 1000
   )
   const otherQuery = useGetLibraryItems(
     `home-feeds-count-${tab == 'read' ? 'watch' : 'read'}`,
@@ -710,14 +752,42 @@ export function StashHome(): JSX.Element {
         .filter(isVisible),
     [itemsQuery.data]
   )
+  // New posts that turn up while Home is open. They're held back while
+  // you're scrolled down, the page is hidden or the pointer is on the list,
+  // so nothing moves under you, then drop in at the top.
+  const known = useRef<Set<string>>()
+  const [held, setHeld] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    if (!itemsQuery.data) return
+    if (!known.current) {
+      known.current = new Set(items.map((item) => item.id))
+      return
+    }
+    const seenBefore = known.current
+    // Older posts that move up from below when something is archived
+    // simply join the list; only ones above the last familiar row arrive.
+    let lastKnown = -1
+    items.forEach((item, index) => {
+      if (seenBefore.has(item.id)) lastKnown = index
+    })
+    const arrivals = items
+      .filter((item, index) => !seenBefore.has(item.id) && index < lastKnown)
+      .map((item) => item.id)
+    items.forEach((item) => seenBefore.add(item.id))
+    if (arrivals.length) {
+      setHeld((current) => new Set([...current, ...arrivals]))
+    }
+  }, [items, itemsQuery.data])
+
   const listed = useMemo(
     () =>
       items.filter(
         (item) =>
-          item.id == peekItem?.id ||
-          (!archived.has(item.id) && !saved.has(item.id))
+          !held.has(item.id) &&
+          (item.id == peekItem?.id ||
+            (!archived.has(item.id) && !saved.has(item.id)))
       ),
-    [items, saved, archived, peekItem]
+    [items, held, saved, archived, peekItem]
   )
 
   const [peekWidth, setPeekWidth] = useState<number>()
@@ -981,6 +1051,8 @@ export function StashHome(): JSX.Element {
     setTab(next)
     setPeekItem(undefined)
     setSeen(new Set())
+    known.current = undefined
+    setHeld(new Set())
   }
 
   // Keyboard, as in Feeds: j and k move, space peeks, o opens, s saves,
@@ -1064,6 +1136,68 @@ export function StashHome(): JSX.Element {
     return list
   }, [listed, now])
   const more = Math.max(0, (total ?? 0) - items.length)
+  const shownTotal =
+    total === undefined ? undefined : Math.max(0, total - held.size)
+  const rolled = useRoll(shownTotal)
+
+  const listRef = useRef<HTMLDivElement>(null)
+  const hovering = useRef(false)
+  // Set by the "N new" pill, so they drop in on reaching the top even if the
+  // pointer ends up over the list.
+  const asked = useRef(false)
+  const dropping = useRef<{ before: RowPositions; ids: string[] }>()
+  const release = useCallback(
+    (force = false) => {
+      if (!held.size || dropping.current) return
+      if (asked.current && window.scrollY <= 120) force = true
+      if (
+        !force &&
+        (window.scrollY > 120 ||
+          document.visibilityState != 'visible' ||
+          hovering.current)
+      ) {
+        return
+      }
+      dropping.current = {
+        before: listRef.current ? measureRows(listRef.current) : new Map(),
+        ids: Array.from(held),
+      }
+      asked.current = false
+      setHeld(new Set())
+    },
+    [held]
+  )
+  useLayoutEffect(() => {
+    const drop = dropping.current
+    if (!drop || held.size) return
+    dropping.current = undefined
+    const rows = drop.ids
+      .map((id) => rowRefs.current.get(id))
+      .filter((row): row is HTMLDivElement => !!row)
+    if (listRef.current) dropIn(listRef.current, drop.before, rows)
+  }, [held])
+  useEffect(() => {
+    if (!held.size) return
+    release()
+    // Come back to the top, or to the tab, and they drop in then.
+    const onScroll = () => {
+      if (window.scrollY <= 120) release()
+    }
+    const onVisible = () => {
+      if (document.visibilityState == 'visible') setTimeout(release, 400)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [held, release])
+  const showHeld = () => {
+    asked.current = true
+    if (window.scrollY <= 120) release()
+    else window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const menuFor = (item: LibraryItemNode): MenuEntry[] => [
     { label: 'Read in Stash', shortcut: '↵', onSelect: () => open(item) },
@@ -1527,9 +1661,17 @@ export function StashHome(): JSX.Element {
           <Feeds aria-label="New from your feeds">
             <SectionTop>
               <h2>New from your feeds</h2>
-              {total !== undefined && (
-                <Count accent={total > 0}>
-                  {total} {tab == 'watch' ? 'new' : 'unseen'}
+              {shownTotal !== undefined && (
+                <Count accent={shownTotal > 0}>
+                  {rolled.from !== undefined ? (
+                    <Roll key={rolled.key}>
+                      <span>{rolled.from}</span>
+                      <span>{shownTotal}</span>
+                    </Roll>
+                  ) : (
+                    shownTotal
+                  )}{' '}
+                  {tab == 'watch' ? 'new' : 'unseen'}
                 </Count>
               )}
               <Trailing>
@@ -1579,24 +1721,43 @@ export function StashHome(): JSX.Element {
                 </Link>
               </Empty>
             ) : (
-              <ItemList>
-                {groups.map((group) => (
-                  <Fragment key={group.label}>
-                    <Group>{group.label}</Group>
-                    {group.items.map(rowFor)}
-                  </Fragment>
-                ))}
-                <More href={tab == 'watch' ? '/l/watch' : '/l/subscriptions'}>
-                  <span>
-                    {more > 0
-                      ? `${more} more ${tab == 'watch' ? 'new' : 'unseen'}`
-                      : 'All your feeds'}
-                  </span>
-                  <b>
-                    Open Feeds <ArrowRight size={13} />
-                  </b>
-                </More>
-              </ItemList>
+              <>
+                {held.size > 0 && (
+                  <NewPill>
+                    <button type="button" onClick={showHeld}>
+                      <ArrowUp size={13} weight="bold" />
+                      {held.size} new
+                    </button>
+                  </NewPill>
+                )}
+                <ItemList
+                  ref={listRef}
+                  onPointerEnter={(event) => {
+                    if (event.pointerType == 'mouse') hovering.current = true
+                  }}
+                  onPointerLeave={() => {
+                    hovering.current = false
+                    release()
+                  }}
+                >
+                  {groups.map((group) => (
+                    <Fragment key={group.label}>
+                      <Group>{group.label}</Group>
+                      {group.items.map(rowFor)}
+                    </Fragment>
+                  ))}
+                  <More href={tab == 'watch' ? '/l/watch' : '/l/subscriptions'}>
+                    <span>
+                      {more > 0
+                        ? `${more} more ${tab == 'watch' ? 'new' : 'unseen'}`
+                        : 'All your feeds'}
+                    </span>
+                    <b>
+                      Open Feeds <ArrowRight size={13} />
+                    </b>
+                  </More>
+                </ItemList>
+              </>
             )}
           </Feeds>
           {peekItem && !isPhone ? (

@@ -21,6 +21,7 @@ import { keyframes, styled, theme } from '../../tokens/stitches.config'
 import { RibbonIcon } from '../../elements/stash/Ribbon'
 import { reducedMotion, spring } from '../../elements/stash/motion'
 import { MOMENT_LANDED, MomentLanded } from '../../../lib/moments'
+import { Roll, useRoll } from '../../elements/stash/Roll'
 import { usePersistedState } from '../../../lib/hooks/usePersistedState'
 import { NavMenuFooter } from './Footer'
 import { ServerVersionChip } from '../settings/ServerVersionChip'
@@ -402,56 +403,6 @@ function NavCount(props: { source: NavCountSource }): JSX.Element | null {
 }
 
 const label = (count: number) => (count > 999 ? '999+' : count)
-
-const rollUp = keyframes({
-  from: { transform: 'translateY(0)' },
-  to: { transform: 'translateY(-50%)' },
-})
-
-const settle = keyframes({
-  '0%, 70%': { color: '$stAccentText' },
-  '100%': { color: '$stMuted' },
-})
-
-// A count that goes up rolls like an odometer and stays orange for a beat.
-const Roll = styled('span', {
-  display: 'inline-flex',
-  flexDirection: 'column',
-  height: '1.3em',
-  lineHeight: '1.3em',
-  overflow: 'hidden',
-  verticalAlign: 'bottom',
-  animation: `${settle} 1600ms ease forwards`,
-  '& > span': {
-    animation: `${rollUp} 240ms ${spring} forwards`,
-  },
-  '& > span:first-child': { opacity: 0.35 },
-  [reducedMotion]: { '& > span': { animation: 'none' } },
-})
-
-// Remembers the last count, so a rise can be shown as a roll.
-function useRoll(count: number | undefined): {
-  from?: number
-  key: number
-} {
-  const previous = useRef(count)
-  const [rolled, setRolled] = useState<{ from?: number; key: number }>({
-    key: 0,
-  })
-  useEffect(() => {
-    const before = previous.current
-    previous.current = count
-    if (before !== undefined && count !== undefined && count > before) {
-      setRolled((current) => ({ from: before, key: current.key + 1 }))
-      const timer = setTimeout(
-        () => setRolled((current) => ({ key: current.key })),
-        1600
-      )
-      return () => clearTimeout(timer)
-    }
-  }, [count])
-  return rolled
-}
 
 // The icon swallows the item, then springs back.
 const dip = keyframes({
