@@ -88,7 +88,7 @@ struct MacShell: View {
     .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
     .environment(\.autoHiddenSidebar, !sidebarVisible)
     .linkCapture(isPresented: $capturing)
-    // A saved card flying to Saved, or a hairline to Archive.
+    // A row swooshing into its place in the sidebar.
     .overlay { flightLayer }
 
     .animation(StashMotion.layout(reduceMotion: reduceMotion), value: sidebarHidden)
@@ -202,15 +202,9 @@ struct MacShell: View {
     }
   }
 
-  @ViewBuilder
   private var flightLayer: some View {
-    GeometryReader { geometry in
-      if sidebarVisible, let moment = Moments.shared.current, let target = Moments.shared.targets[moment.kind] {
-        MomentFlight(moment: moment, target: target, origin: geometry.frame(in: .global).origin)
-          .id(moment.id)
-      }
-    }
-    .allowsHitTesting(false)
+    let moment = sidebarVisible ? Moments.shared.current : nil
+    return MomentFlight(moment: moment, target: moment.flatMap { Moments.shared.targets[$0.kind] })
   }
 
   /// The video you left, over the page. Drag it anywhere (it snaps to nearby edges) and drag a

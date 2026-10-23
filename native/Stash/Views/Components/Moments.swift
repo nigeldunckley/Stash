@@ -103,57 +103,76 @@ extension View {
 private struct MomentSource: ViewModifier {
   let item: LibraryItem
   @Environment(\.isActivePage) private var isActivePage
+  @State private var frame: CGRect?
 
   func body(content: Content) -> some View {
     content
-      .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
-        if isActivePage { Moments.shared.rowFrames[item.id] = frame }
+      .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { value in
+        frame = value
+        if isActivePage { Moments.shared.rowFrames[item.id] = value }
       }
       .onChange(of: isActivePage) { _, active in
-        if !active { Moments.shared.rowFrames[item.id] = nil }
+        if active { Moments.shared.rowFrames[item.id] = frame } else { forget() }
       }
-      .onDisappear { Moments.shared.rowFrames[item.id] = nil }
+      .onDisappear(perform: forget)
+  }
+
+  /// Forgets this row's place, unless another copy of the item (on the page in front) has
+  /// since recorded its own.
+  private func forget() {
+    if Moments.shared.rowFrames[item.id] == frame { Moments.shared.rowFrames[item.id] = nil }
   }
 }
 
 /// The swoosh: a copy of the row lifts off the list, sweeps along a curve to the navigation
-/// entry, tilting, blurring and shrinking to a sliver as it goes, with a fine accent trail
-/// behind it, and is drawn into the entry's icon. Reduce Motion fades it in place.
+/// entry, tilting and shrinking to a sliver as it goes, with a fine accent trail behind it,
+/// and is drawn into the entry's icon. Reduce Motion fades it in place.
+///
+/// It runs in Core Animation rather than SwiftUI, so it plays at the screen's full rate
+/// (120fps on ProMotion) even while the list is busy closing the gap behind it.
 struct MomentFlight: View {
-  let moment: Moment
-  let target: CGRect
-  /// The overlay's own position in window coordinates.
-  let origin: CGPoint
+  let moment: Moment?
+  /// Where it lands, in window coordinates.
+  let target: CGRect?
 
-  @State private var lift: CGFloat = 0
-  @State private var progress: CGFloat = 0
-  @State private var faded = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.displayScale) private var displayScale
+  @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.self) private var environment
 
   var body: some View {
-    if let source = moment.source {
-      let path = FlightPath(
-        from: CGPoint(x: source.midX - origin.x, y: source.midY - origin.y),
-        to: CGPoint(x: target.midX - origin.x, y: target.midY - origin.y),
-        width: min(source.width, 560)
-      )
-      ZStack {
-        if !reduceMotion {
-          FlightTrail(flight: path, progress: progress)
-            .stroke(Color.stAccent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-            .modifier(TrailFade(progress: progress))
-        }
-        card(width: path.width, height: min(max(source.height, 50), 120))
-          .modifier(FlightStep(path: path, lift: lift, progress: reduceMotion ? 0 : progress))
-      }
-      .opacity(faded ? 0 : 1)
-      .allowsHitTesting(false)
-      .onAppear(perform: fly)
+    GeometryReader { geometry in
+      FlightCanvas(plan: plan(origin: geometry.frame(in: .global).origin))
     }
+    .allowsHitTesting(false)
+    .accessibilityHidden(true)
+  }
+
+  private func plan(origin: CGPoint) -> FlightPlan? {
+    guard let moment, let target, let source = moment.source else { return nil }
+    let path = FlightPath(
+      from: CGPoint(x: source.midX - origin.x, y: source.midY - origin.y),
+      to: CGPoint(x: target.midX - origin.x, y: target.midY - origin.y),
+      width: min(source.width, 560)
+    )
+    let size = CGSize(width: path.width, height: min(max(source.height, 50), 120))
+    let card = card(moment, size: size).environment(\.colorScheme, colorScheme)
+    let scale = displayScale
+    return FlightPlan(
+      id: moment.id, path: path, size: size, scale: scale,
+      accent: Color.stAccent.resolve(in: environment).cgColor,
+      reduceMotion: reduceMotion,
+      image: {
+        // Drawn once, at the screen's own resolution, so the card stays crisp as it moves.
+        let renderer = ImageRenderer(content: card)
+        renderer.scale = scale
+        return renderer.cgImage
+      }
+    )
   }
 
   /// The row as a card: its title, and the source in mono.
-  private func card(width: CGFloat, height: CGFloat) -> some View {
+  private func card(_ moment: Moment, size: CGSize) -> some View {
     VStack(alignment: .leading, spacing: 3) {
       Text(moment.title)
         .font(.reading(14, .medium))
@@ -168,21 +187,202 @@ struct MomentFlight: View {
       }
     }
     .padding(.horizontal, 14)
-    .frame(width: width, height: height, alignment: .leading)
+    .frame(width: size.width, height: size.height, alignment: .leading)
     .background(Color.stSurface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
   }
+}
 
-  private func fly() {
-    if reduceMotion {
-      withAnimation(.easeOut(duration: 0.15)) { faded = true }
+/// Everything one flight needs, worked out in SwiftUI and handed to Core Animation.
+struct FlightPlan {
+  let id: UUID
+  let path: FlightPath
+  let size: CGSize
+  let scale: CGFloat
+  let accent: CGColor
+  let reduceMotion: Bool
+  let image: @MainActor () -> CGImage?
+}
+
+/// A CSS-style cubic-bezier easing curve.
+struct Easing {
+  let x1: Double, y1: Double, x2: Double, y2: Double
+
+  /// Quick to lift, settling at the top.
+  static let lift = Easing(x1: 0.2, y1: 0, x2: 0, y2: 1)
+  /// Slow out of the lift, fast through the middle, drawn in at the end.
+  static let sweep = Easing(x1: 0.55, y1: 0.05, x2: 0.25, y2: 1)
+
+  private func bezier(_ s: Double, _ a: Double, _ b: Double) -> Double {
+    let u = 1 - s
+    return 3 * u * u * s * a + 3 * u * s * s * b + s * s * s
+  }
+
+  func callAsFunction(_ t: Double) -> Double {
+    guard t > 0 else { return 0 }
+    guard t < 1 else { return 1 }
+    var low = 0.0, high = 1.0, s = t
+    for _ in 0..<32 {
+      s = (low + high) / 2
+      if bezier(s, x1, x2) < t { low = s } else { high = s }
+    }
+    return bezier(s, y1, y2)
+  }
+}
+
+/// Hosts the flight's layers over the window.
+private struct FlightCanvas {
+  let plan: FlightPlan?
+
+  final class Coordinator {
+    var lastID: UUID?
+  }
+
+  func makeCoordinator() -> Coordinator { Coordinator() }
+
+  @MainActor
+  fileprivate func start(in host: CALayer, coordinator: Coordinator) {
+    guard let plan, plan.id != coordinator.lastID else { return }
+    coordinator.lastID = plan.id
+    guard let image = plan.image() else { return }
+    FlightAnimator.run(plan, image: image, in: host)
+  }
+}
+
+#if os(macOS)
+/// Top-down like SwiftUI, and never in the way of a click.
+final class FlightHostView: NSView {
+  override init(frame: NSRect) {
+    super.init(frame: frame)
+    wantsLayer = true
+  }
+
+  required init?(coder: NSCoder) {
+    super.init(coder: coder)
+    wantsLayer = true
+  }
+
+  override var isFlipped: Bool { true }
+  override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+extension FlightCanvas: NSViewRepresentable {
+  func makeNSView(context: Context) -> FlightHostView { FlightHostView() }
+  func updateNSView(_ view: FlightHostView, context: Context) {
+    guard let layer = view.layer else { return }
+    start(in: layer, coordinator: context.coordinator)
+  }
+}
+#else
+extension FlightCanvas: UIViewRepresentable {
+  func makeUIView(context: Context) -> UIView {
+    let view = UIView()
+    view.isUserInteractionEnabled = false
+    view.backgroundColor = .clear
+    return view
+  }
+  func updateUIView(_ view: UIView, context: Context) {
+    start(in: view.layer, coordinator: context.coordinator)
+  }
+}
+#endif
+
+/// The flight as Core Animation keyframes, sampled from the web's curves at about 150 points a
+/// second so the render server can play it at whatever rate the screen runs.
+@MainActor
+enum FlightAnimator {
+  static func run(_ plan: FlightPlan, image: CGImage, in host: CALayer) {
+    let path = plan.path
+    let ghost = CALayer()
+    ghost.contents = image
+    ghost.contentsScale = plan.scale
+    ghost.contentsGravity = .resize
+    ghost.bounds = CGRect(origin: .zero, size: plan.size)
+    ghost.position = path.from
+    ghost.shadowPath = CGPath(roundedRect: ghost.bounds, cornerWidth: 10, cornerHeight: 10, transform: nil)
+    ghost.shadowColor = CGColor(gray: 0.04, alpha: 1)
+    ghost.shadowRadius = 16
+    ghost.shadowOffset = CGSize(width: 0, height: 14)
+    ghost.shadowOpacity = 0
+    ghost.opacity = 0
+    ghost.allowsEdgeAntialiasing = true
+
+    let trail = CAShapeLayer()
+    trail.path = path.curve.cgPath
+    trail.fillColor = nil
+    trail.strokeColor = plan.accent
+    trail.lineWidth = 2
+    trail.lineCap = .round
+    trail.strokeStart = 0
+    trail.strokeEnd = 0
+    trail.opacity = 0
+    trail.contentsScale = plan.scale
+
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    host.addSublayer(trail)
+    host.addSublayer(ghost)
+    CATransaction.setCompletionBlock {
+      ghost.removeFromSuperlayer()
+      trail.removeFromSuperlayer()
+    }
+
+    if plan.reduceMotion {
+      ghost.add(keyframes("opacity", [1, 0], times: [0, 1], duration: 0.15), forKey: "fade")
+      CATransaction.commit()
       return
     }
-    withAnimation(.timingCurve(0.2, 0, 0, 1, duration: Moments.liftTime)) { lift = 1 }
-    // Slow out of the lift, fast through the middle, drawn in at the end.
-    withAnimation(.timingCurve(0.55, 0.05, 0.25, 1, duration: Moments.travelTime).delay(Moments.liftTime)) {
-      progress = 1
+
+    let lift = Moments.liftTime, travel = Moments.travelTime, total = lift + travel
+    let steps = Int((total * 150).rounded())
+    let tail = Double(min(140, path.length * 0.4) / max(path.length, 1))
+    var times: [Double] = []
+    var positions: [CGPoint] = [], scales: [Double] = [], rotations: [Double] = []
+    var opacities: [Double] = [], shadows: [Double] = []
+    var heads: [Double] = [], tails: [Double] = [], glows: [Double] = []
+    for step in 0...steps {
+      let time = total * Double(step) / Double(steps)
+      let raised = time < lift ? Easing.lift(time / lift) : 1
+      let u = time < lift ? 0 : Easing.sweep((time - lift) / travel)
+      let at = path.point(CGFloat(u))
+      times.append(Double(step) / Double(steps))
+      positions.append(CGPoint(x: at.x, y: at.y - 3 * CGFloat(raised * (1 - u))))
+      // Holds its size through the rise of the curve, then is drawn in.
+      scales.append(1 + 0.025 * raised + (Double(path.endScale) - 1.025) * pow(u, 1.7))
+      rotations.append(path.tilt * .pi / 180 * sin(.pi * min(u * 1.15, 1)))
+      opacities.append(u < 0.82 ? 1 : 1 - (u - 0.82) / 0.18)
+      shadows.append(0.3 * raised * (u < 0.82 ? 1 : 1 - (u - 0.82) / 0.18))
+      heads.append(u)
+      tails.append(max(0, u - tail))
+      glows.append(time < lift ? 0 : 0.7 * (1 - abs(u - 0.5) * 2))
     }
+
+    #if os(macOS)
+    let points = positions.map { NSValue(point: $0) }
+    #else
+    let points = positions.map { NSValue(cgPoint: $0) }
+    #endif
+    ghost.add(keyframes("position", points, times: times, duration: total), forKey: "position")
+    ghost.add(keyframes("transform.scale", scales, times: times, duration: total), forKey: "scale")
+    ghost.add(keyframes("transform.rotation.z", rotations, times: times, duration: total), forKey: "tilt")
+    ghost.add(keyframes("opacity", opacities, times: times, duration: total), forKey: "opacity")
+    ghost.add(keyframes("shadowOpacity", shadows, times: times, duration: total), forKey: "shadow")
+    trail.add(keyframes("strokeEnd", heads, times: times, duration: total), forKey: "head")
+    trail.add(keyframes("strokeStart", tails, times: times, duration: total), forKey: "tail")
+    trail.add(keyframes("opacity", glows, times: times, duration: total), forKey: "glow")
+    CATransaction.commit()
+  }
+
+  private static func keyframes(_ keyPath: String, _ values: [Any], times: [Double], duration: Double) -> CAKeyframeAnimation {
+    let animation = CAKeyframeAnimation(keyPath: keyPath)
+    animation.values = values
+    animation.keyTimes = times.map { NSNumber(value: $0) }
+    animation.duration = duration
+    animation.calculationMode = .linear
+    animation.fillMode = .forwards
+    animation.isRemovedOnCompletion = false
+    animation.preferredFrameRateRange = CAFrameRateRange(minimum: 80, maximum: 120, preferred: 120)
+    return animation
   }
 }
 
@@ -230,70 +430,6 @@ struct FlightPath {
       last = next
     }
     return total
-  }
-}
-
-/// Places the card along its flight as `lift` and then `progress` animate from 0 to 1.
-private struct FlightStep: ViewModifier, Animatable {
-  let path: FlightPath
-  var lift: CGFloat
-  var progress: CGFloat
-
-  var animatableData: AnimatablePair<CGFloat, CGFloat> {
-    get { AnimatablePair(lift, progress) }
-    set { lift = newValue.first; progress = newValue.second }
-  }
-
-  func body(content: Content) -> some View {
-    let u = progress
-    let at = path.point(u)
-    // Holds its size through the rise of the curve, then is drawn in.
-    let scale = 1 + 0.025 * lift + (path.endScale - 1.025) * pow(u, 1.7)
-    let rotation = path.tilt * sin(.pi * min(Double(u) * 1.15, 1))
-    let blur = 1.4 * sin(.pi * u)
-    let opacity = u < 0.82 ? 1 : 1 - Double((u - 0.82) / 0.18)
-    content
-      .shadow(color: .black.opacity(0.32 * lift), radius: 20, y: 18 * lift)
-      .scaleEffect(scale)
-      .rotationEffect(.degrees(rotation))
-      .blur(radius: blur)
-      .position(x: at.x, y: at.y - 3 * lift * (1 - u))
-      .opacity(opacity)
-  }
-}
-
-/// The comet's tail: a short stretch of the curve just behind the card.
-private struct FlightTrail: Shape {
-  let flight: FlightPath
-  var progress: CGFloat
-
-  var animatableData: CGFloat {
-    get { progress }
-    set { progress = newValue }
-  }
-
-  func path(in rect: CGRect) -> Path {
-    let length = flight.length
-    guard length > 1 else { return Path() }
-    let tail = min(140, length * 0.4) / length
-    let head = progress
-    let start = max(0, head - tail)
-    guard head > start else { return Path() }
-    return flight.curve.trimmedPath(from: start, to: min(1, head))
-  }
-}
-
-/// The tail fades in to the middle of the trip and out again by the end.
-private struct TrailFade: ViewModifier, Animatable {
-  var progress: CGFloat
-
-  var animatableData: CGFloat {
-    get { progress }
-    set { progress = newValue }
-  }
-
-  func body(content: Content) -> some View {
-    content.opacity(0.7 * Double(1 - abs(progress - 0.5) * 2))
   }
 }
 

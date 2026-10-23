@@ -2,6 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists/1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Lets animations run at 120fps on iPhones with ProMotion (Mac and iPad do already). -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<!-- Lets a video's sound carry on in Picture in Picture and with the screen locked. -->
 	<key>UIBackgroundModes</key>
 	<array>
