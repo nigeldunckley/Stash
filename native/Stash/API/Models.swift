@@ -53,6 +53,7 @@ struct LibraryItem: Decodable, Identifiable, Hashable {
   var iconURL: URL? { siteIcon.flatMap(URL.init(string:)) }
   var isFeedItem: Bool { folder == "following" }
   var isArchived: Bool { state == "ARCHIVED" }
+  var isDeleted: Bool { state == "DELETED" }
   var progress: Double { (readingProgressPercent ?? 0) / 100 }
 
   /// Minutes to read at 235 words a minute, the same pace the web app uses.

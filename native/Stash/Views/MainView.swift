@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum AppSection: Hashable {
-  case home, edition, feeds, saved, highlights, discover, archive, channels, savedVideos, settings
+  case home, edition, feeds, saved, highlights, discover, archive, trash, channels, savedVideos, settings
   case collection(String)
   /// iPhone only: Read and Watch, each with a row of pages along the top.
   case read, watch
@@ -16,6 +16,7 @@ enum AppSection: Hashable {
     case .highlights: return "highlights"
     case .discover: return "discover"
     case .archive: return "archive"
+    case .trash: return "trash"
     case .channels: return "channels"
     case .savedVideos: return "savedVideos"
     case .settings: return "settings"
@@ -33,6 +34,7 @@ enum AppSection: Hashable {
     case "highlights": self = .highlights
     case "discover": self = .discover
     case "archive": self = .archive
+    case "trash": self = .trash
     case "channels": self = .channels
     case "savedVideos": self = .savedVideos
     case "settings": self = .settings
@@ -74,7 +76,7 @@ struct MainView: View {
         // Restore a valid destination; The Edition no longer occupies a temporary tab.
         #if os(iOS)
         let savedRead = AppSection(key: readPageKey)
-        readPage = [.feeds, .saved, .highlights, .discover, .archive].contains(savedRead) ? savedRead : .feeds
+        readPage = [.feeds, .saved, .highlights, .discover, .archive, .trash].contains(savedRead) ? savedRead : .feeds
         let savedWatch = AppSection(key: watchPageKey)
         watchPage = savedWatch == .savedVideos ? .savedVideos : .channels
         if case .collection = savedWatch { watchPage = savedWatch }
@@ -142,11 +144,12 @@ struct MainView: View {
       }
       Tab("Read", systemImage: "text.alignleft", value: AppSection.read) {
         PageRow(selection: $readPage, pages: [(.feeds, "Feeds"), (.saved, "Saved")], extras: [
-          (.highlights, "Highlights"), (.discover, "Discover"), (.archive, "Archive"),
+          (.highlights, "Highlights"), (.discover, "Discover"), (.archive, "Archive"), (.trash, "Trash"),
         ] + (edition.isOut ? [(.edition, "The Edition")] : []), moreTitle: "More") { page in
           switch page {
           case .saved: SavedView(archive: false)
           case .archive: SavedView(archive: true)
+          case .trash: SavedView(archive: false, trash: true)
           case .edition: EditionView(onPutAway: { readPage = .feeds })
           case .highlights: HighlightsView()
           case .discover: DiscoverView()
@@ -218,7 +221,7 @@ struct MainView: View {
     case .edition:
       showingEdition = true
       return
-    case .feeds, .saved, .highlights, .discover, .archive:
+    case .feeds, .saved, .highlights, .discover, .archive, .trash:
       readPage = target
       section = .read
       return

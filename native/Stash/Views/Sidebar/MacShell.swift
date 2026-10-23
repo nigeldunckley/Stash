@@ -169,6 +169,7 @@ struct MacShell: View {
     case .highlights: return "Highlights"
     case .discover: return "Discover"
     case .archive: return "Archive"
+    case .trash: return "Trash"
     case .channels, .watch: return "Latest videos"
     case .savedVideos: return "Saved videos"
     case .settings: return "Settings"
@@ -188,6 +189,7 @@ struct MacShell: View {
     case .highlights: HighlightsView()
     case .discover: DiscoverView()
     case .archive: SavedView(archive: true)
+    case .trash: SavedView(archive: false, trash: true)
     case .channels: WatchView(kind: .channels)
     case .savedVideos: WatchView(kind: .saved)
     case .collection(let id):

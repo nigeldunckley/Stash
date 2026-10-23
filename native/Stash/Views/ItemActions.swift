@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Something you can do to an item, from a swipe, a menu, a key or the reader's toolbar.
 enum ItemAction: Hashable {
-  case save, archive, unarchive, delete
+  case save, archive, unarchive, delete, restore
   case markRead, markUnread, markSeen
   case openOriginal
 
@@ -12,6 +12,7 @@ enum ItemAction: Hashable {
     case .archive: return "Archive"
     case .unarchive: return "Move to Saved"
     case .delete: return "Delete"
+    case .restore: return "Restore"
     case .markRead: return "Mark read"
     case .markUnread: return "Mark unread"
     case .markSeen: return "Mark seen"
@@ -36,6 +37,7 @@ enum ItemAction: Hashable {
     case .archive: return "archivebox"
     case .unarchive: return "tray.and.arrow.up"
     case .delete: return "trash"
+    case .restore: return "arrow.uturn.backward"
     case .markRead: return "checkmark.circle"
     case .markUnread: return "circle"
     case .markSeen: return "eye"
@@ -46,7 +48,7 @@ enum ItemAction: Hashable {
   var tint: Color {
     switch self {
     case .save: return .stAccent
-    case .archive, .unarchive: return .gray
+    case .archive, .unarchive, .restore: return .gray
     case .delete: return .red
     case .markRead, .markUnread: return .blue
     case .markSeen: return .indigo
@@ -60,6 +62,7 @@ enum ItemAction: Hashable {
     case .archive: return "Archived"
     case .unarchive: return "Moved to Saved"
     case .delete: return "Deleted"
+    case .restore: return "Restored"
     case .markRead: return "Marked read"
     case .markUnread: return "Marked unread"
     case .markSeen: return "Marked seen"
@@ -80,7 +83,7 @@ enum ItemAction: Hashable {
   /// Whether the item leaves the list it's in.
   var removesItem: Bool {
     switch self {
-    case .save, .archive, .unarchive, .delete: return true
+    case .save, .archive, .unarchive, .delete, .restore: return true
     case .markRead, .markUnread, .markSeen, .openOriginal: return false
     }
   }
@@ -93,6 +96,7 @@ enum ItemAction: Hashable {
     case .archive: try await Library.setArchived(item.id, true)
     case .unarchive: try await Library.setArchived(item.id, false)
     case .delete: try await Library.delete(item.id)
+    case .restore: try await Library.restore(item.id)
     case .markRead: try await Library.setProgress(item.id, percent: 100)
     case .markUnread: try await Library.setProgress(item.id, percent: 0)
     case .markSeen: try await Library.markSeen([item.id])
@@ -107,6 +111,7 @@ enum ItemAction: Hashable {
     case .archive: try await Library.setArchived(item.id, false)
     case .unarchive: try await Library.setArchived(item.id, true)
     case .delete: try await Library.restore(item.id)
+    case .restore: try await Library.delete(item.id)
     case .markRead, .markUnread:
       try await Library.setProgress(
         item.id, percent: item.readingProgressPercent ?? 0, anchor: item.readingProgressAnchorIndex ?? 0)
@@ -130,6 +135,7 @@ enum ItemAction: Hashable {
   /// The swipes for an item where it is. The first on each edge is the full swipe.
   static func swipes(for item: LibraryItem, unseen: Bool = false) -> (leading: [ItemAction], trailing: [ItemAction]) {
     let read: ItemAction = item.progress >= 0.9 ? .markUnread : .markRead
+    if item.isDeleted { return ([.restore], []) }
     if item.isArchived {
       return ([.unarchive, read], [.delete])
     }
@@ -205,16 +211,19 @@ func runItemAction(
   refresh: @escaping () async -> Void = {}
 ) {
   if action.removesItem, !LibraryChanges.shared.beginRemoval(item.id) { return }
-  if action.removesItem { withAnimation(StashMotion.systemReduceMotion ? nil : StashMotion.change) { remove() } }
+  // The row sweeps into its place in the navigation straight away, as on the web, before it
+  // leaves the list and the rows below close the gap.
+  switch action {
+  case .save: Moments.shared.saved(item)
+  case .archive: Moments.shared.archived(item)
+  case .delete: Moments.shared.trashed(item)
+  default: break
+  }
+  if action.removesItem { withAnimation(StashMotion.systemReduceMotion ? nil : StashMotion.closeGap) { remove() } }
   Task {
     do {
       try await action.run(on: item)
       if action.removesItem { LibraryChanges.shared.endRemoval(item.id) }
-      switch action {
-      case .save: Moments.shared.saved(item)
-      case .archive: Moments.shared.archived(item)
-      default: break
-      }
       if !action.removesItem { await refresh() }
       guard action != .openOriginal else { return }
       toaster.show(action.doneMessage(for: item), undo: action.canUndo ? {

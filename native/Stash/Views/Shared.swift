@@ -69,6 +69,7 @@ struct ScreenChrome<Bar: ToolbarContent>: ViewModifier {
 extension ItemAction {
   /// What you can do with an item where it is: save or archive a feed item, archive or delete a save.
   static func defaults(for item: LibraryItem) -> [ItemAction] {
+    if item.isDeleted { return [.restore] }
     if item.isFeedItem { return [.save, .archive] }
     if item.isArchived { return [.unarchive, .delete] }
     return [.archive, .delete]

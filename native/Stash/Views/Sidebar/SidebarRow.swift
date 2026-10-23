@@ -10,6 +10,8 @@ struct SidebarRow<Trailing: View>: View {
   var dot: Color?
   /// Saved rows show the ribbon, which lights up as saves land.
   var ribbon: MomentKind?
+  /// What lands on this entry (saves, archives or deletes), swooshing into its icon.
+  var landing: MomentKind?
   var selected = false
   var child = false
   let action: () -> Void
@@ -20,15 +22,9 @@ struct SidebarRow<Trailing: View>: View {
   var body: some View {
     Button(action: action) {
       HStack(spacing: 10) {
-        if let dot {
-          Circle().fill(dot).frame(width: 7, height: 7)
-        } else if let ribbon {
-          LandingRibbon(kind: ribbon).frame(width: 18)
-        } else if let symbol {
-          Image(systemName: symbol)
-            .font(.system(size: 15, weight: .light))
-            .frame(width: 18)
-        }
+        icon
+          .modifier(LandingSwallow(kind: landing))
+          .background { if let landing { Color.clear.momentTarget(landing) } }
         Text(title)
           .font(.ui(14, selected ? .medium : .regular))
           .lineLimit(1)
@@ -39,21 +35,35 @@ struct SidebarRow<Trailing: View>: View {
       .padding(.leading, child ? 28 : 10)
       .padding(.trailing, 10)
       .frame(height: child ? 32 : 36)
-      .background(
-        selected ? Color.stSelected : hovering ? Color.stSunken : Color.clear,
-        in: RoundedRectangle(cornerRadius: Radius.item, style: .continuous)
-      )
+      .modifier(LandingSettle(
+        kind: landing,
+        fill: selected ? Color.stSelected : hovering ? Color.stSunken : Color.clear,
+        shape: RoundedRectangle(cornerRadius: Radius.item, style: .continuous)
+      ))
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     .onHover { hovering = $0 }
     .accessibilityAddTraits(selected ? .isSelected : [])
   }
+
+  @ViewBuilder
+  private var icon: some View {
+    if let dot {
+      Circle().fill(dot).frame(width: 7, height: 7)
+    } else if let ribbon {
+      LandingRibbon(kind: ribbon).frame(width: 18)
+    } else if let symbol {
+      Image(systemName: symbol)
+        .font(.system(size: 15, weight: .light))
+        .frame(width: 18)
+    }
+  }
 }
 
 extension SidebarRow where Trailing == EmptyView {
-  init(title: String, symbol: String? = nil, dot: Color? = nil, ribbon: MomentKind? = nil, selected: Bool = false, child: Bool = false, action: @escaping () -> Void) {
-    self.init(title: title, symbol: symbol, dot: dot, ribbon: ribbon, selected: selected, child: child, action: action) { EmptyView() }
+  init(title: String, symbol: String? = nil, dot: Color? = nil, ribbon: MomentKind? = nil, landing: MomentKind? = nil, selected: Bool = false, child: Bool = false, action: @escaping () -> Void) {
+    self.init(title: title, symbol: symbol, dot: dot, ribbon: ribbon, landing: landing, selected: selected, child: child, action: action) { EmptyView() }
   }
 }
 

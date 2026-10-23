@@ -6,9 +6,10 @@ import UIKit
 import AppKit
 #endif
 
-/// Shared save and archive feedback, including optional sound and haptics.
+/// Saving, archiving and deleting, made physical, as on the web: the item's row sweeps into
+/// its place in the navigation (Saved, Watch Saved, Archive or Trash), which takes it in.
 enum MomentKind: Hashable {
-  case saved, savedVideo, archived
+  case saved, savedVideo, archived, trashed
 }
 
 struct Moment: Identifiable, Equatable {
@@ -28,21 +29,24 @@ final class Moments {
 
   /// The one moment flying now.
   private(set) var current: Moment?
-  /// Goes up each time something lands, so the sidebar row can dip and show "+1".
+  /// Goes up each time something lands, so the navigation entry can take it in.
   private(set) var landings: [MomentKind: Int] = [:]
 
   /// Where each list row is on screen, by item id, kept as rows lay out.
   @ObservationIgnored var rowFrames: [String: CGRect] = [:]
-  /// Where the sidebar's Saved, Watch Saved and Archive rows are.
+  /// Where the icons of the sidebar's Saved, Watch Saved, Archive and Trash entries are.
   @ObservationIgnored var targets: [MomentKind: CGRect] = [:]
 
   func saved(_ item: LibraryItem? = nil, title: String? = nil) {
     post(item.map(Watch.isVideo) == true ? .savedVideo : .saved, item: item, title: title)
   }
   func archived(_ item: LibraryItem) { post(.archived, item: item, title: nil) }
+  func trashed(_ item: LibraryItem) { post(.trashed, item: item, title: nil) }
 
-  /// How long a flight takes, from lift-off to landing.
-  static let flightTime = 0.28
+  /// The web's timings: a quick lift off the list, then the sweep.
+  static let liftTime = 0.09
+  static let travelTime = 0.47
+  static var flightTime: Double { liftTime + travelTime }
 
   private static var reduceMotion: Bool {
     #if os(iOS)
@@ -64,7 +68,7 @@ final class Moments {
       try? await Task.sleep(for: .seconds(flight))
       landings[kind, default: 0] += 1
       #if os(iOS)
-      if kind == .archived { Feedback.landed() }
+      if kind != .saved && kind != .savedVideo { Feedback.landed() }
       #endif
       try? await Task.sleep(for: .seconds(0.05))
       if current?.id == moment.id { current = nil }
@@ -80,36 +84,45 @@ extension View {
     }
   }
 
-  /// Marks a sidebar row as where saves or archives land.
+  /// Marks a sidebar entry's icon as where saves, archives or deletes land. A folded group's
+  /// entries aren't there to land on, so nothing flies to them.
   func momentTarget(_ kind: MomentKind) -> some View {
     onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
       Moments.shared.targets[kind] = frame
     }
+    .onDisappear { Moments.shared.targets[kind] = nil }
   }
 }
 
-/// A short save transition toward its destination. Reduce Motion uses a fade.
+/// The swoosh: a copy of the row lifts off the list, sweeps along a curve to the navigation
+/// entry, tilting, blurring and shrinking to a sliver as it goes, with a fine accent trail
+/// behind it, and is drawn into the entry's icon. Reduce Motion fades it in place.
 struct MomentFlight: View {
   let moment: Moment
   let target: CGRect
   /// The overlay's own position in window coordinates.
   let origin: CGPoint
 
+  @State private var lift: CGFloat = 0
   @State private var progress: CGFloat = 0
   @State private var faded = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
-    if let source = moment.source, moment.kind != .archived {
+    if let source = moment.source {
       let path = FlightPath(
         from: CGPoint(x: source.midX - origin.x, y: source.midY - origin.y),
         to: CGPoint(x: target.midX - origin.x, y: target.midY - origin.y),
-        width: min(source.width, 380)
+        width: min(source.width, 560)
       )
       ZStack {
+        if !reduceMotion {
+          FlightTrail(flight: path, progress: progress)
+            .stroke(Color.stAccent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            .modifier(TrailFade(progress: progress))
+        }
         card(width: path.width)
-          .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
-          .modifier(FlightStep(path: path, progress: reduceMotion ? 0 : progress, lag: 0))
+          .modifier(FlightStep(path: path, lift: lift, progress: reduceMotion ? 0 : progress))
       }
       .opacity(faded ? 0 : 1)
       .allowsHitTesting(false)
@@ -128,14 +141,14 @@ struct MomentFlight: View {
         Text(moment.detail.uppercased())
           .font(.mono(11, .medium))
           .tracking(0.7)
-          .foregroundStyle(moment.kind == .archived ? Color.stMuted : Color.stAccentText)
+          .foregroundStyle(moment.kind == .saved || moment.kind == .savedVideo ? Color.stAccentText : Color.stMuted)
           .lineLimit(1)
       }
     }
     .padding(.horizontal, 14)
     .frame(width: width, height: 50, alignment: .leading)
-    .background(Color.stSurface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.stLineStrong, lineWidth: 1))
+    .background(Color.stSurface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
   }
 
   private func fly() {
@@ -143,21 +156,32 @@ struct MomentFlight: View {
       withAnimation(.easeOut(duration: 0.15)) { faded = true }
       return
     }
-    // Quick to leave, slowing into the landing.
-    withAnimation(.timingCurve(0.55, 0, 0.15, 1, duration: Moments.flightTime)) { progress = 1 }
+    withAnimation(.timingCurve(0.2, 0, 0, 1, duration: Moments.liftTime)) { lift = 1 }
+    // Slow out of the lift, fast through the middle, drawn in at the end.
+    withAnimation(.timingCurve(0.55, 0.05, 0.25, 1, duration: Moments.travelTime).delay(Moments.liftTime)) {
+      progress = 1
+    }
   }
 }
 
-/// A shallow curve toward Saved.
+/// The curve from the row to the entry's icon.
 struct FlightPath {
   let from: CGPoint
   let to: CGPoint
   let width: CGFloat
 
-  /// Above both ends and a little towards the start, so the card arcs rather than slides.
+  /// It rises before it falls into the entry, more so for long trips, and stays on screen
+  /// when the entry is at the top.
   var control: CGPoint {
-    CGPoint(x: to.x + (from.x - to.x) * 0.35, y: min(from.y, to.y) - min(14, abs(from.y - to.y) * 0.08))
+    let dx = to.x - from.x
+    return CGPoint(x: from.x + dx * 0.3, y: max(16, min(from.y, to.y) - 70 - abs(dx) * 0.08))
   }
+
+  /// Leans the way it's going.
+  var tilt: Double { to.x < from.x ? -5 : 5 }
+
+  /// Shrinks to about 36pt wide on the icon.
+  var endScale: CGFloat { max(0.04, 36 / max(width, 1)) }
 
   func point(_ t: CGFloat) -> CGPoint {
     let u = 1 - t
@@ -166,14 +190,80 @@ struct FlightPath {
       y: u * u * from.y + 2 * u * t * control.y + t * t * to.y
     )
   }
+
+  var curve: Path {
+    var path = Path()
+    path.move(to: from)
+    path.addQuadCurve(to: to, control: control)
+    return path
+  }
+
+  /// Roughly how long the curve is.
+  var length: CGFloat {
+    var total: CGFloat = 0
+    var last = from
+    for step in 1...24 {
+      let next = point(CGFloat(step) / 24)
+      total += hypot(next.x - last.x, next.y - last.y)
+      last = next
+    }
+    return total
+  }
 }
 
-/// Places the card along its flight as `progress` animates from 0 to 1.
+/// Places the card along its flight as `lift` and then `progress` animate from 0 to 1.
 private struct FlightStep: ViewModifier, Animatable {
   let path: FlightPath
+  var lift: CGFloat
   var progress: CGFloat
-  /// How far behind the card this copy runs, for the trail.
-  let lag: CGFloat
+
+  var animatableData: AnimatablePair<CGFloat, CGFloat> {
+    get { AnimatablePair(lift, progress) }
+    set { lift = newValue.first; progress = newValue.second }
+  }
+
+  func body(content: Content) -> some View {
+    let u = progress
+    let at = path.point(u)
+    // Holds its size through the rise of the curve, then is drawn in.
+    let scale = 1 + 0.025 * lift + (path.endScale - 1.025) * pow(u, 1.7)
+    let rotation = path.tilt * sin(.pi * min(Double(u) * 1.15, 1))
+    let blur = 1.4 * sin(.pi * u)
+    let opacity = u < 0.82 ? 1 : 1 - Double((u - 0.82) / 0.18)
+    content
+      .shadow(color: .black.opacity(0.32 * lift), radius: 20, y: 18 * lift)
+      .scaleEffect(scale)
+      .rotationEffect(.degrees(rotation))
+      .blur(radius: blur)
+      .position(x: at.x, y: at.y - 3 * lift * (1 - u))
+      .opacity(opacity)
+  }
+}
+
+/// The comet's tail: a short stretch of the curve just behind the card.
+private struct FlightTrail: Shape {
+  let flight: FlightPath
+  var progress: CGFloat
+
+  var animatableData: CGFloat {
+    get { progress }
+    set { progress = newValue }
+  }
+
+  func path(in rect: CGRect) -> Path {
+    let length = flight.length
+    guard length > 1 else { return Path() }
+    let tail = min(140, length * 0.4) / length
+    let head = progress
+    let start = max(0, head - tail)
+    guard head > start else { return Path() }
+    return flight.curve.trimmedPath(from: start, to: min(1, head))
+  }
+}
+
+/// The tail fades in to the middle of the trip and out again by the end.
+private struct TrailFade: ViewModifier, Animatable {
+  var progress: CGFloat
 
   var animatableData: CGFloat {
     get { progress }
@@ -181,22 +271,73 @@ private struct FlightStep: ViewModifier, Animatable {
   }
 
   func body(content: Content) -> some View {
-    let t = lag > 0 ? max(0, (progress - lag) / (1 - lag)) : progress
-    // Lifts off (a touch bigger) in the first tenth, then shrinks to a chip on the target.
-    let scale = 1 - 0.85 * t
-    // Leans into the curve and straightens as it lands.
-    let fade = t > 0.82 ? 1 - Double((t - 0.82) / 0.18) : 1
-    content
-      .scaleEffect(scale)
-      .position(path.point(t))
-      .opacity(fade)
+    content.opacity(0.7 * Double(1 - abs(progress - 0.5) * 2))
   }
 }
 
-/// The row leaving its list as its card lifts off: a quick fade while the list closes the gap.
+/// The row leaving its list: the flying card has taken its place, so it goes at once and the
+/// rows below slide up into the gap.
 extension AnyTransition {
   static func fold(reduceMotion: Bool) -> AnyTransition {
-    reduceMotion ? .opacity : .asymmetric(insertion: .opacity, removal: .opacity.animation(.easeOut(duration: 0.1)))
+    reduceMotion ? .opacity : .asymmetric(insertion: .opacity, removal: .opacity.animation(.linear(duration: 0.05)))
+  }
+}
+
+extension StashMotion {
+  /// How the rows below close the gap a row leaves, as on the web.
+  static let closeGap = Animation.timingCurve(0.32, 0.72, 0, 1, duration: 0.34)
+}
+
+/// How a navigation entry takes an item in: a brief accent wash and a small give.
+struct LandingSettle: ViewModifier {
+  let kind: MomentKind?
+  /// The row's own fill (selected or hovered), under the wash.
+  let fill: Color
+  let shape: RoundedRectangle
+
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  private struct Value {
+    var scale: CGFloat = 1
+    var wash: Double = 0
+  }
+
+  func body(content: Content) -> some View {
+    content.keyframeAnimator(initialValue: Value(), trigger: kind.map { Moments.shared.landings[$0] ?? 0 } ?? 0) { content, value in
+      content
+        .background(Color.stAccent.opacity(value.wash), in: shape)
+        .background(fill, in: shape)
+        .scaleEffect(value.scale)
+    } keyframes: { _ in
+      KeyframeTrack(\.scale) {
+        MoveKeyframe(reduceMotion ? 1 : 0.97)
+        CubicKeyframe(reduceMotion ? 1 : 1.015, duration: 0.19)
+        CubicKeyframe(1, duration: 0.23)
+      }
+      KeyframeTrack(\.wash) {
+        MoveKeyframe(0.14)
+        LinearKeyframe(0, duration: 0.42)
+      }
+    }
+  }
+}
+
+/// An entry's icon swallowing the item and springing back.
+struct LandingSwallow: ViewModifier {
+  let kind: MomentKind?
+
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  func body(content: Content) -> some View {
+    content.keyframeAnimator(initialValue: CGFloat(1), trigger: kind.map { Moments.shared.landings[$0] ?? 0 } ?? 0) { content, scale in
+      content.scaleEffect(scale)
+    } keyframes: { _ in
+      KeyframeTrack {
+        MoveKeyframe(CGFloat(1))
+        CubicKeyframe(reduceMotion ? 1 : 0.72, duration: 0.1)
+        SpringKeyframe(1, duration: 0.4, spring: .bouncy)
+      }
+    }
   }
 }
 
@@ -249,7 +390,7 @@ enum Feedback {
     #if os(iOS)
     switch kind {
     case .saved, .savedVideo: UIImpactFeedbackGenerator(style: .light).impactOccurred()
-    case .archived: UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    case .archived, .trashed: UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
     #endif
     // Off unless turned on in Settings. System sounds follow the iPhone's silent switch.
@@ -258,7 +399,7 @@ enum Feedback {
   }
 
   #if os(iOS)
-  /// The archive landing.
+  /// An archive or delete landing.
   @MainActor
   static func landed() {
     UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.6)
@@ -268,7 +409,7 @@ enum Feedback {
   @MainActor
   private static func sound(_ kind: MomentKind) -> SystemSoundID? {
     if let sound = sounds[kind] { return sound }
-    let name = kind == .archived ? "archive" : "save"
+    let name = kind == .archived || kind == .trashed ? "archive" : "save"
     guard let url = Bundle.main.url(forResource: name, withExtension: "wav") else { return nil }
     var id: SystemSoundID = 0
     guard AudioServicesCreateSystemSoundID(url as CFURL, &id) == noErr else { return nil }
