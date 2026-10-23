@@ -36,6 +36,8 @@ interface PageSaveRequest {
 }
 
 const SAVING_CONTENT = 'Your link is being saved...'
+const FEEDS_FOLDER = 'following'
+const SAVED_FOLDER = 'inbox'
 // An item in one of these states never got its article.
 const UNREAD_STATES = [
   LibraryItemState.Processing,
@@ -147,6 +149,7 @@ export const createPageSaveRequest = async ({
 
   // Saving a link again after deleting it, or after it failed to read,
   // starts it afresh rather than reviving the old copy at its old date.
+  let unarchive = false
   if (!subscription) {
     const existing = await authTrx(
       (tx) =>
@@ -157,8 +160,18 @@ export const createPageSaveRequest = async ({
     )
     if (existing?.state === LibraryItemState.Deleted) {
       await deleteLibraryItemById(existing.id, userId)
-    } else if (existing && UNREAD_STATES.includes(existing.state)) {
-      savedAt = savedAt || new Date()
+    } else if (existing) {
+      if (UNREAD_STATES.includes(existing.state)) {
+        savedAt = savedAt || new Date()
+      }
+      // A feed item, or one archived from Feeds, would otherwise stay out
+      // of Saved while the save says it worked.
+      if (!folder && existing.folder === FEEDS_FOLDER) {
+        folder = SAVED_FOLDER
+      }
+      if (state !== ArticleSavingRequestStatus.Archived) {
+        unarchive = true
+      }
     }
   }
 
@@ -177,6 +190,7 @@ export const createPageSaveRequest = async ({
       folder,
       subscription,
       savedAt,
+      ...(unarchive && { archivedAt: null }),
     },
     userId,
     pubsub
