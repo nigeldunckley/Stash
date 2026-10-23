@@ -50,34 +50,69 @@ final class Session {
   }
 }
 
+/// Where the sign-in token lives. On Mac it's kept in the same kind of keychain iPhone uses,
+/// which belongs to the app itself, so a new build from Xcode reads it without asking for your
+/// Mac password. (The older Mac login keychain asks again whenever the app's signature changes.)
 enum Keychain {
   private static let service = "com.nigeldunckley.stash"
 
   static func read(_ account: String) -> String? {
-    let query: [String: Any] = [
+    if let value = read(account, modern: true) { return value }
+    #if os(macOS)
+    // Signed in before the move: bring the token across once, then clear the old copy.
+    if let value = read(account, modern: false) {
+      if add(value, for: account, modern: true) { delete(account, modern: false) }
+      return value
+    }
+    #endif
+    return nil
+  }
+
+  static func write(_ value: String?, for account: String) {
+    delete(account, modern: true)
+    #if os(macOS)
+    delete(account, modern: false)
+    #endif
+    guard let value else { return }
+    #if os(macOS)
+    // A build without a team can't use the app's own keychain; keep it in the old one then.
+    if !add(value, for: account, modern: true) { _ = add(value, for: account, modern: false) }
+    #else
+    _ = add(value, for: account, modern: true)
+    #endif
+  }
+
+  private static func base(_ account: String, modern: Bool) -> [String: Any] {
+    var query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
       kSecAttrAccount as String: account,
-      kSecReturnData as String: true,
-      kSecMatchLimit as String: kSecMatchLimitOne,
     ]
+    #if os(macOS)
+    query[kSecUseDataProtectionKeychain as String] = modern
+    #endif
+    return query
+  }
+
+  private static func read(_ account: String, modern: Bool) -> String? {
+    var query = base(account, modern: modern)
+    query[kSecReturnData as String] = true
+    query[kSecMatchLimit as String] = kSecMatchLimitOne
     var result: AnyObject?
     guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
           let data = result as? Data else { return nil }
     return String(data: data, encoding: .utf8)
   }
 
-  static func write(_ value: String?, for account: String) {
-    let match: [String: Any] = [
-      kSecClass as String: kSecClassGenericPassword,
-      kSecAttrService as String: service,
-      kSecAttrAccount as String: account,
-    ]
-    SecItemDelete(match as CFDictionary)
-    guard let value else { return }
-    var item = match
+  @discardableResult
+  private static func add(_ value: String, for account: String, modern: Bool) -> Bool {
+    var item = base(account, modern: modern)
     item[kSecValueData as String] = Data(value.utf8)
     item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-    SecItemAdd(item as CFDictionary, nil)
+    return SecItemAdd(item as CFDictionary, nil) == errSecSuccess
+  }
+
+  private static func delete(_ account: String, modern: Bool) {
+    SecItemDelete(base(account, modern: modern) as CFDictionary)
   }
 }
