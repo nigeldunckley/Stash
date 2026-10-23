@@ -455,6 +455,7 @@ struct HomeView: View {
         if showsEditionStrip {
           editionStrip
             .frame(maxWidth: wide ? 300 : .infinity, maxHeight: wide ? .infinity : nil, alignment: .topLeading)
+            .editionDelivery(date: edition.status?.date, fresh: edition.isFresh)
         }
       }
       // Equal heights only side by side; stacked, each section takes what it needs.
@@ -623,7 +624,11 @@ struct HomeView: View {
       FolioView(content: Self.folio).plainListRow(top: 8)
       iPhoneHeader.plainListRow(top: 12)
       continuationSection.plainListRow(top: 18)
-      if showsEditionStrip { editionStrip.plainListRow(top: 18) }
+      if showsEditionStrip {
+        editionStrip
+          .editionDelivery(date: edition.status?.date, fresh: edition.isFresh)
+          .plainListRow(top: 18)
+      }
       if !videos.isEmpty { latestVideos.plainListRow(top: 20) }
       if !upNext.isEmpty { savedSuggestions.plainListRow(top: 20) }
       feedsHeading.plainListRow(top: 22, bottom: 10)

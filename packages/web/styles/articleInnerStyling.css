@@ -852,3 +852,34 @@
   vertical-align: 0.02em;
   background: var(--colors-stAccent);
 }
+
+/* It waits, hidden and raised, until you reach it, then stamps down. */
+.article-inner-css p.st-end.st-end-armed::after {
+  opacity: 0;
+  transform: scale(2.6) rotate(-12deg);
+}
+.article-inner-css p.st-end.st-end-stamped::after {
+  animation: st-end-stamp 560ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+@keyframes st-end-stamp {
+  0% {
+    opacity: 0;
+    transform: scale(2.6) rotate(-12deg);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(0.82) rotate(2deg);
+  }
+  70% {
+    transform: scale(1.08) rotate(0deg);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.article-inner-css .st-end-sentinel {
+  display: inline-block;
+  width: 1px;
+  height: 1px;
+}

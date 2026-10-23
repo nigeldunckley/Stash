@@ -29,8 +29,12 @@ struct SidebarPanel: View {
           row("Home", "house", .home)
           if edition.isOut {
             row("The Edition", "newspaper", .edition) {
-              if edition.isFresh { Text("New").font(.mono(11)).foregroundStyle(Color.stAccentText) }
+              if edition.isFresh {
+                Text("New").font(.mono(11)).foregroundStyle(Color.stAccentText)
+                  .editionStamp(date: edition.status?.date)
+              }
             }
+            .editionDelivery(date: edition.status?.date, fresh: edition.isFresh)
           }
 
           SidebarGroupLabel(title: "Read", isOpen: $readOpen)

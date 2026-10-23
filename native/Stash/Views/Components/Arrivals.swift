@@ -101,3 +101,88 @@ extension View {
     modifier(InkWipe(finished: finished))
   }
 }
+
+/// A new issue of The Edition being delivered: the first time you see this week's issue, it
+/// drops in from above with a slight tilt and settles like a paper landing on the mat, and its
+/// "New" is stamped on. It plays once per issue.
+enum EditionDelivery {
+  private static let key = "editionDelivered"
+
+  /// Whether this issue hasn't been delivered on this device yet.
+  static func isPending(_ date: String?) -> Bool {
+    guard let date else { return false }
+    return UserDefaults.standard.string(forKey: key) != date
+  }
+
+  static func markDelivered(_ date: String?) {
+    guard let date else { return }
+    UserDefaults.standard.set(date, forKey: key)
+  }
+}
+
+private struct PaperDrop: ViewModifier {
+  let date: String?
+  @State private var pending: Bool
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  init(date: String?, fresh: Bool) {
+    self.date = date
+    _pending = State(initialValue: fresh && EditionDelivery.isPending(date))
+  }
+
+  func body(content: Content) -> some View {
+    content
+      .opacity(pending ? 0 : 1)
+      .rotationEffect(.degrees(pending && !reduceMotion ? -6 : 0), anchor: .topLeading)
+      .offset(y: pending && !reduceMotion ? -30 : 0)
+      .onAppear {
+        guard pending else { return }
+        EditionDelivery.markDelivered(date)
+        withAnimation((reduceMotion ? StashMotion.fade : .spring(duration: 0.65, bounce: 0.38)).delay(0.3)) {
+          pending = false
+        }
+        #if os(iOS)
+        if !reduceMotion {
+          Task {
+            try? await Task.sleep(for: .seconds(0.55))
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+          }
+        }
+        #endif
+      }
+  }
+}
+
+private struct StampIn: ViewModifier {
+  @State private var pending: Bool
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  init(date: String?) {
+    _pending = State(initialValue: EditionDelivery.isPending(date))
+  }
+
+  func body(content: Content) -> some View {
+    content
+      .opacity(pending ? 0 : 1)
+      .scaleEffect(pending && !reduceMotion ? 2.2 : 1)
+      .rotationEffect(.degrees(pending && !reduceMotion ? -10 : 0))
+      .onAppear {
+        guard pending else { return }
+        withAnimation((reduceMotion ? StashMotion.fade : .spring(duration: 0.4, bounce: 0.3)).delay(0.75)) {
+          pending = false
+        }
+      }
+  }
+}
+
+extension View {
+  /// Drops a new Edition in the first time this week's issue is seen.
+  func editionDelivery(date: String?, fresh: Bool) -> some View {
+    modifier(PaperDrop(date: date, fresh: fresh))
+  }
+
+  /// Stamps a label on just after the issue lands.
+  func editionStamp(date: String?) -> some View {
+    modifier(StampIn(date: date))
+  }
+}

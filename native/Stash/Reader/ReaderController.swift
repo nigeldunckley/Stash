@@ -62,6 +62,7 @@ final class ReaderController: NSObject {
     controller.add(proxy, name: "stashAction")
     controller.add(proxy, name: "readingProgressUpdate")
     controller.add(proxy, name: "stashColophon")
+    controller.add(proxy, name: "stashFinished")
     controller.add(proxy, name: "stashSections")
     controller.add(proxy, name: "stashTick")
     webView.navigationDelegate = self
@@ -267,6 +268,12 @@ private final class MessageProxy: NSObject, WKScriptMessageHandler {
     case "stashTick": owner?.tick()
     case "stashColophon":
       if let choice = (message.body as? [String: Any])?["choice"] as? String { owner?.onColophon?(choice) }
+    case "stashFinished":
+      // The end mark stamping down as you reach the last line.
+      #if os(iOS)
+      UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.8)
+      #endif
+      break
     default: owner?.handleProgress(message.body)
     }
   }
