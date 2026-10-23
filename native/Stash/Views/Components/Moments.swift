@@ -112,7 +112,7 @@ private struct MomentSource: ViewModifier {
         if isActivePage { Moments.shared.rowFrames[item.id] = value }
       }
       .onChange(of: isActivePage) { _, active in
-        if active { Moments.shared.rowFrames[item.id] = frame } else { forget() }
+        if !active { forget() } else if let frame { Moments.shared.rowFrames[item.id] = frame }
       }
       .onDisappear(perform: forget)
   }
@@ -142,7 +142,7 @@ struct MomentFlight: View {
 
   var body: some View {
     GeometryReader { geometry in
-      FlightCanvas(plan: plan(origin: geometry.frame(in: .global).origin))
+      FlightCanvas(momentID: moment?.id, plan: plan(origin: geometry.frame(in: .global).origin))
     }
     .allowsHitTesting(false)
     .accessibilityHidden(true)
@@ -232,6 +232,7 @@ struct Easing {
 
 /// Hosts the flight's layers over the window.
 private struct FlightCanvas {
+  let momentID: UUID?
   let plan: FlightPlan?
 
   final class Coordinator {
@@ -242,10 +243,16 @@ private struct FlightCanvas {
 
   @MainActor
   fileprivate func start(in host: CALayer, coordinator: Coordinator) {
-    guard let plan, plan.id != coordinator.lastID else { return }
-    coordinator.lastID = plan.id
-    guard let image = plan.image() else { return }
-    FlightAnimator.run(plan, image: image, in: host)
+    // Each moment gets one chance: one whose row or entry isn't on screen lands without a
+    // flight, rather than flying late once something turns up.
+    guard let momentID, momentID != coordinator.lastID else { return }
+    coordinator.lastID = momentID
+    guard let plan else { return }
+    // Drawn just after this update, not in the middle of it.
+    Task { @MainActor in
+      guard let image = plan.image() else { return }
+      FlightAnimator.run(plan, image: image, in: host)
+    }
   }
 }
 
@@ -351,7 +358,7 @@ enum FlightAnimator {
       scales.append(1 + 0.025 * raised + (Double(path.endScale) - 1.025) * pow(u, 1.7))
       rotations.append(path.tilt * .pi / 180 * sin(.pi * min(u * 1.15, 1)))
       opacities.append(u < 0.82 ? 1 : 1 - (u - 0.82) / 0.18)
-      shadows.append(0.3 * raised * (u < 0.82 ? 1 : 1 - (u - 0.82) / 0.18))
+      shadows.append(0.3 * raised)
       heads.append(u)
       tails.append(max(0, u - tail))
       glows.append(time < lift ? 0 : 0.7 * (1 - abs(u - 0.5) * 2))
