@@ -21,11 +21,17 @@ struct HomeView: View {
   @State private var leadTitle: String?
   /// The item open in the preview, and which list it came from, for moving up and down.
   @State private var peek: LibraryItem?
-  /// Home is scrolled to (near) the top, where new posts can drop in without moving what you're reading.
+  /// Home is scrolled to (near) the top, where new posts can drop in without moving what you're
+  /// reading. On iPhone, the feed's heading is in view, which it reports once it's laid out.
+  #if os(macOS)
   @State private var atTop = true
-  /// Mid-scroll, or (on Mac) the pointer resting on the stories: new posts wait until you stop.
+  #else
+  @State private var atTop = false
+  #endif
+  /// Mid-scroll, or (on Mac) the pointer resting on the lead or the grid: new posts wait until you stop.
   @State private var scrolling = false
-  @State private var hoveringFeed = false
+  @State private var hoveringLead = false
+  @State private var hoveringGrid = false
   /// "N new" was tapped while scrolled down: they drop in once Home reaches the top.
   @State private var revealOnTop = false
   @State private var scrollTopTick = 0
@@ -99,13 +105,8 @@ struct HomeView: View {
         .onChange(of: isActivePage) { _, active in
           if active { Task { await checkAndArrive() } }
         }
-        .onChange(of: atTop) { _, top in
-          guard top else { return }
-          if revealOnTop { revealNew() } else { arriveIfIdle() }
-        }
-        .onChange(of: busy) { _, isBusy in
-          if !isBusy { arriveIfIdle() }
-        }
+        .onChange(of: atTop) { _, _ in settle() }
+        .onChange(of: busy) { _, _ in settle() }
         .task(id: feedsQuery) {
           await feeds.load(feedsQuery)
         }
@@ -253,13 +254,7 @@ struct HomeView: View {
             capture: $capture, focus: $captureFocused,
             onSubmit: submitCapture, onAdd: { capturing = true }
           )
-          VStack(alignment: .leading, spacing: 0) { frontPage }
-            .onContinuousHover { phase in
-              switch phase {
-              case .active: hoveringFeed = true
-              case .ended: hoveringFeed = false
-              }
-            }
+          frontPage
         }
         .padding(.horizontal, 48)
         .padding(.leading, sidebarInset)
@@ -348,6 +343,7 @@ struct HomeView: View {
   private var frontPage: some View {
     let front = frontStories
     leadRow(front.lead, secondary: front.secondary)
+      .onHover { hoveringLead = $0 }
       .padding(.vertical, 28)
     shelfBand
     if !front.grid.isEmpty || !feeds.waiting.isEmpty {
@@ -370,6 +366,7 @@ struct HomeView: View {
           .id(item.id)
         }
       }
+      .onHover { hoveringGrid = $0 }
       .padding(.bottom, 36)
     }
     if !videos.isEmpty {
@@ -662,7 +659,7 @@ struct HomeView: View {
   private var content: some View {
     ScrollViewReader { proxy in
       List {
-        FolioView(content: Self.folio).plainListRow(top: 8).id(Self.topID)
+        FolioView(content: Self.folio).plainListRow(top: 8)
         iPhoneHeader.plainListRow(top: 12)
         continuationSection.plainListRow(top: 18)
         if showsEditionStrip {
@@ -672,7 +669,11 @@ struct HomeView: View {
         }
         if !videos.isEmpty { latestVideos.plainListRow(top: 20) }
         if !upNext.isEmpty { savedSuggestions.plainListRow(top: 20) }
-        feedsHeading.plainListRow(top: 22, bottom: 10)
+        feedsHeading
+          .id(Self.topID)
+          // The feed starts here, so "at the top" means this heading is in view.
+          .onScrollVisibilityChange(threshold: 0.5) { atTop = $0 }
+          .plainListRow(top: 22, bottom: 10)
 
         let items = feedItems
         if items.isEmpty {
@@ -702,7 +703,6 @@ struct HomeView: View {
       }
       .stashList()
       .refreshable { await reload() }
-      .onScrollGeometryChange(for: Bool.self) { Self.isAtTop($0) } action: { _, top in atTop = top }
       .onScrollPhaseChange { _, phase in scrolling = phase != .idle }
       .onChange(of: scrollTopTick) {
         withAnimation(reduceMotion ? nil : StashMotion.change) { proxy.scrollTo(Self.topID, anchor: .top) }
@@ -944,9 +944,10 @@ struct HomeView: View {
 
   // MARK: New posts arriving
 
+  /// Where "N new" scrolls to: the top of the front page on Mac, the feed's heading on iPhone.
   private static let topID = "home-top"
 
-  /// Within about 120pt of the top counts as the top, as on the web.
+  /// On Mac, within about 120pt of the top counts as the top, as on the web.
   private static func isAtTop(_ geometry: ScrollGeometry) -> Bool {
     geometry.contentOffset.y + geometry.contentInsets.top <= 120
   }
@@ -955,10 +956,20 @@ struct HomeView: View {
   /// resting on the stories, or a story open over Home.
   private var busy: Bool {
     #if os(macOS)
-    scrolling || hoveringFeed || peek != nil
+    let hovering = hoveringLead || hoveringGrid
     #else
-    scrolling
+    let hovering = false
     #endif
+    return scrolling || hovering || peek != nil || !path.isEmpty || searching || capturing
+  }
+
+  /// Something changed that might let waiting posts in: reaching the top, or finishing a scroll.
+  private func settle() {
+    if revealOnTop, atTop, !scrolling {
+      revealNew()
+    } else {
+      arriveIfIdle()
+    }
   }
 
   private func checkAndArrive() async {
@@ -977,9 +988,9 @@ struct HomeView: View {
   private func revealNew() {
     revealOnTop = false
     guard !feeds.waiting.isEmpty else { return }
-    withAnimation(reduceMotion ? StashMotion.fade : .smooth(duration: 0.38)) { feeds.showWaiting() }
+    let count = withAnimation(reduceMotion ? StashMotion.fade : .smooth(duration: 0.38)) { feeds.showWaiting() }
     #if os(iOS)
-    guard !reduceMotion else { return }
+    guard count > 0, !reduceMotion else { return }
     Task {
       try? await Task.sleep(for: .seconds(ArrivalDrop.gapTime + 0.3))
       Feedback.arrived()
