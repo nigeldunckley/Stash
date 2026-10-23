@@ -40,7 +40,7 @@ struct HomeView: View {
 
   /// Home's feed list is the main column on Mac, so it shows more there.
   #if os(macOS)
-  private static let feedLimit = 20
+  private static let feedLimit = 30
   #else
   private static let feedLimit = 6
   #endif
@@ -219,47 +219,25 @@ struct HomeView: View {
     }
   }
 
-  /// The header pinned at the top and the page scrolling under it.
+  /// The folio over the front page, which scrolls as one.
   private var home: some View {
-    VStack(spacing: 0) {
-      VStack(alignment: .leading, spacing: 18) {
-        FolioView(content: Self.folio)
-        HomeHeader(capture: $capture, focus: $captureFocused, onSubmit: submitCapture, onAdd: { capturing = true })
-      }
-      .padding(.horizontal, 40)
-      .padding(.leading, sidebarInset)
-      .padding(.top, 2)
-      .padding(.bottom, 20)
-      .frame(maxWidth: Self.maxWidth + 80 + sidebarInset)
-      .frame(maxWidth: .infinity)
-      page
-    }
-  }
-
-  /// Content 40pt from the edges, at most 1,180pt wide and centred: the feed list down the
-  /// middle with everything else in a column on the right, in the iPhone's order. Rows are
-  /// selected with a click or the arrow keys; Delete archives and S saves the selected row.
-  private var page: some View {
     ScrollViewReader { proxy in
       ScrollView {
-        Group {
-          if wide {
-            HStack(alignment: .top, spacing: 36) {
-              feedColumn.frame(maxWidth: .infinity, alignment: .topLeading)
-              VStack(alignment: .leading, spacing: 28) { railSections }
-                .frame(width: 340)
-            }
-          } else {
-            VStack(alignment: .leading, spacing: 28) {
-              railSections
-              feedColumn
-            }
-          }
+        VStack(alignment: .leading, spacing: 0) {
+          FolioView(content: Self.folio)
+            .padding(.top, 2)
+            .padding(.bottom, 10)
+          FrontMasthead(
+            summary: mastheadSummary,
+            capture: $capture, focus: $captureFocused,
+            onSubmit: submitCapture, onAdd: { capturing = true }
+          )
+          frontPage
         }
-        .padding(.horizontal, 40)
+        .padding(.horizontal, 48)
         .padding(.leading, sidebarInset)
-        .padding(.bottom, 40)
-        .frame(maxWidth: Self.maxWidth + 80 + sidebarInset)
+        .padding(.bottom, 56)
+        .frame(maxWidth: Self.maxWidth + 96 + sidebarInset)
         .frame(maxWidth: .infinity)
       }
       .scrollContentBackground(.hidden)
@@ -287,17 +265,216 @@ struct HomeView: View {
     }
   }
 
-  /// Everything but the feed list, in the order the iPhone shows it.
-  @ViewBuilder
-  private var railSections: some View {
-    continuationSection
-    if showsEditionStrip { editionStrip }
-    if !videos.isEmpty { latestVideos }
-    savedSuggestions
+  /// "23 stories waiting · 3 new videos", in italic beside "Home."
+  private var mastheadSummary: String? {
+    var parts: [String] = []
+    if let total = feeds.total, total > 0 { parts.append("\(total) \(total == 1 ? "story" : "stories") waiting") }
+    if !videos.isEmpty { parts.append("\(videos.count) new \(videos.count == 1 ? "video" : "videos")") }
+    return parts.isEmpty ? nil : parts.joined(separator: " · ")
   }
 
-  private var feedColumn: some View {
-    VStack(alignment: .leading, spacing: 12) { feedsHeading; feedBox }
+  /// Home's feed posts laid out as a front page: the lead, the rest of its day as a grid, and
+  /// everything older as a river of headlines.
+  private var frontStories: (lead: LibraryItem?, grid: [LibraryItem], river: [(label: String, items: [LibraryItem])]) {
+    let items = feedItems
+    // The lead is the newest story with a picture, if one is near the top.
+    let newestDay = dayGroup(items.first?.date)
+    guard let lead = items.prefix(6).first(where: {
+      $0.imageURL != nil && !Watch.isVideo($0) && dayGroup($0.date) == newestDay
+    }) ?? items.first else {
+      return (nil, [], [])
+    }
+    let rest = items.filter { $0.id != lead.id }
+    let day = dayGroup(lead.date)
+    let grid = Array(rest.filter { dayGroup($0.date) == day }.prefix(6))
+    let gridIDs = Set(grid.map(\.id))
+    let river = groups(rest.filter { !gridIDs.contains($0.id) })
+    return (lead, grid, river)
+  }
+
+  /// The front page's stories in the order they appear, for the arrow keys.
+  private var frontOrder: [LibraryItem] {
+    let front = frontStories
+    return (front.lead.map { [$0] } ?? []) + front.grid + front.river.flatMap(\.items)
+  }
+
+  /// The front page: lead and side column, the grid, then the river beside new videos.
+  @ViewBuilder
+  private var frontPage: some View {
+    let front = frontStories
+    let layout = wide
+      ? AnyLayout(HStackLayout(alignment: .top, spacing: 44))
+      : AnyLayout(VStackLayout(alignment: .leading, spacing: 32))
+    layout {
+      Group {
+        if let lead = front.lead {
+          LeadStory(
+            item: lead, source: channelName(lead) ?? lead.source, unseen: feeds.isUnseen(lead),
+            open: { openFromHome(lead) }, perform: perform
+          )
+          .id(lead.id)
+        } else {
+          feedsEmpty
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .topLeading)
+      sideColumn
+        .frame(width: wide ? 320 : nil)
+        .frame(maxWidth: wide ? nil : .infinity, alignment: .leading)
+    }
+    .padding(.vertical, 28)
+
+    if !front.grid.isEmpty || !feeds.waiting.isEmpty {
+      Rectangle().fill(Color.stLine).frame(height: 1)
+      gridHeading(front.lead.map { dayGroup($0.date) })
+      LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 32, alignment: .top)], alignment: .leading, spacing: 32) {
+        ForEach(front.grid) { item in
+          StoryCard(
+            item: item, source: channelName(item) ?? item.source, unseen: feeds.isUnseen(item),
+            open: { openFromHome(item) }, perform: perform
+          )
+          .id(item.id)
+        }
+      }
+      .padding(.bottom, 32)
+    }
+
+    if !front.river.isEmpty || !videos.isEmpty {
+      Rectangle().fill(Color.stLine).frame(height: 1)
+      lowerSection(front.river)
+    }
+  }
+
+  /// Older posts beside new videos.
+  private func lowerSection(_ days: [(label: String, items: [LibraryItem])]) -> some View {
+    let lower = wide
+      ? AnyLayout(HStackLayout(alignment: .top, spacing: 44))
+      : AnyLayout(VStackLayout(alignment: .leading, spacing: 32))
+    return lower {
+      river(days)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+      if !videos.isEmpty {
+        videosColumn
+          .frame(width: wide ? 320 : nil)
+          .frame(maxWidth: wide ? nil : .infinity, alignment: .leading)
+      }
+    }
+    .padding(.top, 28)
+  }
+
+  /// "From your feeds  Today  ↑ 4 new … All feeds →"
+  private func gridHeading(_ day: String?) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: 12) {
+      Text("From your feeds")
+        .font(.ui(22, .semibold, relativeTo: .title2))
+        .tracking(-0.4)
+        .foregroundStyle(Color.stInk)
+      if let day {
+        Text(day)
+          .font(.reading(18, .regular, italic: true))
+          .foregroundStyle(Color.stMuted)
+      }
+      if !feeds.waiting.isEmpty {
+        Button { withAnimation(reduceMotion ? nil : StashMotion.change) { feeds.showWaiting() } } label: {
+          Label("\(feeds.waiting.count) new", systemImage: "arrow.up")
+        }
+        .buttonStyle(.textProminent)
+        .help("Show the new posts")
+      }
+      Spacer(minLength: 8)
+      Button("All feeds") { go(.feeds) }.buttonStyle(.text)
+    }
+    .padding(.top, 28)
+    .padding(.bottom, 18)
+  }
+
+  /// Older posts as headlines, two columns across, under each day's name.
+  @ViewBuilder
+  private func river(_ days: [(label: String, items: [LibraryItem])]) -> some View {
+    if !days.isEmpty {
+      VStack(alignment: .leading, spacing: 24) {
+        ForEach(days, id: \.label) { day in
+          VStack(alignment: .leading, spacing: 0) {
+            RiverHeading(title: day.label) { EmptyView() }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 32, alignment: .top)], alignment: .leading, spacing: 0) {
+              ForEach(day.items) { item in
+                HeadlineRow(item: item, source: channelName(item) ?? item.source, unseen: feeds.isUnseen(item)) {
+                  openFromHome(item)
+                }
+                .id(item.id)
+                .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
+              }
+            }
+          }
+        }
+        let shown = feedItems.count
+        Button {
+          go(.feeds)
+        } label: {
+          HStack(spacing: 6) {
+            if let total = feeds.total, total > shown { Text("\(total - shown) more in Feeds") } else { Text("Open Feeds") }
+            Image(systemName: "arrow.right").imageScale(.small)
+          }
+          .font(.ui(13, .medium))
+          .foregroundStyle(Color.stInk)
+        }
+        .buttonStyle(.plain)
+      }
+    }
+  }
+
+  /// Pick up where you left off, The Edition, and In Saved.
+  private var sideColumn: some View {
+    VStack(alignment: .leading, spacing: 28) {
+      let article = upNext.first { $0.progress >= 0.02 }
+      let video = continuingVideos.first
+      if article != nil || video != nil {
+        VStack(alignment: .leading, spacing: 14) {
+          ColumnHeading(title: "Pick up where you left off")
+          if let article { PickUpRow(item: article, watching: false) { open(article, from: .upNext) } }
+          if let video { PickUpRow(item: video, watching: true) { open(video, from: .continuing) } }
+        }
+      }
+      if showsEditionStrip { editionStrip }
+      savedColumn
+    }
+  }
+
+  @ViewBuilder
+  private var savedColumn: some View {
+    let items = Array(upNext.filter { $0.progress < 0.02 }.prefix(3))
+    if !items.isEmpty {
+      VStack(alignment: .leading, spacing: 0) {
+        ColumnHeading(title: "In Saved", link: "Open Saved") { go(.saved) }
+        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+          NumberedRow(number: index + 1, item: item, divider: index < items.count - 1) { open(item, from: .upNext) }
+            .itemMenu(item, perform: perform)
+        }
+      }
+    } else if let upNextError {
+      HStack {
+        Text(upNextError).font(.stSmall).foregroundStyle(Color.stMuted)
+        Button("Try again") { Task { await loadUpNext() } }.buttonStyle(.text)
+      }
+    }
+  }
+
+  private var videosColumn: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      ColumnHeading(title: "New videos", link: "All channels") { go(.channels) }
+      LazyVGrid(columns: [GridItem(.flexible(), spacing: 16, alignment: .top), GridItem(.flexible(), spacing: 16, alignment: .top)], spacing: 18) {
+        ForEach(videos.prefix(4)) { item in
+          VideoTile(item: item) { open(item, from: .videos) }
+            .itemMenu(item, unseen: true, perform: perform)
+        }
+      }
+    }
+  }
+
+  /// Opens a feed post from the front page, with the feed list beside it.
+  private func openFromHome(_ item: LibraryItem) {
+    listFocused = true
+    open(item, from: .feeds)
   }
 
   // MARK: An item opened from Home
@@ -305,12 +482,14 @@ struct HomeView: View {
   /// Wide enough to keep the list beside the item.
   private var showsSourceColumn: Bool { contentWidth >= 760 }
 
-  /// The list the item came from on the left, the item in the reader or player across the rest.
+  /// The list the item came from on the left as a column of headlines, the item in the reader
+  /// or player across the rest.
   private func openItem(_ item: LibraryItem) -> some View {
     HStack(spacing: 0) {
       if showsSourceColumn {
         sourceColumn
-          .frame(width: 320 + sidebarInset)
+          .frame(width: 340 + sidebarInset)
+          .background(Color.stGroup)
         Rectangle().fill(Color.stLine).frame(width: 1)
       }
       peekCard(item, inSheet: true)
@@ -329,22 +508,34 @@ struct HomeView: View {
     }
   }
 
-  /// "‹ HOME", the section's name, and its items, with the open one marked.
+  /// "‹ HOME / FROM YOUR FEEDS", then the section's stories as headlines under each day's name,
+  /// with the open one marked.
   private var sourceColumn: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      BackBar(back: PageBack(crumbs: ["Home"], action: close))
-      Text(sourceTitle)
-        .font(.stSection)
-        .foregroundStyle(Color.stInk)
+    VStack(alignment: .leading, spacing: 12) {
+      BackBar(back: PageBack(crumbs: ["Home", sourceTitle], action: close))
       ScrollViewReader { proxy in
         ScrollView {
-          ListBox {
-            let list = peekList
-            ForEach(list) { item in
-              sourceRow(item, divider: item.id != list.last?.id)
+          VStack(alignment: .leading, spacing: 18) {
+            let days = sourceDays
+            ForEach(days, id: \.label) { day in
+              VStack(alignment: .leading, spacing: 0) {
+                RiverHeading(title: day.label) {
+                  if day.label == days.first?.label, let position = peekPosition {
+                    Text(position)
+                      .font(.mono(11))
+                      .foregroundStyle(Color.stMuted)
+                      .monospacedDigit()
+                  }
+                }
+                ForEach(day.items) { item in
+                  sourceRow(item)
+                }
+              }
             }
           }
-          .padding(.bottom, 24)
+          // Room for the open story's box, which reaches 10pt either side of the rows.
+          .padding(.horizontal, 10)
+          .padding(.bottom, 16)
         }
         .scrollContentBackground(.hidden)
         .focusable()
@@ -358,70 +549,40 @@ struct HomeView: View {
           withAnimation(reduceMotion ? nil : StashMotion.feedback) { proxy.scrollTo(id) }
         }
       }
+      Text("↑ ↓ next story · Esc back to Home")
+        .font(.mono(11))
+        .foregroundStyle(Color.stMuted)
+        .padding(.bottom, 12)
     }
-    .padding(.leading, 16 + sidebarInset)
-    .padding(.trailing, 16)
-    .padding(.top, 12)
+    .padding(.leading, 10 + sidebarInset)
+    .padding(.trailing, 10)
+    .padding(.top, 14)
   }
 
-  private func sourceRow(_ item: LibraryItem, divider: Bool) -> some View {
-    let selected = peek?.id == item.id
-    return Group {
-      if Watch.isVideo(item) {
-        VideoRow(item: item, selected: selected, divider: divider)
-      } else {
-        ItemRow(item: item, subscriptionName: channelName(item), unseen: feeds.isUnseen(item), selected: selected, divider: divider)
-      }
-    }
-    .id(item.id)
-    .contentShape(Rectangle())
-    .onTapGesture {
+  /// The open item's list, by day for feed posts, under the section's name otherwise.
+  private var sourceDays: [(label: String, items: [LibraryItem])] {
+    peekSource == .feeds ? groups(peekList) : [(label: sourceTitle, items: peekList)]
+  }
+
+  /// "2 of 23"
+  private var peekPosition: String? {
+    let list = peekList
+    guard let peek, let index = list.firstIndex(of: peek) else { return nil }
+    return "\(index + 1) of \(list.count)"
+  }
+
+  private func sourceRow(_ item: LibraryItem) -> some View {
+    let fromFeeds = peekSource == .feeds
+    let unseen = feeds.isUnseen(item)
+    return HeadlineRow(
+      item: item, source: channelName(item) ?? item.source,
+      unseen: fromFeeds && unseen, selected: peek?.id == item.id, read: fromFeeds && !unseen
+    ) {
       sourceFocused = true
       show(item)
     }
-    .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
-  }
-
-  /// The feed list as one bordered box: day bands, rows, then a "more" row.
-  private var feedBox: some View {
-    let items = feedItems
-    let hasMore = (feeds.total ?? 0) > items.count
-    return Group {
-      if items.isEmpty {
-        feedsEmpty
-      } else {
-        VStack(spacing: 0) {
-          ForEach(groups(items), id: \.label) { group in
-            DayBand(label: group.label)
-              .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
-            ForEach(group.items) { item in
-              feedRow(item, divider: hasMore || item.id != items.last?.id)
-            }
-          }
-          if hasMore { moreRow(items.count) }
-        }
-        .background(Color.stSurface)
-        .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
-      }
-    }
-  }
-
-  private func feedRow(_ item: LibraryItem, divider: Bool) -> some View {
-    let selected = selectedID == item.id
-    return Group {
-      if Watch.isVideo(item) {
-        VideoRow(item: item, selected: selected, divider: divider)
-      } else {
-        ItemRow(item: item, subscriptionName: channelName(item), unseen: feeds.isUnseen(item), selected: selected, divider: divider)
-      }
-    }
     .id(item.id)
-    .onTapGesture {
-      listFocused = true
-      selectedID = item.id
-    }
-    .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
+    .itemMenu(item, unseen: unseen, perform: perform)
   }
   #endif
 
@@ -787,7 +948,7 @@ struct HomeView: View {
       move(offset)
       return .handled
     }
-    let items = feedItems
+    let items = frontOrder
     guard !items.isEmpty else { return .ignored }
     guard let id = selectedID, let index = items.firstIndex(where: { $0.id == id }) else {
       selectedID = (offset > 0 ? items.first : items.last)?.id
