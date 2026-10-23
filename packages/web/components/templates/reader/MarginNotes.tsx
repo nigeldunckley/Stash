@@ -245,6 +245,57 @@ const markEnd = (root: HTMLElement) => {
   last?.classList.add('st-end')
 }
 
+// When you reach the end, the end mark stamps down: it waits, hidden, until
+// the last line scrolls into view, then lands with a small give. The apps
+// also get a tap on iPhone. Reduce Motion shows it in place from the start.
+const stampEnd = (root: HTMLElement): (() => void) => {
+  const end = root.querySelector<HTMLElement>('p.st-end')
+  if (
+    !end ||
+    typeof IntersectionObserver == 'undefined' ||
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ) {
+    return () => undefined
+  }
+  const sentinel = document.createElement('span')
+  sentinel.className = 'st-end-sentinel'
+  sentinel.setAttribute('aria-hidden', 'true')
+  end.appendChild(sentinel)
+  end.classList.remove('st-end-stamped')
+  end.classList.add('st-end-armed')
+  // Only reaching the end by reading stamps it. If it's already in view
+  // before you've scrolled (a short piece, or reopened at the end), it is
+  // simply there.
+  let scrolled = false
+  const onScroll = () => {
+    scrolled = true
+  }
+  window.addEventListener('scroll', onScroll, { capture: true, passive: true })
+  const observer = new IntersectionObserver((entries) => {
+    if (!entries.some((entry) => entry.isIntersecting)) return
+    observer.disconnect()
+    window.removeEventListener('scroll', onScroll, { capture: true })
+    end.classList.remove('st-end-armed')
+    if (!scrolled) return
+    end.classList.add('st-end-stamped')
+    const handlers = (
+      window as unknown as {
+        webkit?: {
+          messageHandlers?: Record<string, { postMessage(body: unknown): void }>
+        }
+      }
+    ).webkit?.messageHandlers
+    handlers?.stashFinished?.postMessage({})
+  })
+  observer.observe(sentinel)
+  return () => {
+    observer.disconnect()
+    window.removeEventListener('scroll', onScroll, { capture: true })
+    sentinel.remove()
+    end.classList.remove('st-end-armed')
+  }
+}
+
 type MarginNotesProps = {
   contentRef: MutableRefObject<HTMLDivElement | null>
   // Changes when the article's HTML is replaced.
@@ -272,6 +323,7 @@ export function MarginNotes(props: MarginNotesProps): JSX.Element | null {
     markEnd(root)
     setNotes(collectNotes(root, props.pageUrls))
     setOpen(undefined)
+    return stampEnd(root)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.contentRef, props.contentKey])
 

@@ -67,6 +67,7 @@ struct PageHeader<Trailing: View>: View {
         .lineLimit(1)
       if let detail {
         Text(detail.uppercased())
+          .rolls(detail)
           .font(.mono(11))
           .tracking(0.66)
           .monospacedDigit()

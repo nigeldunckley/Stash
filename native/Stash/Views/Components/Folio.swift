@@ -73,7 +73,7 @@ struct FolioView: View {
               Spacer(minLength: 12)
               #if os(macOS)
               if variant.right, let right = content.right {
-                Text(right).foregroundStyle(Color.stMuted)
+                Text(right).foregroundStyle(Color.stMuted).rolls(right)
               }
               #endif
             }
@@ -126,6 +126,7 @@ struct FolioView: View {
         Text(index == 0 ? part : " · \(part)")
           .foregroundStyle(index == 0 ? Color.stInk : Color.stMuted)
           .fixedSize()
+          .rolls(part)
       }
       if showChecked, content.checked, let checked = data.checked {
         Text(" · \(checkedText(checked, now: now))").foregroundStyle(Color.stMuted).fixedSize()

@@ -14,7 +14,7 @@ struct Count: View {
   }
 
   var body: some View {
-    let text = Text("\(value)").font(.mono(11, style == .badge ? .medium : .regular)).monospacedDigit()
+    let text = Text("\(value)").font(.mono(11, style == .badge ? .medium : .regular)).monospacedDigit().rolls(value)
     switch style {
     case .plain:
       text.foregroundStyle(Color.stMuted)

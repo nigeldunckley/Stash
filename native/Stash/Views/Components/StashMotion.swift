@@ -26,3 +26,22 @@ extension EnvironmentValues {
     set { self[AutoHiddenSidebarKey.self] = newValue }
   }
 }
+
+extension View {
+  /// Numbers that tick over like an odometer when they change: each digit rolls up as a count
+  /// grows and down as it shrinks. Reduce Motion cross-fades instead.
+  func rolls<Value: Equatable>(_ value: Value) -> some View {
+    modifier(RollingNumber(value: value))
+  }
+}
+
+private struct RollingNumber<Value: Equatable>: ViewModifier {
+  let value: Value
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  func body(content: Content) -> some View {
+    content
+      .contentTransition(reduceMotion ? .opacity : .numericText())
+      .animation(reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.4, extraBounce: 0.08), value: value)
+  }
+}

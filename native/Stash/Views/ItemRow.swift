@@ -35,7 +35,7 @@ struct ItemRow: View {
           Text(item.title)
             .font(.stRowTitle)
             .tracking(Tracking.rowTitle)
-            .foregroundStyle(Color.stInk)
+            .inkWipe(finished: item.progress >= 0.98)
             .lineLimit(typeSize.isAccessibilitySize ? nil : compact ? 3 : 2)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)

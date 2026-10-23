@@ -29,8 +29,12 @@ struct SidebarPanel: View {
           row("Home", "house", .home)
           if edition.isOut {
             row("The Edition", "newspaper", .edition) {
-              if edition.isFresh { Text("New").font(.mono(11)).foregroundStyle(Color.stAccentText) }
+              if edition.isFresh {
+                Text("New").font(.mono(11)).foregroundStyle(Color.stAccentText)
+                  .editionStamp(date: edition.status?.date)
+              }
             }
+            .editionDelivery(date: edition.status?.date, fresh: edition.isFresh)
           }
 
           SidebarGroupLabel(title: "Read", isOpen: $readOpen)
@@ -42,7 +46,7 @@ struct SidebarPanel: View {
             row("Highlights", "highlighter", .highlights)
             row("Discover", "safari", .discover) {
               if let discoverCount, discoverCount > 0 {
-                Text("\(discoverCount) new").font(.mono(11)).monospacedDigit().foregroundStyle(Color.stAccentText)
+                Text("\(discoverCount) new").font(.mono(11)).monospacedDigit().foregroundStyle(Color.stAccentText).rolls(discoverCount)
               }
             }
             SidebarRow(title: "Archive", symbol: "archivebox", landing: .archived, selected: section == .archive, action: { go(.archive) }) {

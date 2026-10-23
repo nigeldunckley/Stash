@@ -20,6 +20,8 @@ struct Moment: Identifiable, Equatable {
   var detail: String = ""
   /// Where it starts, in window coordinates, if the item is on screen.
   let source: CGRect?
+  /// Undo: the card flies back out of the entry and into its place in the list.
+  var reversed = false
 }
 
 @MainActor
@@ -34,6 +36,8 @@ final class Moments {
 
   /// Where each list row is on screen, by item id, kept as rows lay out.
   @ObservationIgnored var rowFrames: [String: CGRect] = [:]
+  /// Rows put back by Undo that stay hidden until their card has landed in their place.
+  private(set) var incoming: Set<String> = []
   /// Where the icons of the sidebar's Saved, Watch Saved, Archive and Trash entries are.
   @ObservationIgnored var targets: [MomentKind: CGRect] = [:]
 
@@ -47,6 +51,44 @@ final class Moments {
   /// Archived from the reader or The Sort, where the row isn't on screen: it lands without a flight.
   func archivedOffList(_ item: LibraryItem) {
     post(Watch.isVideo(item) ? .archivedVideo : .archived, item: item, title: nil, flies: false)
+  }
+
+  /// Which entry an action sends an item to, if it's one that swooshes.
+  static func kind(for action: ItemAction, item: LibraryItem) -> MomentKind? {
+    switch action {
+    case .save: return Watch.isVideo(item) ? .savedVideo : .saved
+    case .archive: return Watch.isVideo(item) ? .archivedVideo : .archived
+    case .delete: return .trashed
+    default: return nil
+    }
+  }
+
+  /// Undo: the card comes back out of the entry it went into and settles into the row's old
+  /// place (`origin`, where the row was when the action ran), as the list opens up for it. The
+  /// row stays hidden until the card lands. Returns whether it flies.
+  @discardableResult
+  func returned(_ item: LibraryItem, from kind: MomentKind, to origin: CGRect?) -> Bool {
+    guard !Self.reduceMotion, let origin, canFly(to: kind) else { return false }
+    let moment = Moment(kind: kind, title: item.title, detail: item.source, source: origin, reversed: true)
+    current = moment
+    incoming.insert(item.id)
+    Task {
+      try? await Task.sleep(for: .seconds(Self.flightTime))
+      incoming.remove(item.id)
+      try? await Task.sleep(for: .seconds(0.05))
+      if current?.id == moment.id { current = nil }
+    }
+    return true
+  }
+
+  /// Whether there's an entry on screen for a card to come out of: the sidebar's on Mac, the
+  /// tab bar's on iPhone (iPad shows its tabs elsewhere).
+  private func canFly(to kind: MomentKind) -> Bool {
+    #if os(macOS)
+    targets[kind] != nil
+    #else
+    UIDevice.current.userInterfaceIdiom == .phone
+    #endif
   }
 
   /// The web's timings: a quick lift off the list, then the sweep.
@@ -115,6 +157,8 @@ private struct MomentSource: ViewModifier {
         if !active { forget() } else if let frame { Moments.shared.rowFrames[item.id] = frame }
       }
       .onDisappear(perform: forget)
+      // Put back by Undo: hidden while its card flies back into this place.
+      .opacity(Moments.shared.incoming.contains(item.id) ? 0 : 1)
   }
 
   /// Forgets this row's place, unless another copy of the item (on the page in front) has
@@ -162,6 +206,7 @@ struct MomentFlight: View {
       id: moment.id, path: path, size: size, scale: scale,
       accent: Color.stAccent.resolve(in: environment).cgColor,
       reduceMotion: reduceMotion,
+      reversed: moment.reversed,
       image: {
         // Drawn once, at the screen's own resolution, so the card stays crisp as it moves.
         let renderer = ImageRenderer(content: card)
@@ -201,6 +246,7 @@ struct FlightPlan {
   let scale: CGFloat
   let accent: CGColor
   let reduceMotion: Bool
+  let reversed: Bool
   let image: @MainActor () -> CGImage?
 }
 
@@ -364,6 +410,17 @@ enum FlightAnimator {
       glows.append(time < lift ? 0 : 0.7 * (1 - abs(u - 0.5) * 2))
     }
 
+    // Undo plays the same flight backwards: out of the icon, growing back to full size, and
+    // set down in the row's old place, with the trail still behind it.
+    var starts = tails, ends = heads
+    if plan.reversed {
+      // Leaning the way it now travels.
+      positions.reverse(); scales.reverse(); rotations = rotations.reversed().map { -$0 }
+      opacities.reverse(); shadows.reverse(); glows.reverse()
+      starts = heads.reversed()
+      ends = starts.map { min(1, $0 + tail) }
+    }
+
     #if os(macOS)
     let points = positions.map { NSValue(point: $0) }
     #else
@@ -374,8 +431,8 @@ enum FlightAnimator {
     ghost.add(keyframes("transform.rotation.z", rotations, times: times, duration: total), forKey: "tilt")
     ghost.add(keyframes("opacity", opacities, times: times, duration: total), forKey: "opacity")
     ghost.add(keyframes("shadowOpacity", shadows, times: times, duration: total), forKey: "shadow")
-    trail.add(keyframes("strokeEnd", heads, times: times, duration: total), forKey: "head")
-    trail.add(keyframes("strokeStart", tails, times: times, duration: total), forKey: "tail")
+    trail.add(keyframes("strokeEnd", ends, times: times, duration: total), forKey: "head")
+    trail.add(keyframes("strokeStart", starts, times: times, duration: total), forKey: "tail")
     trail.add(keyframes("opacity", glows, times: times, duration: total), forKey: "glow")
     CATransaction.commit()
   }
