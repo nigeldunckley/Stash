@@ -1,46 +1,40 @@
-function addStorage(itemsToAdd) {
-    return chrome.storage.local.set(itemsToAdd)
+const DEFAULT_STASH_URL = 'https://stash.nigeldunckley.com'
+
+function serverUrl(value) {
+  const trimmed = (value || '').trim().replace(/\/+$/, '')
+  return trimmed || DEFAULT_STASH_URL
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  const saveApiButton = document.getElementById('save-api-key-btn')
-  const apiInput = document.getElementById('api-key')
+document.addEventListener('DOMContentLoaded', async () => {
+  const urlInput = document.getElementById('server-url')
+  const keyInput = document.getElementById('api-key')
+  const apiLink = document.getElementById('api-link')
+  const status = document.getElementById('status')
+  const saveButton = document.getElementById('save-btn')
 
+  const stored = await chrome.storage.local.get([
+    'omnivoreApiKey',
+    'omnivoreUrl',
+  ])
+  urlInput.value = stored.omnivoreUrl ?? ''
+  keyInput.value = stored.omnivoreApiKey ?? ''
 
-  chrome.storage.local.get('omnivoreApiKey').then(
-    apiKey => {
-      apiInput.value = apiKey.omnivoreApiKey ?? ''
-    }
-  )
+  const updateLink = () => {
+    apiLink.href = `${serverUrl(urlInput.value)}/settings/api`
+  }
+  updateLink()
+  urlInput.addEventListener('input', updateLink)
 
-  saveApiButton.addEventListener('click', (e) => {
-    addStorage({ "omnivoreApiKey": apiInput.value })
+  saveButton.addEventListener('click', async () => {
+    const url = serverUrl(urlInput.value)
+    // The web app and API share one origin behind Caddy.
+    await chrome.storage.local.set({
+      omnivoreApiKey: keyInput.value.trim(),
+      omnivoreUrl: url,
+      omnivoreApiUrl: url,
+    })
+    urlInput.value = url
+    status.textContent = 'Saved'
+    setTimeout(() => (status.textContent = ''), 2000)
   })
-
-  const saveUrlButton = document.getElementById('save-api-url-btn')
-  const apiUrlInput = document.getElementById('api-url')
-
-  chrome.storage.local.get('omnivoreApiUrl').then(
-    url => {
-      apiUrlInput.value = url.omnivoreApiUrl ?? ''
-    }
-  )
-
-  saveUrlButton.addEventListener('click', (e) => {
-    addStorage({ "omnivoreApiUrl": apiUrlInput.value })
-  })
-
-
-  const urlButton = document.getElementById('save-omnivore-url-btn')
-  const urlInput = document.getElementById('omnivore-url')
-
-  chrome.storage.local.get('omnivoreUrl').then(
-    url => {
-      urlInput.value = url.omnivoreUrl ?? ''
-    }
-  )
-
-  urlButton.addEventListener('click', (e) => {
-    addStorage({ "omnivoreUrl": urlInput.value })
-  })
-});
+})

@@ -1,3 +1,6 @@
+// Used until a different server is saved on the options page.
+export const DEFAULT_STASH_URL = 'https://stash.nigeldunckley.com'
+
 export const getStorageItem = async (singleKey: string) => {
   return new Promise((resolve) => {
     chrome.storage.local.get(singleKey, (result) => {

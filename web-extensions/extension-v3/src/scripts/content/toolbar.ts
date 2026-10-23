@@ -1,5 +1,5 @@
 import { ToolbarMessage, ToolbarStatus } from '../types'
-import { getStorageItem, setStorage } from '../utils'
+import { DEFAULT_STASH_URL, getStorageItem, setStorage } from '../utils'
 import { editLabels } from './labels'
 
 const systemIcons: { [key: string]: string } = {
@@ -31,7 +31,7 @@ const createToastContainer = async (clientRequestId: string) => {
   if (root.shadowRoot) {
     root.shadowRoot.innerHTML = `<style>:host {all initial;}</style>`
   } else {
-    alert('Error opening Omnivore user interface.')
+    alert('Error opening Stash.')
     return
   }
 
@@ -555,7 +555,8 @@ const readNow = async () => {
   window.open(
     new URL(
       `/article?url=${encodeURI(document.location.href)}`,
-      (await getStorageItem("omnivoreUrl")) as string,
+      ((await getStorageItem('omnivoreUrl')) as string | null) ??
+        DEFAULT_STASH_URL,
     ),
     '_blank'
   )

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Omnivore - Self Hosted",
-  "version": "3.0",
-  "description": "Save content to your Omnivore library.",
+  "name": "Stash",
+  "version": "1.0.0",
+  "description": "Save any page to your Stash to read later.",
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": ["<all_urls>"],
   "background": {
@@ -16,7 +16,14 @@
     }
   ],
   "options_page": "views/options.html",
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "Save this page to Stash"
+    }
+  },
   "action": {
+    "default_title": "Save to Stash",
     "default_icon": {
       "16": "icons/icon-16.png",
       "48": "icons/icon-48.png",
