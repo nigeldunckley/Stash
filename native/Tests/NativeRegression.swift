@@ -35,6 +35,7 @@ func page(_ ids: [String], cursor: String? = nil, more: Bool = false, total: Int
     try await race()
     try await wireRace()
     try await pendingRemoval()
+    try await undoAfterReload()
     try await initialInvalidation()
     try await pagination()
     try await paginationInvalidation()
@@ -101,6 +102,18 @@ func page(_ ids: [String], cursor: String? = nil, more: Bool = false, total: Int
     try check(list.visibleItems.map(\.id) == ["a"] && list.total == 1, "Refresh resurrected pending removal")
     LibraryChanges.shared.endRemoval("b"); list.restore(item("b")); list.restore(item("b"))
     try check(list.visibleItems.count == 2 && list.total == 2, "Rollback failed to restore count/item")
+  }
+  @MainActor static func undoAfterReload() async throws {
+    var ids = ["a", "b", "c"]
+    let list = ItemList(search: { _,_,_ in page(ids, total: ids.count) })
+    await list.load("A")
+    _ = LibraryChanges.shared.beginRemoval("b")
+    list.remove(item("b"))
+    LibraryChanges.shared.endRemoval("b")
+    ids = ["a", "c"]
+    await list.reload("A", preservingItems: true)
+    list.restore(item("b"))
+    try check(list.visibleItems.map(\.id) == ["a", "b", "c"] && list.total == 3, "Undo after a refresh didn't put the item back in place")
   }
   @MainActor static func initialInvalidation() async throws {
     let transport = Transport(); let list = ItemList(search: transport.search)

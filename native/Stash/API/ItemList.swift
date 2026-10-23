@@ -26,6 +26,8 @@ final class ItemList {
 
   /// Items you've just saved, archived or deleted, so they leave the list straight away.
   private var removed: Set<String> = []
+  /// Where those items were, so Undo can put them back in place.
+  private var departed: [String: Int] = [:]
   /// Items marked seen while this list is open.
   private(set) var seen: Set<String> = []
   /// When items that turned up while the list was open arrived, for the Wire's typing-in.
@@ -174,10 +176,21 @@ final class ItemList {
   }
 
   func remove(_ item: LibraryItem) {
+    if let index = items.firstIndex(where: { $0.id == item.id }) { departed[item.id] = index }
     if removed.insert(item.id).inserted, let count = total { total = max(0, count - 1) }
   }
+
+  /// Puts an item back (Undo). A reload since it left may have dropped it from the list
+  /// altogether, so it goes back where it was rather than waiting for the server to return it.
   func restore(_ item: LibraryItem) {
-    if removed.remove(item.id) != nil, let count = total { total = count + 1 }
+    let wasHidden = removed.remove(item.id) != nil
+    if let index = departed[item.id], !items.contains(where: { $0.id == item.id }) {
+      items.insert(item, at: min(index, items.count))
+      if let count = total { total = count + 1 }
+    } else if wasHidden, let count = total {
+      total = count + 1
+    }
+    departed[item.id] = nil
   }
   func markSeen(_ item: LibraryItem) { seen.insert(item.id) }
   func isUnseen(_ item: LibraryItem) -> Bool { item.seenAt == nil && !seen.contains(item.id) }
