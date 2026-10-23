@@ -9,7 +9,7 @@ import AppKit
 /// Saving, archiving and deleting, made physical, as on the web: the item's row sweeps into
 /// its place in the navigation (Saved, Watch Saved, Archive or Trash), which takes it in.
 enum MomentKind: Hashable {
-  case saved, savedVideo, archived, trashed
+  case saved, savedVideo, archived, archivedVideo, trashed
 }
 
 struct Moment: Identifiable, Equatable {
@@ -40,8 +40,14 @@ final class Moments {
   func saved(_ item: LibraryItem? = nil, title: String? = nil) {
     post(item.map(Watch.isVideo) == true ? .savedVideo : .saved, item: item, title: title)
   }
-  func archived(_ item: LibraryItem) { post(.archived, item: item, title: nil) }
+  /// Videos aren't in the article Archive, so they don't fly there on Mac (on iPhone they go
+  /// to the Watch tab).
+  func archived(_ item: LibraryItem) { post(Watch.isVideo(item) ? .archivedVideo : .archived, item: item, title: nil) }
   func trashed(_ item: LibraryItem) { post(.trashed, item: item, title: nil) }
+  /// Archived from the reader or The Sort, where the row isn't on screen: it lands without a flight.
+  func archivedOffList(_ item: LibraryItem) {
+    post(Watch.isVideo(item) ? .archivedVideo : .archived, item: item, title: nil, flies: false)
+  }
 
   /// The web's timings: a quick lift off the list, then the sweep.
   static let liftTime = 0.09
@@ -56,10 +62,10 @@ final class Moments {
     #endif
   }
 
-  private func post(_ kind: MomentKind, item: LibraryItem?, title: String?) {
+  private func post(_ kind: MomentKind, item: LibraryItem?, title: String?, flies: Bool = true) {
     let moment = Moment(
       kind: kind, title: title ?? item?.title ?? "", detail: item?.source ?? "",
-      source: item.flatMap { rowFrames[$0.id] }
+      source: flies ? item.flatMap { rowFrames[$0.id] } : nil
     )
     current = moment
     Feedback.play(kind)
@@ -79,9 +85,7 @@ final class Moments {
 extension View {
   /// Keeps the item's row position, so a save or archive can fly from it.
   func momentSource(_ item: LibraryItem) -> some View {
-    onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
-      Moments.shared.rowFrames[item.id] = frame
-    }
+    modifier(MomentSource(item: item))
   }
 
   /// Marks a sidebar entry's icon as where saves, archives or deletes land. A folded group's
@@ -91,6 +95,24 @@ extension View {
       Moments.shared.targets[kind] = frame
     }
     .onDisappear { Moments.shared.targets[kind] = nil }
+  }
+}
+
+/// Only rows on the page you're looking at count, so a card never starts from a page kept
+/// hidden underneath, and a row that's gone is forgotten.
+private struct MomentSource: ViewModifier {
+  let item: LibraryItem
+  @Environment(\.isActivePage) private var isActivePage
+
+  func body(content: Content) -> some View {
+    content
+      .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+        if isActivePage { Moments.shared.rowFrames[item.id] = frame }
+      }
+      .onChange(of: isActivePage) { _, active in
+        if !active { Moments.shared.rowFrames[item.id] = nil }
+      }
+      .onDisappear { Moments.shared.rowFrames[item.id] = nil }
   }
 }
 
@@ -121,7 +143,7 @@ struct MomentFlight: View {
             .stroke(Color.stAccent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
             .modifier(TrailFade(progress: progress))
         }
-        card(width: path.width)
+        card(width: path.width, height: min(max(source.height, 50), 120))
           .modifier(FlightStep(path: path, lift: lift, progress: reduceMotion ? 0 : progress))
       }
       .opacity(faded ? 0 : 1)
@@ -131,7 +153,7 @@ struct MomentFlight: View {
   }
 
   /// The row as a card: its title, and the source in mono.
-  private func card(width: CGFloat) -> some View {
+  private func card(width: CGFloat, height: CGFloat) -> some View {
     VStack(alignment: .leading, spacing: 3) {
       Text(moment.title)
         .font(.reading(14, .medium))
@@ -146,7 +168,7 @@ struct MomentFlight: View {
       }
     }
     .padding(.horizontal, 14)
-    .frame(width: width, height: 50, alignment: .leading)
+    .frame(width: width, height: height, alignment: .leading)
     .background(Color.stSurface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
   }
@@ -390,7 +412,7 @@ enum Feedback {
     #if os(iOS)
     switch kind {
     case .saved, .savedVideo: UIImpactFeedbackGenerator(style: .light).impactOccurred()
-    case .archived, .trashed: UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    case .archived, .archivedVideo, .trashed: UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
     #endif
     // Off unless turned on in Settings. System sounds follow the iPhone's silent switch.
@@ -409,7 +431,7 @@ enum Feedback {
   @MainActor
   private static func sound(_ kind: MomentKind) -> SystemSoundID? {
     if let sound = sounds[kind] { return sound }
-    let name = kind == .archived || kind == .trashed ? "archive" : "save"
+    let name = kind == .saved || kind == .savedVideo ? "save" : "archive"
     guard let url = Bundle.main.url(forResource: name, withExtension: "wav") else { return nil }
     var id: SystemSoundID = 0
     guard AudioServicesCreateSystemSoundID(url as CFURL, &id) == noErr else { return nil }

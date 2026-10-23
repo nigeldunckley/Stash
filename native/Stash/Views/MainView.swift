@@ -132,7 +132,7 @@ struct MainView: View {
   private func tabTarget(_ kind: MomentKind, in frame: CGRect) -> CGRect {
     let tabs = 4
     let read = 1
-    let index = kind == .savedVideo ? read + 1 : read
+    let index = kind == .savedVideo || kind == .archivedVideo ? read + 1 : read
     let x = frame.minX + frame.width * (CGFloat(index) + 0.5) / CGFloat(tabs)
     return CGRect(x: x - 12, y: frame.maxY - 42, width: 24, height: 24)
   }

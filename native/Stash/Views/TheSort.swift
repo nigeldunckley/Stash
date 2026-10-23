@@ -310,7 +310,7 @@ struct TheSort: View {
         case .archive:
           try await ItemAction.archive.run(on: item)
           archived += 1
-          Moments.shared.archived(item)
+          Moments.shared.archivedOffList(item)
         case .skip:
           try await Library.markSeen([item.id])
           skipped += 1
