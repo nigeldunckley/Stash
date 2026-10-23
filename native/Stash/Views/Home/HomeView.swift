@@ -273,60 +273,55 @@ struct HomeView: View {
     return parts.isEmpty ? nil : parts.joined(separator: " · ")
   }
 
-  /// Home's feed posts laid out as a front page: the lead, the rest of its day as a grid, and
-  /// everything older as a river of headlines.
-  private var frontStories: (lead: LibraryItem?, grid: [LibraryItem], river: [(label: String, items: [LibraryItem])]) {
+  /// Home's feed posts laid out as a front page: the lead with secondary stories beside it, the
+  /// rest of that day as a grid, and everything older as a river of headlines.
+  private var frontStories: (lead: LibraryItem?, secondary: [LibraryItem], grid: [LibraryItem], river: [(label: String, items: [LibraryItem])]) {
     let items = feedItems
-    // The lead is the newest story with a picture, if one is near the top.
     let newestDay = dayGroup(items.first?.date)
+    // The lead is the newest story with a picture, if one is near the top.
     guard let lead = items.prefix(6).first(where: {
       $0.imageURL != nil && !Watch.isVideo($0) && dayGroup($0.date) == newestDay
     }) ?? items.first else {
-      return (nil, [], [])
+      return (nil, [], [], [])
     }
-    let rest = items.filter { $0.id != lead.id }
+    var rest = items.filter { $0.id != lead.id }
+    let secondary = Array(rest.prefix(wide ? 4 : 0))
+    rest.removeFirst(secondary.count)
     let day = dayGroup(lead.date)
     let grid = Array(rest.filter { dayGroup($0.date) == day }.prefix(6))
     let gridIDs = Set(grid.map(\.id))
     let river = groups(rest.filter { !gridIDs.contains($0.id) })
-    return (lead, grid, river)
+      .map { group in
+        let name = day == "Today" || day == "Yesterday" ? day.lowercased() : day
+        return (label: group.label == day ? "More from \(name)" : group.label, items: group.items)
+      }
+    return (lead, secondary, grid, river)
   }
 
   /// The front page's stories in the order they appear, for the arrow keys.
   private var frontOrder: [LibraryItem] {
     let front = frontStories
-    return (front.lead.map { [$0] } ?? []) + front.grid + front.river.flatMap(\.items)
+    return (front.lead.map { [$0] } ?? []) + front.secondary + front.grid + front.river.flatMap(\.items)
   }
 
-  /// The front page: lead and side column, the grid, then the river beside new videos.
+  /// The front page: the lead and its secondary stories, a band of what you've started and
+  /// saved, then Read and Watch as equal sections, then the river.
   @ViewBuilder
   private var frontPage: some View {
     let front = frontStories
-    let layout = wide
-      ? AnyLayout(HStackLayout(alignment: .top, spacing: 44))
-      : AnyLayout(VStackLayout(alignment: .leading, spacing: 32))
-    layout {
-      Group {
-        if let lead = front.lead {
-          LeadStory(
-            item: lead, source: channelName(lead) ?? lead.source, unseen: feeds.isUnseen(lead),
-            open: { openFromHome(lead) }, perform: perform
-          )
-          .id(lead.id)
-        } else {
-          feedsEmpty
+    leadRow(front.lead, secondary: front.secondary)
+      .padding(.vertical, 28)
+    shelfBand
+    if !front.grid.isEmpty || !feeds.waiting.isEmpty {
+      sectionHeading("Read", detail: front.lead.map { dayGroup($0.date) }, link: "All feeds", target: .feeds) {
+        if !feeds.waiting.isEmpty {
+          Button { withAnimation(reduceMotion ? nil : StashMotion.change) { feeds.showWaiting() } } label: {
+            Label("\(feeds.waiting.count) new", systemImage: "arrow.up")
+          }
+          .buttonStyle(.textProminent)
+          .help("Show the new posts")
         }
       }
-      .frame(maxWidth: .infinity, alignment: .topLeading)
-      sideColumn
-        .frame(width: wide ? 320 : nil)
-        .frame(maxWidth: wide ? nil : .infinity, alignment: .leading)
-    }
-    .padding(.vertical, 28)
-
-    if !front.grid.isEmpty || !feeds.waiting.isEmpty {
-      Rectangle().fill(Color.stLine).frame(height: 1)
-      gridHeading(front.lead.map { dayGroup($0.date) })
       LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 32, alignment: .top)], alignment: .leading, spacing: 32) {
         ForEach(front.grid) { item in
           StoryCard(
@@ -336,138 +331,169 @@ struct HomeView: View {
           .id(item.id)
         }
       }
-      .padding(.bottom, 32)
+      .padding(.bottom, 36)
     }
-
-    if !front.river.isEmpty || !videos.isEmpty {
-      Rectangle().fill(Color.stLine).frame(height: 1)
-      lowerSection(front.river)
-    }
-  }
-
-  /// Older posts beside new videos.
-  private func lowerSection(_ days: [(label: String, items: [LibraryItem])]) -> some View {
-    let lower = wide
-      ? AnyLayout(HStackLayout(alignment: .top, spacing: 44))
-      : AnyLayout(VStackLayout(alignment: .leading, spacing: 32))
-    return lower {
-      river(days)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-      if !videos.isEmpty {
-        videosColumn
-          .frame(width: wide ? 320 : nil)
-          .frame(maxWidth: wide ? nil : .infinity, alignment: .leading)
-      }
-    }
-    .padding(.top, 28)
-  }
-
-  /// "From your feeds  Today  ↑ 4 new … All feeds →"
-  private func gridHeading(_ day: String?) -> some View {
-    HStack(alignment: .firstTextBaseline, spacing: 12) {
-      Text("From your feeds")
-        .font(.ui(22, .semibold, relativeTo: .title2))
-        .tracking(-0.4)
-        .foregroundStyle(Color.stInk)
-      if let day {
-        Text(day)
-          .font(.reading(18, .regular, italic: true))
-          .foregroundStyle(Color.stMuted)
-      }
-      if !feeds.waiting.isEmpty {
-        Button { withAnimation(reduceMotion ? nil : StashMotion.change) { feeds.showWaiting() } } label: {
-          Label("\(feeds.waiting.count) new", systemImage: "arrow.up")
-        }
-        .buttonStyle(.textProminent)
-        .help("Show the new posts")
-      }
-      Spacer(minLength: 8)
-      Button("All feeds") { go(.feeds) }.buttonStyle(.text)
-    }
-    .padding(.top, 28)
-    .padding(.bottom, 18)
-  }
-
-  /// Older posts as headlines, two columns across, under each day's name.
-  @ViewBuilder
-  private func river(_ days: [(label: String, items: [LibraryItem])]) -> some View {
-    if !days.isEmpty {
-      VStack(alignment: .leading, spacing: 24) {
-        ForEach(days, id: \.label) { day in
-          VStack(alignment: .leading, spacing: 0) {
-            RiverHeading(title: day.label) { EmptyView() }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 32, alignment: .top)], alignment: .leading, spacing: 0) {
-              ForEach(day.items) { item in
-                HeadlineRow(item: item, source: channelName(item) ?? item.source, unseen: feeds.isUnseen(item)) {
-                  openFromHome(item)
-                }
-                .id(item.id)
-                .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
-              }
-            }
-          }
-        }
-        let shown = feedItems.count
-        Button {
-          go(.feeds)
-        } label: {
-          HStack(spacing: 6) {
-            if let total = feeds.total, total > shown { Text("\(total - shown) more in Feeds") } else { Text("Open Feeds") }
-            Image(systemName: "arrow.right").imageScale(.small)
-          }
-          .font(.ui(13, .medium))
-          .foregroundStyle(Color.stInk)
-        }
-        .buttonStyle(.plain)
-      }
-    }
-  }
-
-  /// Pick up where you left off, The Edition, and In Saved.
-  private var sideColumn: some View {
-    VStack(alignment: .leading, spacing: 28) {
-      let article = upNext.first { $0.progress >= 0.02 }
-      let video = continuingVideos.first
-      if article != nil || video != nil {
-        VStack(alignment: .leading, spacing: 14) {
-          ColumnHeading(title: "Pick up where you left off")
-          if let article { PickUpRow(item: article, watching: false) { open(article, from: .upNext) } }
-          if let video { PickUpRow(item: video, watching: true) { open(video, from: .continuing) } }
-        }
-      }
-      if showsEditionStrip { editionStrip }
-      savedColumn
-    }
-  }
-
-  @ViewBuilder
-  private var savedColumn: some View {
-    let items = Array(upNext.filter { $0.progress < 0.02 }.prefix(3))
-    if !items.isEmpty {
-      VStack(alignment: .leading, spacing: 0) {
-        ColumnHeading(title: "In Saved", link: "Open Saved") { go(.saved) }
-        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-          NumberedRow(number: index + 1, item: item, divider: index < items.count - 1) { open(item, from: .upNext) }
-            .itemMenu(item, perform: perform)
-        }
-      }
-    } else if let upNextError {
-      HStack {
-        Text(upNextError).font(.stSmall).foregroundStyle(Color.stMuted)
-        Button("Try again") { Task { await loadUpNext() } }.buttonStyle(.text)
-      }
-    }
-  }
-
-  private var videosColumn: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      ColumnHeading(title: "New videos", link: "All channels") { go(.channels) }
-      LazyVGrid(columns: [GridItem(.flexible(), spacing: 16, alignment: .top), GridItem(.flexible(), spacing: 16, alignment: .top)], spacing: 18) {
-        ForEach(videos.prefix(4)) { item in
+    if !videos.isEmpty {
+      sectionHeading("Watch", detail: "New from your channels", link: "All channels", target: .channels) { EmptyView() }
+      LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 32, alignment: .top)], alignment: .leading, spacing: 32) {
+        ForEach(videos.prefix(8)) { item in
           VideoTile(item: item) { open(item, from: .videos) }
             .itemMenu(item, unseen: true, perform: perform)
         }
       }
+      .padding(.bottom, 36)
+    }
+    if !front.river.isEmpty {
+      river(front.river)
+        .padding(.top, 8)
+    }
+  }
+
+  /// The lead story, and on a wide window the next few stories beside it, both columns the
+  /// same height so neither leaves a gap.
+  @ViewBuilder
+  private func leadRow(_ lead: LibraryItem?, secondary: [LibraryItem]) -> some View {
+    if let lead {
+      let story = LeadStory(
+        item: lead, source: channelName(lead) ?? lead.source, unseen: feeds.isUnseen(lead),
+        open: { openFromHome(lead) }, perform: perform
+      )
+      .id(lead.id)
+      if secondary.isEmpty {
+        story
+      } else {
+        HStack(alignment: .top, spacing: 44) {
+          story.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+          VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(secondary.enumerated()), id: \.element.id) { index, item in
+              if index > 0 {
+                Spacer(minLength: 14)
+                Rectangle().fill(Color.stLine).frame(height: 1)
+                Spacer(minLength: 14)
+              }
+              SecondaryStory(item: item, source: channelName(item) ?? item.source, unseen: feeds.isUnseen(item)) {
+                openFromHome(item)
+              }
+              .id(item.id)
+              .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
+            }
+          }
+          .frame(width: 340)
+          .frame(maxHeight: .infinity, alignment: .topLeading)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+      }
+    } else {
+      feedsEmpty
+    }
+  }
+
+  /// "Read  Today  ↑ 4 new … All feeds" over a heavy rule.
+  private func sectionHeading<Extra: View>(
+    _ title: String, detail: String?, link: String, target: AppSection,
+    @ViewBuilder extra: () -> Extra
+  ) -> some View {
+    VStack(spacing: 0) {
+      Rectangle().fill(Color.stInk).frame(height: 2)
+      HStack(alignment: .firstTextBaseline, spacing: 12) {
+        Text(title)
+          .font(.ui(26, .semibold, relativeTo: .title2))
+          .tracking(-0.6)
+          .foregroundStyle(Color.stInk)
+        if let detail {
+          Text(detail)
+            .font(.reading(19, .regular, italic: true))
+            .foregroundStyle(Color.stMuted)
+        }
+        extra()
+        Spacer(minLength: 8)
+        Button(link) { go(target) }.buttonStyle(.text)
+      }
+      .padding(.top, 14)
+      .padding(.bottom, 20)
+    }
+  }
+
+  /// Pick up where you left off, The Edition and In Saved side by side, the same height.
+  @ViewBuilder
+  private var shelfBand: some View {
+    let article = upNext.first { $0.progress >= 0.02 }
+    let video = continuingVideos.first
+    let saved = Array(upNext.filter { $0.progress < 0.02 }.prefix(3))
+    let hasPickUp = article != nil || video != nil
+    if hasPickUp || showsEditionStrip || !saved.isEmpty || upNextError != nil {
+      let layout = wide
+        ? AnyLayout(HStackLayout(alignment: .top, spacing: 36))
+        : AnyLayout(VStackLayout(alignment: .leading, spacing: 28))
+      layout {
+        if hasPickUp {
+          VStack(alignment: .leading, spacing: 14) {
+            ColumnHeading(title: "Pick up where you left off")
+            if let article { PickUpRow(item: article, watching: false) { open(article, from: .upNext) } }
+            if let video { PickUpRow(item: video, watching: true) { open(video, from: .continuing) } }
+          }
+          .frame(maxWidth: .infinity, maxHeight: wide ? .infinity : nil, alignment: .topLeading)
+        }
+        if !saved.isEmpty {
+          VStack(alignment: .leading, spacing: 0) {
+            ColumnHeading(title: "In Saved", link: "Open Saved") { go(.saved) }
+            ForEach(Array(saved.enumerated()), id: \.element.id) { index, item in
+              NumberedRow(number: index + 1, item: item, divider: index < saved.count - 1) { open(item, from: .upNext) }
+                .itemMenu(item, perform: perform)
+            }
+          }
+          .frame(maxWidth: .infinity, maxHeight: wide ? .infinity : nil, alignment: .topLeading)
+        } else if let upNextError {
+          HStack {
+            Text(upNextError).font(.stSmall).foregroundStyle(Color.stMuted)
+            Button("Try again") { Task { await loadUpNext() } }.buttonStyle(.text)
+          }
+          .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        if showsEditionStrip {
+          editionStrip
+            .frame(maxWidth: wide ? 300 : .infinity, maxHeight: wide ? .infinity : nil, alignment: .topLeading)
+        }
+      }
+      // Equal heights only side by side; stacked, each section takes what it needs.
+      .fixedSize(horizontal: false, vertical: wide)
+      .padding(.top, 4)
+      .padding(.bottom, 40)
+    }
+  }
+
+  /// Older posts as headlines, three columns across on a wide window, under each day's name.
+  private func river(_ days: [(label: String, items: [LibraryItem])]) -> some View {
+    VStack(alignment: .leading, spacing: 28) {
+      ForEach(days, id: \.label) { day in
+        VStack(alignment: .leading, spacing: 0) {
+          RiverHeading(title: day.label) { EmptyView() }
+          LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 32, alignment: .top)], alignment: .leading, spacing: 0) {
+            ForEach(day.items) { item in
+              HeadlineRow(item: item, source: channelName(item) ?? item.source, unseen: feeds.isUnseen(item)) {
+                openFromHome(item)
+              }
+              .id(item.id)
+              .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
+            }
+          }
+        }
+      }
+      Button {
+        go(.feeds)
+      } label: {
+        HStack(spacing: 6) {
+          if let total = feeds.total, total > feedItems.count {
+            Text("\(total - feedItems.count) more in Feeds")
+          } else {
+            Text("Open Feeds")
+          }
+          Image(systemName: "arrow.right").imageScale(.small)
+        }
+        .font(.ui(13, .medium))
+        .foregroundStyle(Color.stInk)
+      }
+      .buttonStyle(.plain)
     }
   }
 
@@ -731,10 +757,10 @@ struct HomeView: View {
     #endif
   }
 
-  /// The Edition's strip stacks its two halves in Mac's side column.
+  /// The Edition's strip stacks its two halves in Mac's shelf band.
   private var editionStacked: Bool {
     #if os(macOS)
-    wide
+    true
     #else
     false
     #endif

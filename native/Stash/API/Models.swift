@@ -28,7 +28,28 @@ struct LibraryItem: Decodable, Identifiable, Hashable {
   let highlightsCount: Int?
 
   var originalURL: URL? { URL(string: originalArticleUrl ?? url) }
-  var imageURL: URL? { (image ?? headerImage).flatMap(URL.init(string:)) }
+  /// The article's own header picture first (usually full size), then the feed's thumbnail.
+  var imageURL: URL? { (headerImage ?? image).flatMap(URL.init(string:)) }
+
+  /// A guess at a bigger copy of the picture: YouTube's full-size thumbnail, or a WordPress
+  /// image without its "-300x200" size. Shown with `imageURL` as the fallback when it's missing.
+  var largeImageURL: URL? {
+    guard let url = imageURL else { return nil }
+    var text = url.absoluteString
+    if url.host()?.hasSuffix("ytimg.com") == true {
+      // Signed thumbnails carry a query that only fits the original size.
+      var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+      components?.query = nil
+      text = components?.string ?? text
+      text = text.replacingOccurrences(of: #"/(hq|mq|sd)?default\.jpg"#, with: "/maxresdefault.jpg", options: .regularExpression)
+    } else {
+      text = text.replacingOccurrences(
+        of: #"-\d{2,4}x\d{2,4}(?=\.(jpe?g|png|webp|gif)(\?|$))"#, with: "",
+        options: [.regularExpression, .caseInsensitive]
+      )
+    }
+    return URL(string: text) ?? url
+  }
   var iconURL: URL? { siteIcon.flatMap(URL.init(string:)) }
   var isFeedItem: Bool { folder == "following" }
   var isArchived: Bool { state == "ARCHIVED" }
