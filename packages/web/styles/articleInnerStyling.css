@@ -878,6 +878,20 @@
     transform: none;
   }
 }
+@media (prefers-reduced-motion: reduce) {
+  .article-inner-css p.st-end.st-end-armed::after,
+  .article-inner-css p.st-end.st-end-stamped::after {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+}
+@media print {
+  .article-inner-css p.st-end.st-end-armed::after {
+    opacity: 1;
+    transform: none;
+  }
+}
 .article-inner-css .st-end-sentinel {
   display: inline-block;
   width: 1px;

@@ -263,29 +263,34 @@ const stampEnd = (root: HTMLElement): (() => void) => {
   end.appendChild(sentinel)
   end.classList.remove('st-end-stamped')
   end.classList.add('st-end-armed')
-  const observer = new IntersectionObserver(
-    (entries) => {
-      if (!entries.some((entry) => entry.isIntersecting)) return
-      observer.disconnect()
-      end.classList.remove('st-end-armed')
-      end.classList.add('st-end-stamped')
-      const handlers = (
-        window as unknown as {
-          webkit?: {
-            messageHandlers?: Record<
-              string,
-              { postMessage(body: unknown): void }
-            >
-          }
+  // Only reaching the end by reading stamps it. If it's already in view
+  // before you've scrolled (a short piece, or reopened at the end), it is
+  // simply there.
+  let scrolled = false
+  const onScroll = () => {
+    scrolled = true
+  }
+  window.addEventListener('scroll', onScroll, { capture: true, passive: true })
+  const observer = new IntersectionObserver((entries) => {
+    if (!entries.some((entry) => entry.isIntersecting)) return
+    observer.disconnect()
+    window.removeEventListener('scroll', onScroll, { capture: true })
+    end.classList.remove('st-end-armed')
+    if (!scrolled) return
+    end.classList.add('st-end-stamped')
+    const handlers = (
+      window as unknown as {
+        webkit?: {
+          messageHandlers?: Record<string, { postMessage(body: unknown): void }>
         }
-      ).webkit?.messageHandlers
-      handlers?.stashFinished?.postMessage({})
-    },
-    { rootMargin: '0px 0px -12% 0px' }
-  )
+      }
+    ).webkit?.messageHandlers
+    handlers?.stashFinished?.postMessage({})
+  })
   observer.observe(sentinel)
   return () => {
     observer.disconnect()
+    window.removeEventListener('scroll', onScroll, { capture: true })
     sentinel.remove()
     end.classList.remove('st-end-armed')
   }

@@ -211,6 +211,8 @@ func runItemAction(
   refresh: @escaping () async -> Void = {}
 ) {
   if action.removesItem, !LibraryChanges.shared.beginRemoval(item.id) { return }
+  // Where the row is now, so Undo can fly it back here.
+  let origin = Moments.shared.rowFrames[item.id]
   // The row sweeps into its place in the navigation straight away, as on the web, before it
   // leaves the list and the rows below close the gap.
   switch action {
@@ -231,8 +233,8 @@ func runItemAction(
           do {
             try await action.undo(on: item)
             // The card flies back out of the sidebar, and the list opens up just in time for it.
-            if action.removesItem, let kind = Moments.kind(for: action, item: item), !StashMotion.systemReduceMotion {
-              Moments.shared.returned(item, from: kind)
+            if action.removesItem, let kind = Moments.kind(for: action, item: item),
+               Moments.shared.returned(item, from: kind, to: origin) {
               try? await Task.sleep(for: .seconds(max(0, Moments.flightTime - 0.34)))
               withAnimation(StashMotion.closeGap) { restore() }
             } else {

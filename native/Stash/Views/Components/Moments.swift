@@ -36,8 +36,8 @@ final class Moments {
 
   /// Where each list row is on screen, by item id, kept as rows lay out.
   @ObservationIgnored var rowFrames: [String: CGRect] = [:]
-  /// Where rows were when they left their list, so Undo can fly them back.
-  @ObservationIgnored var departed: [String: CGRect] = [:]
+  /// Rows put back by Undo that stay hidden until their card has landed in their place.
+  private(set) var incoming: Set<String> = []
   /// Where the icons of the sidebar's Saved, Watch Saved, Archive and Trash entries are.
   @ObservationIgnored var targets: [MomentKind: CGRect] = [:]
 
@@ -64,15 +64,31 @@ final class Moments {
   }
 
   /// Undo: the card comes back out of the entry it went into and settles into the row's old
-  /// place, as the list opens up for it.
-  func returned(_ item: LibraryItem, from kind: MomentKind) {
-    guard !Self.reduceMotion, let frame = departed[item.id] ?? rowFrames[item.id] else { return }
-    let moment = Moment(kind: kind, title: item.title, detail: item.source, source: frame, reversed: true)
+  /// place (`origin`, where the row was when the action ran), as the list opens up for it. The
+  /// row stays hidden until the card lands. Returns whether it flies.
+  @discardableResult
+  func returned(_ item: LibraryItem, from kind: MomentKind, to origin: CGRect?) -> Bool {
+    guard !Self.reduceMotion, let origin, canFly(to: kind) else { return false }
+    let moment = Moment(kind: kind, title: item.title, detail: item.source, source: origin, reversed: true)
     current = moment
+    incoming.insert(item.id)
     Task {
-      try? await Task.sleep(for: .seconds(Self.flightTime + 0.05))
+      try? await Task.sleep(for: .seconds(Self.flightTime))
+      incoming.remove(item.id)
+      try? await Task.sleep(for: .seconds(0.05))
       if current?.id == moment.id { current = nil }
     }
+    return true
+  }
+
+  /// Whether there's an entry on screen for a card to come out of: the sidebar's on Mac, the
+  /// tab bar's on iPhone (iPad shows its tabs elsewhere).
+  private func canFly(to kind: MomentKind) -> Bool {
+    #if os(macOS)
+    targets[kind] != nil
+    #else
+    UIDevice.current.userInterfaceIdiom == .phone
+    #endif
   }
 
   /// The web's timings: a quick lift off the list, then the sweep.
@@ -141,14 +157,14 @@ private struct MomentSource: ViewModifier {
         if !active { forget() } else if let frame { Moments.shared.rowFrames[item.id] = frame }
       }
       .onDisappear(perform: forget)
+      // Put back by Undo: hidden while its card flies back into this place.
+      .opacity(Moments.shared.incoming.contains(item.id) ? 0 : 1)
   }
 
   /// Forgets this row's place, unless another copy of the item (on the page in front) has
   /// since recorded its own.
   private func forget() {
-    guard Moments.shared.rowFrames[item.id] == frame else { return }
-    Moments.shared.rowFrames[item.id] = nil
-    Moments.shared.departed[item.id] = frame
+    if Moments.shared.rowFrames[item.id] == frame { Moments.shared.rowFrames[item.id] = nil }
   }
 }
 
@@ -398,7 +414,8 @@ enum FlightAnimator {
     // set down in the row's old place, with the trail still behind it.
     var starts = tails, ends = heads
     if plan.reversed {
-      positions.reverse(); scales.reverse(); rotations.reverse()
+      // Leaning the way it now travels.
+      positions.reverse(); scales.reverse(); rotations = rotations.reversed().map { -$0 }
       opacities.reverse(); shadows.reverse(); glows.reverse()
       starts = heads.reversed()
       ends = starts.map { min(1, $0 + tail) }

@@ -79,20 +79,18 @@ private struct InkStep: ViewModifier, Animatable {
   }
 
   func body(content: Content) -> some View {
-    if progress <= 0 {
-      content.foregroundStyle(ink)
-    } else if progress >= 1 {
-      content.foregroundStyle(dried)
-    } else {
-      // The edge runs a little past both ends so the wipe starts and finishes cleanly.
-      let edge = progress * 1.2 - 0.1
-      let start = min(0.998, max(0, edge - 0.08))
-      let end = min(1, max(start + 0.001, edge + 0.02))
-      content.foregroundStyle(LinearGradient(
-        stops: [.init(color: dried, location: start), .init(color: ink, location: end)],
-        startPoint: .leading, endPoint: .trailing
-      ))
-    }
+    // One style throughout, so the title keeps its identity as the wipe starts and ends. The
+    // edge runs a little past both ends so the wipe starts and finishes cleanly.
+    let edge = progress * 1.2 - 0.1
+    let start = min(0.998, max(0, edge - 0.08))
+    let end = min(1, max(start + 0.001, edge + 0.02))
+    content.foregroundStyle(LinearGradient(
+      stops: [
+        .init(color: progress <= 0 ? ink : dried, location: start),
+        .init(color: progress >= 1 ? dried : ink, location: end),
+      ],
+      startPoint: .leading, endPoint: .trailing
+    ))
   }
 }
 
@@ -122,11 +120,13 @@ enum EditionDelivery {
 
 private struct PaperDrop: ViewModifier {
   let date: String?
+  let fresh: Bool
   @State private var pending: Bool
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   init(date: String?, fresh: Bool) {
     self.date = date
+    self.fresh = fresh
     _pending = State(initialValue: fresh && EditionDelivery.isPending(date))
   }
 
@@ -135,21 +135,34 @@ private struct PaperDrop: ViewModifier {
       .opacity(pending ? 0 : 1)
       .rotationEffect(.degrees(pending && !reduceMotion ? -6 : 0), anchor: .topLeading)
       .offset(y: pending && !reduceMotion ? -30 : 0)
-      .onAppear {
-        guard pending else { return }
-        EditionDelivery.markDelivered(date)
-        withAnimation((reduceMotion ? StashMotion.fade : .spring(duration: 0.65, bounce: 0.38)).delay(0.3)) {
-          pending = false
+      .onAppear(perform: deliver)
+      // An issue that comes out while this is already on screen.
+      .onChange(of: fresh) { _, now in
+        guard now, EditionDelivery.isPending(date) else { return }
+        var still = Transaction()
+        still.disablesAnimations = true
+        withTransaction(still) { pending = true }
+        Task {
+          try? await Task.sleep(for: .milliseconds(50))
+          deliver()
         }
-        #if os(iOS)
-        if !reduceMotion {
-          Task {
-            try? await Task.sleep(for: .seconds(0.55))
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-          }
-        }
-        #endif
       }
+  }
+
+  private func deliver() {
+    guard pending else { return }
+    EditionDelivery.markDelivered(date)
+    withAnimation((reduceMotion ? StashMotion.fade : .spring(duration: 0.65, bounce: 0.38)).delay(0.3)) {
+      pending = false
+    }
+    #if os(iOS)
+    if !reduceMotion {
+      Task {
+        try? await Task.sleep(for: .seconds(0.55))
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+      }
+    }
+    #endif
   }
 }
 
