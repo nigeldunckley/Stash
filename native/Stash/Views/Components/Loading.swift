@@ -1,18 +1,64 @@
+import ImageIO
 import SwiftUI
 
-/// An image that fades in once it loads, over Stash's sunken grey.
+/// An image that fades in once it loads, over Stash's sunken grey. When `url` can't be loaded
+/// (a guessed bigger copy that doesn't exist), `fallback` is tried instead.
 struct FadeImage: View {
   let url: URL?
+  var fallback: URL?
   var contentMode: ContentMode = .fill
 
+  @State private var image: Image?
+  @State private var loaded: URL?
+
   var body: some View {
-    AsyncImage(url: url, transaction: Transaction(animation: .easeOut(duration: 0.25))) { phase in
-      if let image = phase.image {
+    ZStack {
+      if let image {
         image.resizable().aspectRatio(contentMode: contentMode).transition(.opacity)
       } else {
         Color.stSunken
       }
     }
+    .task(id: url) { await load() }
+  }
+
+  /// Pictures are kept on disk between launches, so lists don't fetch them again.
+  private static let session: URLSession = {
+    let configuration = URLSessionConfiguration.default
+    configuration.urlCache = URLCache(memoryCapacity: 64 << 20, diskCapacity: 512 << 20)
+    return URLSession(configuration: configuration)
+  }()
+
+  private func load() async {
+    guard loaded != url || image == nil else { return }
+    if loaded != url { image = nil }
+    var candidates = [url].compactMap { $0 }
+    if let fallback, fallback != url { candidates.append(fallback) }
+    for candidate in candidates {
+      guard let (data, response) = try? await Self.session.data(from: candidate) else { continue }
+      if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { continue }
+      guard let picture = await Self.decode(data) else { continue }
+      let next = Image(decorative: picture, scale: 1)
+      guard !Task.isCancelled else { return }
+      withAnimation(.easeOut(duration: 0.25)) { image = next }
+      loaded = url
+      return
+    }
+  }
+
+  /// Decodes the picture away from the main thread, scaled down to at most 1,600 pixels across,
+  /// so big header images don't stutter lists or fill memory.
+  private nonisolated static func decode(_ data: Data) async -> CGImage? {
+    await Task.detached(priority: .userInitiated) {
+      guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+      let options: [CFString: Any] = [
+        kCGImageSourceCreateThumbnailFromImageAlways: true,
+        kCGImageSourceCreateThumbnailWithTransform: true,
+        kCGImageSourceShouldCacheImmediately: true,
+        kCGImageSourceThumbnailMaxPixelSize: 1600,
+      ]
+      return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    }.value
   }
 }
 

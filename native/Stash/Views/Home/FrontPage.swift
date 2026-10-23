@@ -84,7 +84,7 @@ struct LeadStory: View {
           if let url = item.imageURL {
             Color.stSunken
               .aspectRatio(16 / 9, contentMode: .fit)
-              .overlay { FadeImage(url: url) }
+              .overlay { FadeImage(url: item.largeImageURL, fallback: url) }
               .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
           }
           StoryKicker(source: source, detail: storyDetail(item), unseen: unseen)
@@ -135,7 +135,7 @@ struct StoryCard: View {
         if let url = item.imageURL {
           Color.stSunken
             .aspectRatio(3 / 2, contentMode: .fit)
-            .overlay { FadeImage(url: url) }
+            .overlay { FadeImage(url: item.largeImageURL, fallback: url) }
             .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
             .opacity(hovering ? 0.92 : 1)
         } else {
@@ -253,18 +253,23 @@ struct PickUpRow: View {
   var body: some View {
     Button(action: open) {
       HStack(alignment: .top, spacing: 14) {
+        // The same width for an article and a video, so their titles line up.
         Group {
           if watching {
             Color.stSunken
+              .overlay { FadeImage(url: item.largeImageURL, fallback: item.imageURL) }
+              .frame(width: 120, height: 68)
+          } else if item.imageURL != nil {
+            Color.stSunken
               .overlay { FadeImage(url: item.imageURL) }
-              .frame(width: 112, height: 63)
+              .frame(width: 120, height: 80)
           } else {
-            ItemCover(item: item).frame(width: 64, height: 84)
+            ItemCover(item: item).frame(width: 120, height: 80)
           }
         }
         .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
         VStack(alignment: .leading, spacing: 6) {
-          Text((watching ? "\(item.source) · Watching" : "\(item.author ?? item.source) · Saved").uppercased())
+          Text("\(item.source) · \(watching ? "Watching" : "Reading")".uppercased())
             .stashLabel()
             .foregroundStyle(Color.stMuted)
             .lineLimit(1)
@@ -345,40 +350,88 @@ struct NumberedRow: View {
   }
 }
 
-/// A new video in the side column's two-across grid.
+/// A new video, set with the same weight as a story: a large picture with its length, the
+/// channel, and a serif title.
 struct VideoTile: View {
   let item: LibraryItem
+  let open: () -> Void
+  @State private var hovering = false
+
+  var body: some View {
+    Button(action: open) {
+      VStack(alignment: .leading, spacing: 10) {
+        Color.stSunken
+          .aspectRatio(16 / 9, contentMode: .fit)
+          .overlay { FadeImage(url: item.largeImageURL, fallback: item.imageURL) }
+          .overlay(alignment: .bottomTrailing) {
+            if let duration = Watch.duration(item) {
+              Text(Watch.timecode(duration))
+                .font(.mono(11, .medium))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 3))
+                .padding(6)
+            }
+          }
+          .overlay {
+            Image(systemName: "play.fill")
+              .font(.system(size: 16))
+              .foregroundStyle(.white)
+              .frame(width: 44, height: 44)
+              .background(Color.black.opacity(0.55), in: Circle())
+              .opacity(hovering ? 1 : 0)
+          }
+          .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        StoryKicker(source: item.source, detail: shortAge(item.date))
+        Text(item.title)
+          .font(.reading(21, .medium, relativeTo: .title2))
+          .foregroundStyle(Color.stInk)
+          .underline(hovering, color: Color.stLine)
+          .multilineTextAlignment(.leading)
+          .lineLimit(3)
+      }
+      .frame(maxWidth: .infinity, alignment: .topLeading)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .onHover { hovering = $0 }
+  }
+}
+
+/// A story beside the lead: source, headline and a line of summary, with a small picture.
+struct SecondaryStory: View {
+  let item: LibraryItem
+  let source: String
+  let unseen: Bool
   let open: () -> Void
 
   var body: some View {
     Button(action: open) {
-      VStack(alignment: .leading, spacing: 6) {
-        Color.stSunken
-          .aspectRatio(16 / 9, contentMode: .fit)
-          .overlay { FadeImage(url: item.imageURL) }
-          .overlay(alignment: .bottomTrailing) {
-            if let duration = Watch.duration(item) {
-              Text(Watch.timecode(duration))
-                .font(.mono(10, .medium))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 3))
-                .padding(5)
-            }
+      HStack(alignment: .top, spacing: 14) {
+        VStack(alignment: .leading, spacing: 6) {
+          StoryKicker(source: source, detail: shortAge(item.date), unseen: unseen)
+          Text(item.title)
+            .font(.reading(19, .medium, relativeTo: .headline))
+            .foregroundStyle(Color.stInk)
+            .multilineTextAlignment(.leading)
+            .lineLimit(3)
+          if let summary = item.description, !summary.isEmpty {
+            Text(summary)
+              .font(.ui(13))
+              .foregroundStyle(Color.stMuted)
+              .multilineTextAlignment(.leading)
+              .lineLimit(2)
           }
-          .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
-        Text(item.title)
-          .font(.ui(13, .medium))
-          .foregroundStyle(Color.stInk)
-          .multilineTextAlignment(.leading)
-          .lineLimit(2)
-        Text("\(item.source) · \(shortAge(item.date))")
-          .font(.mono(11))
-          .foregroundStyle(Color.stMuted)
-          .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        if let url = item.imageURL {
+          Color.stSunken
+            .overlay { FadeImage(url: url) }
+            .frame(width: 84, height: 84)
+            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        }
       }
-      .frame(maxWidth: .infinity, alignment: .topLeading)
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
