@@ -36,18 +36,19 @@ struct SidebarPanel: View {
           SidebarGroupLabel(title: "Read", isOpen: $readOpen)
           if readOpen {
             row("Feeds", "dot.radiowaves.up.forward", .feeds)
-            SidebarRow(title: "Saved", ribbon: .saved, selected: section == .saved, action: { go(.saved) }) {
+            SidebarRow(title: "Saved", ribbon: .saved, landing: .saved, selected: section == .saved, action: { go(.saved) }) {
               LandingCount(kind: .saved)
             }
-            .momentTarget(.saved)
             row("Highlights", "highlighter", .highlights)
             row("Discover", "safari", .discover) {
               if let discoverCount, discoverCount > 0 {
                 Text("\(discoverCount) new").font(.mono(11)).monospacedDigit().foregroundStyle(Color.stAccentText)
               }
             }
-            row("Archive", "archivebox", .archive) { LandingCount(kind: .archived) }
-              .momentTarget(.archived)
+            SidebarRow(title: "Archive", symbol: "archivebox", landing: .archived, selected: section == .archive, action: { go(.archive) }) {
+              LandingCount(kind: .archived)
+            }
+            SidebarRow(title: "Trash", symbol: "trash", landing: .trashed, selected: section == .trash) { go(.trash) }
           }
 
           SidebarGroupLabel(title: "Watch", isOpen: $watchOpen)
@@ -55,10 +56,9 @@ struct SidebarPanel: View {
             row("Latest", "play.rectangle", .channels) {
               if let channelsCount, channelsCount > 0 { Count(channelsCount, style: .badge) }
             }
-            SidebarRow(title: "Saved", ribbon: .savedVideo, selected: section == .savedVideos, action: { go(.savedVideos) }) {
+            SidebarRow(title: "Saved", ribbon: .savedVideo, landing: .savedVideo, selected: section == .savedVideos, action: { go(.savedVideos) }) {
               LandingCount(kind: .savedVideo)
             }
-            .momentTarget(.savedVideo)
             ForEach(collections) { collection in
               SidebarRow(
                 title: collection.name,

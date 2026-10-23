@@ -251,7 +251,7 @@ struct ReaderScreen: View {
       Task {
         do {
           try await Library.setArchived(item.id, true)
-          Moments.shared.archived(item)
+          Moments.shared.archivedOffList(item)
           guard generation == reader?.loadGeneration else { return }
           reader?.send("stashColophonResult", ["archived": true])
           toaster.show("Archived", undo: {
