@@ -24,7 +24,7 @@ type Subscribe = {
 export type SubscribeMutationInput = {
   url: string
   subscriptionType?: SubscriptionType
-  includeShorts?: boolean
+  hideShortVideos?: boolean
   collectionId?: string
 }
 

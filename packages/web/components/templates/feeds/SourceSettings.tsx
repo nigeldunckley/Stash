@@ -79,8 +79,8 @@ export function SourceSettings(props: {
   )
   const [confirming, setConfirming] = useState(false)
   const channel = isYouTubeFeedUrl(subscription.url)
-  const [includeShorts, setIncludeShorts] = useState(
-    !!subscription.includeShorts
+  const [hideShortVideos, setHideShortVideos] = useState(
+    !!subscription.hideShortVideos
   )
 
   const { collections, create: createCollection } = useWatchCollections()
@@ -90,18 +90,18 @@ export function SourceSettings(props: {
   )
 
   const changeShorts = async (value: boolean) => {
-    setIncludeShorts(value)
+    setHideShortVideos(value)
     try {
       const result = await updateSubscriptionMutation({
         id: subscription.id,
-        includeShorts: value,
+        hideShortVideos: value,
       })
       if (result.updateSubscription.errorCodes?.length) {
         throw new Error(result.updateSubscription.errorCodes[0])
       }
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
     } catch {
-      setIncludeShorts(!value)
+      setHideShortVideos(!value)
       showErrorToast('Could not update this channel')
     }
   }
@@ -186,19 +186,29 @@ export function SourceSettings(props: {
           </Detail>
         </Row>
       )}
+      {channel && subscription.youtubeImported && (
+        <Detail>
+          Imported from your YouTube subscriptions
+          {subscription.youtubeManualFollow
+            ? ' and also followed in Stash'
+            : ''}
+          .
+        </Detail>
+      )}
       {channel ? (
         <Row>
           <Toggle>
-            Include Shorts
+            Hide videos under 3 minutes
             <Switch
-              label="Include Shorts"
-              checked={includeShorts}
+              label="Hide videos under 3 minutes"
+              checked={hideShortVideos}
               onChange={changeShorts}
             />
           </Toggle>
           <Detail>
-            Shorts are vertical clips under a minute. New ones appear from the
-            next check.
+            Applies to new automatic imports, including short regular videos.
+            This is a duration filter, not exact Shorts detection. Saved videos
+            stay available.
           </Detail>
         </Row>
       ) : (

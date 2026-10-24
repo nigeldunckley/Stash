@@ -1,3 +1,4 @@
+import { disconnect as disconnectYouTube } from './youtube/connection'
 import { Notification } from 'firebase-admin/messaging'
 import { DeepPartial, FindOptionsWhere, In } from 'typeorm'
 import { Profile } from '../entity/profile'
@@ -31,6 +32,7 @@ export const updateUser = async (userId: string, update: Partial<User>) => {
 }
 
 export const softDeleteUser = async (userId: string) => {
+  await disconnectYouTube(userId)
   return authTrx(
     async (t) => {
       // change email address and username for user to sign up again

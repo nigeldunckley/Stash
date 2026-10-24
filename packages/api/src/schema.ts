@@ -413,6 +413,9 @@ const schema = gql`
     readAt: Date
     recommendations: [Recommendation!]
     wordsCount: Int
+    youtubeMadeForKids: Boolean
+    youtubeEmbeddable: Boolean
+    youtubeAvailable: Boolean
     folder: String!
     feedContent: String
     directionality: DirectionalityType
@@ -1691,6 +1694,9 @@ const schema = gql`
     siteIcon: String
     recommendations: [Recommendation!]
     wordsCount: Int
+    youtubeMadeForKids: Boolean
+    youtubeEmbeddable: Boolean
+    youtubeAvailable: Boolean
     content: String
     archivedAt: Date
     feedContent: String
@@ -1765,6 +1771,14 @@ const schema = gql`
     refreshedAt: Date
     failedAt: Date
     includeShorts: Boolean!
+      @deprecated(
+        reason: "Use hideShortVideos; exact Shorts detection is unavailable"
+      )
+    hideShortVideos: Boolean!
+    youtubeChannelId: String
+    youtubeManualFollow: Boolean!
+    youtubeImported: Boolean!
+    youtubeExcluded: Boolean!
     collectionId: ID
   }
 
@@ -2686,6 +2700,7 @@ const schema = gql`
     fetchContentType: FetchContentType
     folder: String
     includeShorts: Boolean
+    hideShortVideos: Boolean
     collectionId: ID
   }
 
@@ -2705,6 +2720,7 @@ const schema = gql`
     mostRecentItemDate: Date
     failedAt: Date
     includeShorts: Boolean
+    hideShortVideos: Boolean
     collectionId: ID
   }
 

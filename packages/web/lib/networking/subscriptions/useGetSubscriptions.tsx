@@ -59,7 +59,11 @@ const GQL_GET_SUBSCRIPTIONS = gql`
           updatedAt
           lastFetchedAt
           fetchContentType
-          includeShorts
+          hideShortVideos
+          youtubeImported
+          youtubeManualFollow
+          youtubeExcluded
+          youtubeChannelId
           collectionId
           mostRecentItemDate
           failedAt

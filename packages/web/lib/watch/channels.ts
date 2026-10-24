@@ -19,7 +19,7 @@ export function useFollowChannel() {
     async (
       channel: { feedUrl: string; title: string },
       options: {
-        includeShorts?: boolean
+        hideShortVideos?: boolean
         quiet?: boolean
         collectionId?: string
       } = {}
@@ -29,7 +29,7 @@ export function useFollowChannel() {
         const response = await subscribeMutation({
           url: channel.feedUrl,
           subscriptionType: SubscriptionType.RSS,
-          includeShorts: options.includeShorts ?? false,
+          hideShortVideos: options.hideShortVideos ?? false,
           collectionId: options.collectionId,
         })
         const error = response.subscribe.errorCodes?.[0]

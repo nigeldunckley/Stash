@@ -13,7 +13,8 @@
     "lint": "eslint src --ext ts,js,tsx,jsx",
     "lint:fix": "eslint src --fix --ext ts,js,tsx,jsx",
     "test:typecheck": "tsc --noEmit",
-    "test": "nyc mocha -r ts-node/register --config mocha-config.json"
+    "test": "nyc mocha -r ts-node/register --config mocha-config.json",
+    "test:youtube": "node --test test/youtube/*.test.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.679.0",
@@ -127,8 +128,7 @@
     "uuid": "^8.3.1",
     "voca": "^1.4.0",
     "winston": "^3.3.3",
-    "yaml": "^2.4.1",
-    "youtubei": "^1.5.4"
+    "yaml": "^2.4.1"
   },
   "devDependencies": {
     "@istanbuljs/nyc-config-typescript": "^1.0.2",
@@ -179,7 +179,11 @@
     "postgrator": "^4.2.0",
     "sinon": "^14.0.0",
     "sinon-chai": "^3.7.0",
-    "ts-node-dev": "^1.1.8"
+    "ts-node-dev": "^1.1.8",
+    "@electric-sql/pglite": "^0.5.11",
+    "@babel/core": "^7.17.7",
+    "@babel/preset-env": "^7.17.7",
+    "@babel/preset-typescript": "^7.16.7"
   },
   "volta": {
     "extends": "../../package.json"

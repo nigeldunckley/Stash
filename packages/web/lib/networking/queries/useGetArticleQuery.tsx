@@ -7,7 +7,7 @@ import {
   State,
 } from '../fragments/articleFragment'
 import { Highlight, highlightFragment } from '../fragments/highlightFragment'
-import { ScopedMutator } from 'swr/dist/_internal'
+import type { ScopedMutator } from 'swr'
 import { Label, labelFragment } from '../fragments/labelFragment'
 import {
   ArticleAttributes,

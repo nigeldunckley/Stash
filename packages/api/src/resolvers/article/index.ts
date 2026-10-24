@@ -1,3 +1,4 @@
+import { isYouTubeVideoURL } from '../../utils/youtube'
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/restrict-plus-operands */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -509,6 +510,12 @@ export const saveArticleReadingProgressResolver = authorized<
         errorCodes: [SaveArticleReadingProgressErrorCode.Unauthorized],
       }
     }
+
+    if (
+      isYouTubeVideoURL(updatedItem.originalUrl) &&
+      updatedItem.youtubeMadeForKids !== false
+    )
+      return { updatedArticle: updatedItem }
 
     if (env.redis.cache && force) {
       // clear any cached values.

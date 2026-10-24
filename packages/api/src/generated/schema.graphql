@@ -142,6 +142,9 @@ type Article {
   uploadFileId: ID
   url: String!
   wordsCount: Int
+  youtubeAvailable: Boolean
+  youtubeEmbeddable: Boolean
+  youtubeMadeForKids: Boolean
 }
 
 type ArticleEdge {
@@ -2591,6 +2594,9 @@ type SearchItem {
   uploadFileId: ID
   url: String!
   wordsCount: Int
+  youtubeAvailable: Boolean
+  youtubeEmbeddable: Boolean
+  youtubeMadeForKids: Boolean
 }
 
 type SearchItemEdge {
@@ -2967,6 +2973,7 @@ input SubscribeInput {
   fetchContent: Boolean
   fetchContentType: FetchContentType
   folder: String
+  hideShortVideos: Boolean
   includeShorts: Boolean
   isPrivate: Boolean
   subscriptionType: SubscriptionType
@@ -2989,9 +2996,10 @@ type Subscription {
   fetchContent: Boolean!
   fetchContentType: FetchContentType!
   folder: String!
+  hideShortVideos: Boolean!
   icon: String
   id: ID!
-  includeShorts: Boolean!
+  includeShorts: Boolean! @deprecated(reason: "Use hideShortVideos; exact Shorts detection is unavailable")
   isPrivate: Boolean
   lastFetchedAt: Date
   mostRecentItemDate: Date
@@ -3004,6 +3012,10 @@ type Subscription {
   unsubscribeMailTo: String
   updatedAt: Date
   url: String
+  youtubeChannelId: String
+  youtubeExcluded: Boolean!
+  youtubeImported: Boolean!
+  youtubeManualFollow: Boolean!
 }
 
 type SubscriptionError {
@@ -3439,6 +3451,7 @@ input UpdateSubscriptionInput {
   fetchContent: Boolean
   fetchContentType: FetchContentType
   folder: String
+  hideShortVideos: Boolean
   id: ID!
   includeShorts: Boolean
   isPrivate: Boolean

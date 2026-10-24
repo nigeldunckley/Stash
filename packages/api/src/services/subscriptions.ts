@@ -165,6 +165,9 @@ export const unsubscribe = async (subscription: Subscription) => {
   return authTrx((tx) =>
     tx.getRepository(Subscription).update(subscription.id, {
       status: SubscriptionStatus.Unsubscribed,
+      ...(subscription.youtubeChannelId
+        ? { youtubeExcluded: true, youtubeManualFollow: false }
+        : {}),
     })
   )
 }

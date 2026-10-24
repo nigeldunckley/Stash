@@ -71,6 +71,9 @@ export const gqlSearchQuery = (includeTotalCount = false) => gql`
             seenAt
             savedAt
             wordsCount
+            youtubeMadeForKids
+            youtubeEmbeddable
+            youtubeAvailable
             highlightsCount
           }
         }

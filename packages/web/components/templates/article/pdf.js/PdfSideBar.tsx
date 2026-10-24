@@ -31,7 +31,7 @@ export default function PdfSideBar(props: PdfSidebarProps) {
           canvas.width = viewport.width
           canvas.height = viewport.height
           if (ctx) {
-            const task = page.render({ canvasContext: ctx, viewport: viewport })
+            const task = page.render({ canvas, canvasContext: ctx, viewport: viewport })
             return task.promise.then(() => canvas.toDataURL())
           }
 

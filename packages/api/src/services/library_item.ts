@@ -1060,7 +1060,7 @@ export const updateLibraryItemReadingProgress = async (
         ELSE reading_progress_highest_read_anchor
       END,
       read_at = now()
-      WHERE id = $1 AND (
+      WHERE id = $1 AND (youtube_made_for_kids IS FALSE OR original_url !~ '^https?://(www\\.)?(youtube\\.com|youtu\\.be)/') AND (
         (reading_progress_top_percent < $2 OR $2 = 0) OR
         (reading_progress_bottom_percent < $3 OR $3 = 0) OR
         (reading_progress_highest_read_anchor < $4 OR $4 = 0)

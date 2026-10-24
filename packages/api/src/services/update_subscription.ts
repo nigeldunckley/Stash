@@ -31,6 +31,7 @@ type UpdateSubscriptionData = {
   refreshedAt?: Date | null
   failedAt?: Date | null
   includeShorts?: boolean | null
+  hideShortVideos?: boolean | null
   // An empty string takes the channel out of its collection.
   collectionId?: string | null
 }
@@ -57,7 +58,13 @@ export const updateSubscription = async (
     isPrivate: newData.isPrivate ?? undefined,
     fetchContentType: newData.fetchContentType || undefined,
     folder: newData.folder ?? undefined,
-    includeShorts: newData.includeShorts ?? undefined,
+    hideShortVideos: newData.hideShortVideos ?? undefined,
+    ...(newData.status === SubscriptionStatus.Unsubscribed
+      ? { youtubeExcluded: true, youtubeManualFollow: false }
+      : {}),
+    ...(newData.status === SubscriptionStatus.Active
+      ? { youtubeExcluded: false, youtubeManualFollow: true }
+      : {}),
     collectionId:
       newData.collectionId === '' ? null : newData.collectionId ?? undefined,
   })

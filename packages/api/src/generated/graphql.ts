@@ -163,6 +163,9 @@ export type Article = {
   uploadFileId?: Maybe<Scalars['ID']>;
   url: Scalars['String'];
   wordsCount?: Maybe<Scalars['Int']>;
+  youtubeAvailable?: Maybe<Scalars['Boolean']>;
+  youtubeEmbeddable?: Maybe<Scalars['Boolean']>;
+  youtubeMadeForKids?: Maybe<Scalars['Boolean']>;
 };
 
 
@@ -3380,6 +3383,9 @@ export type SearchItem = {
   uploadFileId?: Maybe<Scalars['ID']>;
   url: Scalars['String'];
   wordsCount?: Maybe<Scalars['Int']>;
+  youtubeAvailable?: Maybe<Scalars['Boolean']>;
+  youtubeEmbeddable?: Maybe<Scalars['Boolean']>;
+  youtubeMadeForKids?: Maybe<Scalars['Boolean']>;
 };
 
 export type SearchItemEdge = {
@@ -3788,6 +3794,7 @@ export type SubscribeInput = {
   fetchContent?: InputMaybe<Scalars['Boolean']>;
   fetchContentType?: InputMaybe<FetchContentType>;
   folder?: InputMaybe<Scalars['String']>;
+  hideShortVideos?: InputMaybe<Scalars['Boolean']>;
   includeShorts?: InputMaybe<Scalars['Boolean']>;
   isPrivate?: InputMaybe<Scalars['Boolean']>;
   subscriptionType?: InputMaybe<SubscriptionType>;
@@ -3812,8 +3819,10 @@ export type Subscription = {
   fetchContent: Scalars['Boolean'];
   fetchContentType: FetchContentType;
   folder: Scalars['String'];
+  hideShortVideos: Scalars['Boolean'];
   icon?: Maybe<Scalars['String']>;
   id: Scalars['ID'];
+  /** @deprecated Use hideShortVideos; exact Shorts detection is unavailable */
   includeShorts: Scalars['Boolean'];
   isPrivate?: Maybe<Scalars['Boolean']>;
   lastFetchedAt?: Maybe<Scalars['Date']>;
@@ -3827,6 +3836,10 @@ export type Subscription = {
   unsubscribeMailTo?: Maybe<Scalars['String']>;
   updatedAt?: Maybe<Scalars['Date']>;
   url?: Maybe<Scalars['String']>;
+  youtubeChannelId?: Maybe<Scalars['String']>;
+  youtubeExcluded: Scalars['Boolean'];
+  youtubeImported: Scalars['Boolean'];
+  youtubeManualFollow: Scalars['Boolean'];
 };
 
 export type SubscriptionError = {
@@ -4301,6 +4314,7 @@ export type UpdateSubscriptionInput = {
   fetchContent?: InputMaybe<Scalars['Boolean']>;
   fetchContentType?: InputMaybe<FetchContentType>;
   folder?: InputMaybe<Scalars['String']>;
+  hideShortVideos?: InputMaybe<Scalars['Boolean']>;
   id: Scalars['ID'];
   includeShorts?: InputMaybe<Scalars['Boolean']>;
   isPrivate?: InputMaybe<Scalars['Boolean']>;
@@ -6122,6 +6136,9 @@ export type ArticleResolvers<ContextType = ResolverContext, ParentType extends R
   uploadFileId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
   url?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   wordsCount?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
+  youtubeAvailable?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
+  youtubeEmbeddable?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
+  youtubeMadeForKids?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 };
 
@@ -8038,6 +8055,9 @@ export type SearchItemResolvers<ContextType = ResolverContext, ParentType extend
   uploadFileId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
   url?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   wordsCount?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
+  youtubeAvailable?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
+  youtubeEmbeddable?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
+  youtubeMadeForKids?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 };
 
@@ -8286,6 +8306,7 @@ export type SubscriptionResolvers<ContextType = ResolverContext, ParentType exte
   fetchContent?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   fetchContentType?: Resolver<ResolversTypes['FetchContentType'], ParentType, ContextType>;
   folder?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  hideShortVideos?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   icon?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   includeShorts?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
@@ -8301,6 +8322,10 @@ export type SubscriptionResolvers<ContextType = ResolverContext, ParentType exte
   unsubscribeMailTo?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   url?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  youtubeChannelId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  youtubeExcluded?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  youtubeImported?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  youtubeManualFollow?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 };
 

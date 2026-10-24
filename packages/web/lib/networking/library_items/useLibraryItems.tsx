@@ -1059,6 +1059,9 @@ export type ArticleAttributes = {
   createdAt: string
   publishedAt?: string
   description?: string
+  youtubeMadeForKids?: boolean
+  youtubeEmbeddable?: boolean
+  youtubeAvailable?: boolean
   wordsCount?: number
   originalHtml?: string
   contentReader: ContentReader
@@ -1181,6 +1184,9 @@ export type LibraryItemNode = {
   readAt?: string
   seenAt?: string
   savedAt?: string
+  youtubeMadeForKids?: boolean
+  youtubeEmbeddable?: boolean
+  youtubeAvailable?: boolean
   wordsCount?: number
   aiSummary?: string
   recommendations?: Recommendation[]

@@ -45,6 +45,7 @@ export const refreshAllFeeds = async (db: DataSource): Promise<boolean> => {
       WHERE
         s.type = $1
         AND s.status = $2
+        AND s.youtube_channel_id IS NULL
         AND (
           s.scheduled_at <= NOW()
           OR s.scheduled_at IS NULL

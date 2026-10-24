@@ -20,6 +20,7 @@ RUN yarn install --pure-lockfile --network-timeout=300000 && \
     yarn workspace @omnivore/content-handler build && \
     yarn workspace @omnivore/liqe build && \
     yarn workspace @omnivore/api build && \
+    yarn workspace @omnivore/api test:youtube && \
     rm -rf /app/packages/api/node_modules /app/node_modules && \
     yarn install --pure-lockfile --production --network-timeout=300000
 

@@ -117,6 +117,21 @@ export class Subscription {
   @Column('boolean', { default: false })
   includeShorts!: boolean
 
+  @Column('text', { nullable: true })
+  youtubeChannelId?: string | null
+  @Column('boolean', { default: true })
+  youtubeManualFollow!: boolean
+  @Column('boolean', { default: false })
+  youtubeImported!: boolean
+  @Column('boolean', { default: false })
+  youtubeExcluded!: boolean
+  @Column('boolean', { default: false })
+  hideShortVideos!: boolean
+  @Column('timestamptz', { nullable: true })
+  youtubeInitializedAt?: Date | null
+  @Column('timestamptz', { nullable: true })
+  youtubeCheckpointAt?: Date | null
+
   // For YouTube channels: the Watch collection (a label) its videos sort into.
   @Column('uuid', { nullable: true })
   collectionId?: string | null

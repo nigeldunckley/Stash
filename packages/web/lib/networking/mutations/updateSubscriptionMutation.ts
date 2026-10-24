@@ -30,7 +30,7 @@ export interface UpdateSubscriptionInput {
   autoAddToLibrary?: boolean
   isPrivate?: boolean
   fetchContentType?: FetchContentType
-  includeShorts?: boolean
+  hideShortVideos?: boolean
   // An empty string takes a channel out of its collection.
   collectionId?: string
 }

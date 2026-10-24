@@ -116,7 +116,7 @@ export function AddChannelPanel(props: {
   const [busy, setBusy] = useState(false)
   const [channel, setChannel] = useState<YouTubeChannel>()
   const [missing, setMissing] = useState(false)
-  const [includeShorts, setIncludeShorts] = useState(false)
+  const [hideShortVideos, setHideShortVideos] = useState(false)
   const [progress, setProgress] = useState<string>()
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -154,7 +154,7 @@ export function AddChannelPanel(props: {
       const result = await subscribeMutation({
         url: channel.feedUrl,
         subscriptionType: SubscriptionType.RSS,
-        includeShorts,
+        hideShortVideos,
       })
       const error = result.subscribe.errorCodes?.[0]
       if (error == 'ALREADY_SUBSCRIBED') {
@@ -266,11 +266,11 @@ export function AddChannelPanel(props: {
             </Minis>
           )}
           <Toggle>
-            Include Shorts
+            Hide videos under 3 minutes
             <Switch
-              label="Include Shorts"
-              checked={includeShorts}
-              onChange={setIncludeShorts}
+              label="Hide videos under 3 minutes"
+              checked={hideShortVideos}
+              onChange={setHideShortVideos}
             />
           </Toggle>
           <Button

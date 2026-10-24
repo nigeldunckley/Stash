@@ -1,480 +1,165 @@
-import axios from 'axios'
-import { parseHTML } from 'linkedom'
-import Parser from 'rss-parser'
 import _ from 'underscore'
-import { Client as InnerTube } from 'youtubei'
-import { logger } from './logger'
 import { videoIdFromYouTubeUrl } from './youtube'
-
-// YouTube channels publish their latest uploads as an Atom feed. Stash
-// follows a channel by subscribing to that feed like any other.
-const FEED_BASE = 'https://www.youtube.com/feeds/videos.xml'
+import {
+  channels,
+  ChannelResource,
+  searchChannels,
+  thumbnail,
+  videos,
+  youtubeList,
+  YouTubeUnavailableError,
+} from '../services/youtube/client'
+export { YouTubeUnavailableError }
 const CHANNEL_ID = /^UC[\w-]{22}$/
-
-// Without these, a server in Europe gets YouTube's cookie-consent page instead
-// of the channel. SOCS is the answer to that page; the language keeps names
-// and dates in English.
-const PAGE_HEADERS = {
-  'user-agent':
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
-  'accept-language': 'en-GB,en;q=0.9',
-  cookie: 'SOCS=CAI; CONSENT=YES+1',
+export const channelFeedUrl = (id: string) =>
+  `https://www.youtube.com/feeds/videos.xml?channel_id=${id}`
+export const channelIdFromFeedUrl = (value: string): string | undefined => {
+  try {
+    const u = new URL(value)
+    const id = u.searchParams.get('channel_id')
+    return /(^|\.)youtube\.com$/.test(u.hostname) &&
+      u.pathname === '/feeds/videos.xml' &&
+      id &&
+      CHANNEL_ID.test(id)
+      ? id
+      : undefined
+  } catch {
+    return undefined
+  }
 }
-
-// YouTube's own app interface. It answers in JSON, so unlike the channel's web
-// page it is never replaced by a consent page or a "sign in" wall.
-const innertube = new InnerTube({
-  youtubeClientOptions: { hl: 'en', gl: 'GB' },
-})
-
-// Something went wrong talking to YouTube, as opposed to YouTube saying there
-// is no such channel.
-export class YouTubeUnavailableError extends Error {}
-
+export const isYouTubeChannelFeed = (value: string) =>
+  !!channelIdFromFeedUrl(value)
+export const isYouTubeUrl = (value: string) => {
+  if (/^@[\w.-]+$/.test(value.trim())) return true
+  try {
+    return (
+      /(^|\.)youtube\.com$/.test(
+        new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`)
+          .hostname
+      ) ||
+      new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`)
+        .hostname === 'youtu.be'
+    )
+  } catch {
+    return false
+  }
+}
+export const isShortsLink = (url: string) => /\/shorts\//.test(url)
+export const videoThumbnail = (id: string) =>
+  `https://i.ytimg.com/vi/${id}/hqdefault.jpg`
+export const watchUrl = (id: string) => `https://www.youtube.com/watch?v=${id}`
 export type YouTubeVideo = {
   id: string
   title: string
+  description?: string
   url: string
   thumbnail: string
   publishedAt?: Date
 }
-
-export type YouTubeChannel = {
+export type YouTubeChannelMatch = {
   channelId: string
   feedUrl: string
   title: string
   handle?: string
   avatar?: string
+  subscribers?: string
+}
+export type YouTubeChannel = YouTubeChannelMatch & {
   videos: YouTubeVideo[]
   uploadsPerWeek?: number
 }
-
-export const channelFeedUrl = (channelId: string) =>
-  `${FEED_BASE}?channel_id=${channelId}`
-
-// The channel's uploads without Shorts (and without past live streams):
-// YouTube's "UULF" playlist mirrors the uploads playlist for long videos.
-export const longFormFeedUrl = (channelId: string) =>
-  `${FEED_BASE}?playlist_id=UULF${channelId.slice(2)}`
-
-export const channelIdFromFeedUrl = (url: string): string | undefined => {
-  try {
-    const parsed = new URL(url)
-    if (
-      !parsed.hostname.endsWith('youtube.com') ||
-      parsed.pathname != '/feeds/videos.xml'
-    ) {
-      return undefined
-    }
-    const id = parsed.searchParams.get('channel_id')
-    return id && CHANNEL_ID.test(id) ? id : undefined
-  } catch {
-    return undefined
-  }
-}
-
-export const isYouTubeChannelFeed = (url: string) => !!channelIdFromFeedUrl(url)
-
-export const isYouTubeUrl = (value: string) => {
-  const trimmed = value.trim()
-  if (/^@[\w.-]{3,}$/.test(trimmed)) {
-    return true
-  }
-  try {
-    const host = new URL(
-      /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
-    ).hostname
-    return /(^|\.)youtube\.com$/.test(host) || host == 'youtu.be'
-  } catch {
-    return false
-  }
-}
-
-export const isShortsLink = (url: string) => /\/shorts\//.test(url)
-
-// The largest thumbnail YouTube makes for every video. It is 4:3 with black
-// bars, which a 16:9 crop removes exactly.
-export const videoThumbnail = (videoId: string) =>
-  `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
-
-export const watchUrl = (videoId: string) =>
-  `https://www.youtube.com/watch?v=${videoId}`
-
-const fetchPage = async (url: string) => {
-  const response = await axios.get<string>(url, {
-    headers: PAGE_HEADERS,
-    timeout: 15000,
-    maxRedirects: 5,
-    responseType: 'text',
-  })
-  return response.data
-}
-
-const meta = (document: Document, property: string) =>
-  document
-    .querySelector(`meta[property="${property}"], meta[name="${property}"]`)
-    ?.getAttribute('content') || undefined
-
-type ChannelPage = {
-  channelId?: string
-  title?: string
-  handle?: string
-  avatar?: string
-}
-
-const readChannelPage = (html: string): ChannelPage => {
-  const { document } = parseHTML(html)
-  const canonical =
-    document.querySelector('link[rel="canonical"]')?.getAttribute('href') || ''
-  const fromCanonical = canonical.match(/\/channel\/(UC[\w-]{22})/)?.[1]
-  const fromMeta = document
-    .querySelector('meta[itemprop="identifier"], meta[itemprop="channelId"]')
-    ?.getAttribute('content')
-  const fromData =
-    html.match(/"externalId":"(UC[\w-]{22})"/)?.[1] ||
-    html.match(/"channelId":"(UC[\w-]{22})"/)?.[1]
-  const handle =
-    html.match(/"canonicalBaseUrl":"\/(@[^"]+)"/)?.[1] ||
-    html.match(
-      /"vanityChannelUrl":"https?:\/\/www\.youtube\.com\/(@[^"]+)"/
-    )?.[1]
-
-  return {
-    channelId:
-      fromCanonical ||
-      (fromMeta && CHANNEL_ID.test(fromMeta) ? fromMeta : undefined) ||
-      fromData,
-    title: meta(document, 'og:title'),
-    avatar: meta(document, 'og:image'),
-    handle: handle ? decodeURIComponent(handle) : undefined,
-  }
-}
-
-// Turns what someone pasted (a channel link, an @handle, a feed address or a
-// link to one of the channel's videos) into the address of a channel page.
-const channelPageFor = async (
-  value: string
-): Promise<{ page?: string; channelId?: string } | undefined> => {
-  const trimmed = value.trim()
-  if (/^@[\w.-]{3,}$/.test(trimmed)) {
-    return { page: `https://www.youtube.com/${trimmed}` }
-  }
-
-  let url: URL
-  try {
-    url = new URL(
-      /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
-    )
-  } catch {
-    return undefined
-  }
-
-  const feedId = channelIdFromFeedUrl(url.href)
-  if (feedId) {
-    return {
-      channelId: feedId,
-      page: `https://www.youtube.com/channel/${feedId}`,
-    }
-  }
-
-  const pathId = url.pathname.match(/^\/channel\/(UC[\w-]{22})/)?.[1]
-  if (pathId) {
-    return {
-      channelId: pathId,
-      page: `https://www.youtube.com/channel/${pathId}`,
-    }
-  }
-
-  const videoId =
-    videoIdFromYouTubeUrl(url.href) ||
-    url.pathname.match(/^\/(?:shorts|live)\/([\w-]{11})/)?.[1]
-  if (videoId) {
-    // oEmbed names the channel that posted the video.
-    const oembed = await axios.get<{ author_url?: string }>(
-      'https://www.youtube.com/oembed',
-      {
-        params: { url: watchUrl(videoId), format: 'json' },
-        headers: PAGE_HEADERS,
-        timeout: 10000,
-      }
-    )
-    const authorUrl = oembed.data.author_url
-    return authorUrl ? { page: authorUrl } : undefined
-  }
-
-  const path = url.pathname.match(/^\/(@[^/]+|c\/[^/]+|user\/[^/]+)/)?.[1]
-  if (path) {
-    return { page: `https://www.youtube.com/${path}` }
-  }
-
-  return undefined
-}
-
-const feedParser = new Parser<
-  Record<string, unknown>,
-  { 'yt:videoId'?: string; 'media:group'?: unknown }
->({
-  customFields: {
-    item: [
-      ['yt:videoId', 'yt:videoId'],
-      ['media:group', 'media:group'],
-    ],
-  },
+const match = (c: ChannelResource): YouTubeChannelMatch => ({
+  channelId: c.id,
+  feedUrl: channelFeedUrl(c.id),
+  title: c.snippet.title,
+  handle: c.snippet.customUrl,
+  avatar: thumbnail(c.snippet.thumbnails),
 })
-
-export const fetchChannelFeed = async (feedUrl: string) => {
-  const xml = await fetchPage(feedUrl)
-  return feedParser.parseString(xml)
-}
-
-const uploadsPerWeek = (dates: Date[]) => {
-  if (dates.length < 2) {
-    return undefined
-  }
-  const newest = Math.max(...dates.map((date) => date.getTime()))
-  const oldest = Math.min(...dates.map((date) => date.getTime()))
-  const weeks = (newest - oldest) / (7 * 24 * 60 * 60 * 1000)
-  if (weeks <= 0) {
-    return undefined
-  }
-  return Math.round(((dates.length - 1) / weeks) * 10) / 10
-}
-
-// The channel ID behind a channel address such as youtube.com/@handle.
-const resolveChannelId = async (page: string): Promise<string | undefined> => {
-  const response = (await innertube.http.post(
-    '/youtubei/v1/navigation/resolve_url',
-    { data: { url: page } }
-  )) as {
-    data?: { endpoint?: { browseEndpoint?: { browseId?: string } } }
-  }
-  const id = response.data?.endpoint?.browseEndpoint?.browseId
-  return id && CHANNEL_ID.test(id) ? id : undefined
-}
-
-type ChannelInfo = {
-  title?: string
-  handle?: string
-  avatar?: string
-  videos: YouTubeVideo[]
-}
-
-// The channel's name, handle, picture and latest uploads from the app
-// interface.
-const channelInfo = async (
-  channelId: string,
-  videoCount: number
-): Promise<ChannelInfo | undefined> => {
-  const channel = await innertube.getChannel(channelId)
-  if (!channel) {
-    return undefined
-  }
-  let videos: YouTubeVideo[] = []
-  if (videoCount > 0) {
-    try {
-      const items = await channel.videos.next()
-      videos = items.slice(0, videoCount).map((video) => ({
-        id: video.id,
-        title: video.title,
-        url: watchUrl(video.id),
-        thumbnail: videoThumbnail(video.id),
-      }))
-    } catch (error) {
-      logger.info('youtube: channel videos unavailable', { channelId, error })
-    }
-  }
-  return {
-    title: channel.name || undefined,
-    handle: channel.handle || undefined,
-    avatar: channel.thumbnails?.length ? channel.thumbnails.best : undefined,
-    videos,
-  }
-}
-
-const videosFromFeed = (feed: Awaited<ReturnType<typeof fetchChannelFeed>>) =>
-  feed.items
-    .map((item): YouTubeVideo | undefined => {
-      const id = item['yt:videoId'] || videoIdFromYouTubeUrl(item.link)
-      if (!id) {
-        return undefined
-      }
-      return {
-        id,
-        title: item.title || '',
-        url: item.link || watchUrl(id),
-        thumbnail: videoThumbnail(id),
-        publishedAt: item.isoDate ? new Date(item.isoDate) : undefined,
-      }
-    })
-    .filter((video): video is YouTubeVideo => !!video)
-
-const attempt = async <T>(
-  what: string,
-  context: Record<string, unknown>,
-  run: () => Promise<T>
-): Promise<{ value?: T; failed: boolean }> => {
-  try {
-    return { value: await run(), failed: false }
-  } catch (error) {
-    logger.info(`youtube: ${what} failed`, {
-      ...context,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return { failed: true }
-  }
-}
-
-// Finds the channel behind a channel link, @handle, feed address or video
-// link. Undefined means YouTube has no such channel; YouTubeUnavailableError
-// means YouTube couldn't be asked.
 export const resolveYouTubeChannel = async (
   value: string,
   videoCount = 3
 ): Promise<YouTubeChannel | undefined> => {
-  const target = await attempt('finding the channel address', { value }, () =>
-    channelPageFor(value)
-  )
-  if (target.failed) {
-    throw new YouTubeUnavailableError('YouTube did not answer')
-  }
-  if (!target.value) {
-    return undefined
-  }
-  const { page: pageUrl } = target.value
-  let channelId = target.value.channelId
-  let unreachable = false
-
-  // The app interface first, then the channel's web page.
-  let page: ChannelPage = {}
-  if (!channelId && pageUrl) {
-    const resolved = await attempt('resolving the channel', { pageUrl }, () =>
-      resolveChannelId(pageUrl)
-    )
-    channelId = resolved.value
-    unreachable = resolved.failed
-  }
-  if (!channelId && pageUrl) {
-    const scraped = await attempt('reading the channel page', { pageUrl }, () =>
-      fetchPage(pageUrl).then(readChannelPage)
-    )
-    page = scraped.value ?? {}
-    channelId = page.channelId
-    unreachable = unreachable && scraped.failed
-  }
-  if (!channelId || !CHANNEL_ID.test(channelId)) {
-    if (unreachable) {
-      throw new YouTubeUnavailableError('YouTube did not answer')
+  let params: Record<string, string> | undefined
+  if (value.trim().startsWith('@')) params = { forHandle: value.trim() }
+  else {
+    let u: URL
+    try {
+      u = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`)
+    } catch {
+      return undefined
     }
-    return undefined
+    if (!isYouTubeUrl(u.href)) return undefined
+    const id =
+      channelIdFromFeedUrl(u.href) ||
+      u.pathname.match(/^\/channel\/(UC[\w-]{22})/)?.[1]
+    const videoId = videoIdFromYouTubeUrl(u.href)
+    if (id) params = { id }
+    else if (videoId) {
+      const video = (await videos([videoId]))[0]
+      if (!video) return undefined
+      params = { id: video.snippet.channelId }
+    } else if (u.pathname.startsWith('/@'))
+      params = { forHandle: u.pathname.split('/')[1] }
+    else if (u.pathname.startsWith('/user/'))
+      params = { forUsername: u.pathname.split('/')[2] }
+    // Legacy /c/ URLs have no official resolver. Ask for the current @handle.
+    else return undefined
   }
-
-  const feedUrl = channelFeedUrl(channelId)
-  const [info, feed] = await Promise.all([
-    attempt('loading the channel', { channelId }, () =>
-      channelInfo(channelId as string, videoCount)
-    ),
-    attempt('loading the channel feed', { feedUrl }, () =>
-      fetchChannelFeed(feedUrl)
-    ),
-  ])
-  if (!info.value && !feed.value && !page.title) {
-    if (info.failed || feed.failed) {
-      throw new YouTubeUnavailableError('YouTube did not answer')
-    }
-    return undefined
-  }
-
-  const feedVideos = feed.value ? videosFromFeed(feed.value) : []
-  const videos = feedVideos.length
-    ? feedVideos.filter((video) => !isShortsLink(video.url))
-    : info.value?.videos ?? []
-
+  const c = (
+    await youtubeList<ChannelResource>('channels', {
+      part: 'snippet,contentDetails',
+      ...params,
+    })
+  ).items[0]
+  if (!c) return undefined
+  const playlistId = c.contentDetails?.relatedPlaylists?.uploads
+  const items =
+    videoCount && playlistId
+      ? (
+          await youtubeList<{
+            contentDetails: { videoId: string; videoPublishedAt?: string }
+            snippet: { title: string }
+          }>('playlistItems', {
+            part: 'snippet,contentDetails',
+            playlistId,
+            maxResults: Math.min(videoCount, 50),
+          })
+        ).items
+      : []
   return {
-    channelId,
-    feedUrl,
-    title: info.value?.title || page.title || feed.value?.title || channelId,
-    handle: info.value?.handle || page.handle,
-    avatar: info.value?.avatar || page.avatar,
-    videos: videos.slice(0, videoCount),
-    uploadsPerWeek: uploadsPerWeek(
-      feedVideos
-        .map((video) => video.publishedAt)
-        .filter((date): date is Date => !!date)
-    ),
+    ...match(c),
+    videos: items.map((v) => ({
+      id: v.contentDetails.videoId,
+      title: v.snippet.title,
+      url: watchUrl(v.contentDetails.videoId),
+      thumbnail: videoThumbnail(v.contentDetails.videoId),
+      publishedAt: v.contentDetails.videoPublishedAt
+        ? new Date(v.contentDetails.videoPublishedAt)
+        : undefined,
+    })),
   }
 }
-
-const UNIT_MS: Record<string, number> = {
-  second: 1000,
-  minute: 60 * 1000,
-  hour: 60 * 60 * 1000,
-  day: 24 * 60 * 60 * 1000,
-  week: 7 * 24 * 60 * 60 * 1000,
-  month: 30 * 24 * 60 * 60 * 1000,
-  year: 365 * 24 * 60 * 60 * 1000,
+export const searchYouTubeChannels = async (query: string, limit = 6) =>
+  (await searchChannels(query, limit)).map(match)
+// Compatibility for older queued RSS jobs; new jobs use the official provider.
+export const channelUploads = async (id: string) => {
+  const channel = await resolveYouTubeChannel(channelFeedUrl(id), 50)
+  return channel && { title: channel.title, uploads: channel.videos }
 }
-
-// "3 hours ago" or "Streamed 2 days ago" as a date. YouTube only gives the app
-// interface relative times, so this is as close as it gets.
-export const dateFromAge = (age: string | undefined, now = Date.now()) => {
-  const match = age?.match(
-    /(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/i
-  )
-  if (!match) {
-    return undefined
-  }
-  return new Date(now - Number(match[1]) * UNIT_MS[match[2].toLowerCase()])
-}
-
-export type ChannelUpload = {
-  id: string
-  title: string
-  description?: string
-  publishedAt?: Date
-}
-
-// The channel's latest uploads from the app interface, for when its feed
-// can't be read. Shorts and live streams are on other tabs, so never here.
-export const channelUploads = async (
-  channelId: string
-): Promise<{ title: string; uploads: ChannelUpload[] } | undefined> => {
-  const channel = await innertube.getChannel(channelId)
-  if (!channel) {
-    return undefined
-  }
-  const videos = await channel.videos.next()
-  const now = Date.now()
-  return {
-    title: channel.name || channelId,
-    uploads: videos
-      .filter((video) => !video.isLive)
-      .map((video) => ({
-        id: video.id,
-        title: video.title,
-        description: video.description || undefined,
-        publishedAt: dateFromAge(video.uploadDate, now),
-      })),
-  }
-}
-
-// The IDs of a channel's latest long videos, so Shorts can be left out. Falls
-// back to undefined when YouTube doesn't answer, and callers then rely on the
-// /shorts/ link instead.
 export const longFormVideoIds = async (
-  channelId: string
-): Promise<Set<string> | undefined> => {
-  try {
-    const feed = await fetchChannelFeed(longFormFeedUrl(channelId))
-    return new Set(
-      feed.items
-        .map((item) => item['yt:videoId'] || videoIdFromYouTubeUrl(item.link))
-        .filter((id): id is string => !!id)
-    )
-  } catch (error) {
-    logger.info('youtube: long-form feed unavailable', { channelId, error })
-    return undefined
-  }
+  _id: string
+): Promise<Set<string> | undefined> => undefined
+export type YouTubeTranscriptLine = {
+  start: number
+  duration: number
+  text: string
 }
+// Public transcript extraction is deliberately retired. Preserve the old query
+// shape for older clients without fetching or serving cached scraped captions.
+export const getYouTubeTranscript = async (
+  _videoId: string,
+  _redis?: unknown
+): Promise<YouTubeTranscriptLine[]> => []
 
 const first = (value: unknown): unknown =>
   Array.isArray(value) ? value[0] : value
@@ -541,115 +226,4 @@ export const videoDocument = (args: {
   </div>
   </body>
 </html>`
-}
-
-export type YouTubeChannelMatch = {
-  channelId: string
-  feedUrl: string
-  title: string
-  handle?: string
-  avatar?: string
-  // As YouTube words it, such as "1.6M subscribers".
-  subscribers?: string
-}
-
-// Channels whose name matches what was typed, best match first, from
-// YouTube's own search.
-export const searchYouTubeChannels = async (
-  query: string,
-  limit = 6
-): Promise<YouTubeChannelMatch[]> => {
-  let result
-  try {
-    result = await innertube.search(query, { type: 'channel' })
-  } catch (error) {
-    logger.info('youtube: channel search failed', {
-      query,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    throw new YouTubeUnavailableError('YouTube did not answer')
-  }
-  return result.items
-    .filter((channel) => CHANNEL_ID.test(channel.id))
-    .slice(0, limit)
-    .map((channel) => {
-      const avatar = channel.thumbnails?.length
-        ? channel.thumbnails.best
-        : undefined
-      return {
-        channelId: channel.id,
-        feedUrl: channelFeedUrl(channel.id),
-        title: channel.name || channel.id,
-        handle: channel.handle || undefined,
-        // Search gives protocol-relative picture links.
-        avatar: avatar?.startsWith('//') ? `https:${avatar}` : avatar,
-        subscribers: channel.subscriberCount || undefined,
-      }
-    })
-}
-
-export type YouTubeTranscriptLine = {
-  start: number
-  duration: number
-  text: string
-}
-
-const TRANSCRIPT_TTL = 7 * 24 * 60 * 60
-// Videos without captions are asked about again a day later; captions are
-// often added after upload.
-const NO_TRANSCRIPT_TTL = 24 * 60 * 60
-
-// A video's captions as lines with start times in seconds. Fetched from
-// YouTube once and kept in Redis, so every visit after the first is instant.
-export const getYouTubeTranscript = async (
-  videoId: string,
-  redis?: {
-    get: (key: string) => Promise<string | null>
-    set: (
-      key: string,
-      value: string,
-      mode: 'EX',
-      ttl: number
-    ) => Promise<unknown>
-  }
-): Promise<YouTubeTranscriptLine[]> => {
-  const key = `youtube-transcript:${videoId}`
-  const cached = await redis?.get(key).catch(() => null)
-  if (cached) {
-    try {
-      return JSON.parse(cached) as YouTubeTranscriptLine[]
-    } catch {
-      // Fetch it again below.
-    }
-  }
-
-  let captions
-  try {
-    captions = await innertube.getVideoTranscript(videoId)
-  } catch (error) {
-    logger.info('youtube: transcript failed', {
-      videoId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    throw new YouTubeUnavailableError('YouTube did not answer')
-  }
-  const lines = (captions ?? [])
-    .map((caption) => ({
-      start: Math.max(0, (caption.start || 0) / 1000),
-      duration: Math.max(0, (caption.duration || 0) / 1000),
-      text: _.unescape(caption.text || '')
-        .replace(/\s+/g, ' ')
-        .trim(),
-    }))
-    .filter((line) => line.text)
-
-  await redis
-    ?.set(
-      key,
-      JSON.stringify(lines),
-      'EX',
-      lines.length ? TRANSCRIPT_TTL : NO_TRANSCRIPT_TTL
-    )
-    .catch(() => undefined)
-  return lines
 }

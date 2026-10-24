@@ -1572,7 +1572,7 @@
     "@babel/helper-create-regexp-features-plugin" "^7.29.7"
     "@babel/helper-plugin-utils" "^7.29.7"
 
-"@babel/preset-env@^7.12.11", "@babel/preset-env@^7.16.11":
+"@babel/preset-env@^7.12.11", "@babel/preset-env@^7.16.11", "@babel/preset-env@^7.17.7":
   version "7.29.7"
   resolved "https://registry.yarnpkg.com/@babel/preset-env/-/preset-env-7.29.7.tgz#5e2ab5e764b493fdefc99c43aeaa70a9533a37fd"
   integrity sha512-GYzX36n1nsciIb0uyH0GHwxwtNwPQIcpxSeiVLDtG/B7jB5xXgchnmL1f/jCX5o+pwnaDBtO60ONSJhEBJfxYA==
@@ -1949,6 +1949,11 @@
   version "0.5.7"
   resolved "https://registry.yarnpkg.com/@discoveryjs/json-ext/-/json-ext-0.5.7.tgz#1d572bfbbe14b7704e0ba0f39b74815b84870d70"
   integrity sha512-dBVuXR082gk3jsFp7Rd/JI4kytwGHecnCoTtXFb7DB6CNHp4rg5k1bhg0nWdLGLnOV71lmDzGQaLMy8iPLY0pw==
+
+"@electric-sql/pglite@^0.5.11":
+  version "0.5.11"
+  resolved "https://registry.yarnpkg.com/@electric-sql/pglite/-/pglite-0.5.11.tgz#c03add178a12cefe7b050759bc3a8e3f19994026"
+  integrity sha512-SWuqsTjA4DDWqgZ05PC1RJaq8e00p5KACxbqaikDFQ8dIGA0SLRzuPniky7IW+q/c5RDNMdEXwv7mFBWIx9Hxw==
 
 "@emnapi/core@1.10.0":
   version "1.10.0"
@@ -22686,7 +22691,7 @@ node-fetch@2.6.7:
   dependencies:
     whatwg-url "^5.0.0"
 
-node-fetch@2.7.0, node-fetch@^2.6.0, node-fetch@^2.6.1, node-fetch@^2.6.7, node-fetch@^2.6.9, node-fetch@^2.7.0:
+node-fetch@^2.6.0, node-fetch@^2.6.1, node-fetch@^2.6.7, node-fetch@^2.6.9, node-fetch@^2.7.0:
   version "2.7.0"
   resolved "https://registry.yarnpkg.com/node-fetch/-/node-fetch-2.7.0.tgz#d0f0fa6e3e2dc1d27efcd8ad99d550bda94d187d"
   integrity sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==
@@ -25123,13 +25128,6 @@ proto3-json-serializer@^4.0.0:
   integrity sha512-VUQlb/J2WjOG8BKhdLwJUz+MKxSMtBGYh+TaNmRtiYVhlIzXjzeAGIx7gtc3lXlA2iURzfF2+cXaQvC2ofwzpg==
   dependencies:
     protobufjs "^7.5.4"
-
-protobufjs@8.4.0:
-  version "8.4.0"
-  resolved "https://registry.yarnpkg.com/protobufjs/-/protobufjs-8.4.0.tgz#57664ab3f835ec6e326fd9a98178da132b8b7240"
-  integrity sha512-iriNhQ57SYA5Jbdi+41AyPdx6jPPkFO7DODzkOBmqFhgYn/JzX2HxgxYPY18eQAs3CP/AWqtPvkWn8rclRAxdQ==
-  dependencies:
-    long "^5.3.2"
 
 protobufjs@^7.2.5, protobufjs@^7.3.2, protobufjs@^7.4.0, protobufjs@^7.5.3, protobufjs@^7.5.4, protobufjs@^7.5.5:
   version "7.6.6"
@@ -31206,14 +31204,6 @@ yocto-queue@^1.0.0:
   version "1.2.2"
   resolved "https://registry.yarnpkg.com/yocto-queue/-/yocto-queue-1.2.2.tgz#3e09c95d3f1aa89a58c114c99223edf639152c00"
   integrity sha512-4LCcse/U2MHZ63HAJVE+v71o7yOdIe4cZ70Wpf8D/IyjDKYQLV5GD46B+hSTjJsvV5PztjvHoU580EftxjDZFQ==
-
-youtubei@^1.5.4:
-  version "1.8.16"
-  resolved "https://registry.yarnpkg.com/youtubei/-/youtubei-1.8.16.tgz#297c3bd6863d9c332a98968ab599864fddb1d9be"
-  integrity sha512-/CczIe/jjrNoT9Z2gf2jm6BAOUa91lJSP0IF1c4NSoMFWUPUxd0tQSj4Af6OE0SZAiU4dbph85/eUSJGnSwaxw==
-  dependencies:
-    node-fetch "2.7.0"
-    protobufjs "8.4.0"
 
 yup@^0.32.0:
   version "0.32.11"

@@ -46,7 +46,6 @@ import { useMediaQuery } from '../feeds/feedRowParts'
 import { ExtraTab, VideoTabs } from '../feeds/VideoPeek'
 import { CollectionDot } from './Collections'
 import { SubscribeChannel } from './SubscribeChannel'
-import { Transcript } from './Transcript'
 import { WatchViewingControls } from './WatchViewingControls'
 
 const Page = styled('main', {
@@ -696,6 +695,20 @@ export function WatchPlayerPage(props: {
           <ArrowLeft size={14} /> Watch
         </Back>
         <Slot ref={slotRef} data-theatre={theatre} />
+        {player.playbackError && (
+          <div role="alert">
+            <p>{player.playbackError}</p>
+            <Action onClick={() => player.play(item)}>Try again</Action>
+            <Action
+              as="a"
+              href={item.originalArticleUrl || item.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open on YouTube
+            </Action>
+          </div>
+        )}
         <WatchViewingControls
           theatre={theatre}
           onToggleTheatre={toggleTheatre}
@@ -767,23 +780,6 @@ export function WatchPlayerPage(props: {
             playing={player.state.playing}
             onSeek={player.seek}
             extra={phoneTabs}
-            after={
-              videoId
-                ? [
-                    {
-                      id: 'transcript',
-                      label: 'Transcript',
-                      content: (
-                        <Transcript
-                          videoId={videoId}
-                          time={player.state.time}
-                          onSeek={player.seek}
-                        />
-                      ),
-                    },
-                  ]
-                : []
-            }
           />
         </Body>
       </div>

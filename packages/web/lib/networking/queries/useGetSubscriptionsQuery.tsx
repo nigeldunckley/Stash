@@ -34,7 +34,11 @@ export type Subscription = {
 
   fetchContentType?: FetchContentType
   // YouTube channels: whether Shorts come in with the videos.
-  includeShorts?: boolean
+  hideShortVideos?: boolean
+  youtubeImported?: boolean
+  youtubeManualFollow?: boolean
+  youtubeExcluded?: boolean
+  youtubeChannelId?: string
   collectionId?: string | null
 } & (
   | {
@@ -87,6 +91,11 @@ export function useGetSubscriptionsQuery(
             updatedAt
             lastFetchedAt
             fetchContentType
+            hideShortVideos
+            youtubeImported
+            youtubeManualFollow
+            youtubeExcluded
+            youtubeChannelId
             mostRecentItemDate
             failedAt
           }

@@ -25,6 +25,7 @@ import { contentRouter } from './routers/content_router'
 import { digestRouter } from './routers/digest_router'
 import { explainRouter } from './routers/explain_router'
 import { exportRouter } from './routers/export_router'
+import { youtubeRouter } from './routers/youtube_router'
 import { integrationRouter } from './routers/integration_router'
 import { localDebugRouter } from './routers/local_debug_router'
 import { notificationRouter } from './routers/notification_router'
@@ -107,6 +108,7 @@ export const createApp = (): Express => {
   app.use('/api/text-to-speech', textToSpeechRouter())
   app.use('/api/notification', notificationRouter())
   app.use('/api/integration', integrationRouter())
+  app.use('/api/youtube', youtubeRouter())
   app.use('/api/tasks', taskRouter())
   app.use('/api/digest', digestRouter())
   app.use('/api/content', contentRouter())

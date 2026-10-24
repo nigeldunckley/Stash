@@ -336,7 +336,9 @@ export const deleteAccountResolver = authorized<
   DeleteAccountSuccess,
   DeleteAccountError,
   MutationDeleteAccountArgs
->(async (_, { userID }, { log }) => {
+>(async (_, { userID }, { uid, log }) => {
+  if (userID !== uid)
+    return { errorCodes: [DeleteAccountErrorCode.Unauthorized] }
   // soft delete user and change email address for user to sign up again
   const result = await softDeleteUser(userID)
   if (!result.affected) {

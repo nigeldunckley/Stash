@@ -1,3 +1,4 @@
+import { youtubeRequest } from '../networking/subscriptions/youtubeConnection'
 // One YouTube player for the whole app. The player page gives it a slot to
 // sit over; anywhere else it shrinks to a mini player, so a video keeps
 // playing while you read or triage feeds. The iframe is never moved in the
@@ -40,6 +41,7 @@ export type PlayerState = {
 }
 
 type Player = {
+  playbackError?: string
   item?: LibraryItemNode
   state: PlayerState
   queue: LibraryItemNode[]
@@ -119,6 +121,10 @@ export function WatchPlayerProvider(props: { children: ReactNode }) {
   const [autoplay, setAutoplayState] = useState(true)
   const [slot, setSlot] = useState<HTMLElement | null>(null)
   const [src, setSrc] = useState<string>()
+  const [playbackError, setPlaybackError] = useState<string>()
+  const trackingAllowed = useRef(false)
+  const playbackAuthorized = useRef(false)
+  const playRequest = useRef(0)
   const frame = useRef<HTMLIFrameElement>(null)
   const ready = useRef(false)
 
@@ -141,7 +147,7 @@ export function WatchPlayerProvider(props: { children: ReactNode }) {
   latest.current = { item, state }
   const savePosition = useCallback(() => {
     const { item, state } = latest.current
-    if (!item || !state.duration) return
+    if (!item || !state.duration || !trackingAllowed.current) return
     if (Math.abs(state.time - saved.current.time) < 2) return
     saved.current = { id: item.id, time: state.time }
     saveVideoPosition(item.id, state.time, state.duration).catch(
@@ -153,37 +159,76 @@ export function WatchPlayerProvider(props: { children: ReactNode }) {
     (next: LibraryItemNode) => {
       const videoId = videoIdFromUrl(next.originalArticleUrl || next.url)
       if (!videoId) return
-      if (latest.current.item?.id == next.id) {
+      if (
+        latest.current.item?.id == next.id &&
+        !playbackError &&
+        playbackAuthorized.current
+      ) {
         post('playVideo')
         return
       }
       savePosition()
-      const start = Math.floor(startFor(next))
-      saved.current = { id: next.id, time: start }
+      post('pauseVideo')
+      trackingAllowed.current = false
+      playbackAuthorized.current = false
+      setPlaybackError(undefined)
+      const request = ++playRequest.current
       setItem(next)
-      setState({ ...IDLE, time: start, rate: rateFor(next) })
-      markItemsSeen([next.id]).catch(() => undefined)
-      if (ready.current && frame.current) {
-        post('loadVideoById', [{ videoId, startSeconds: start }])
-      } else {
-        const params = new URLSearchParams({
-          autoplay: '1',
-          playsinline: '1',
-          rel: '0',
-          enablejsapi: '1',
-          origin: window.location.origin,
+      setState(IDLE)
+      youtubeRequest<{
+        youtubeAvailable: boolean
+        youtubeEmbeddable: boolean
+        youtubeMadeForKids: boolean
+      }>(`video/${videoId}`)
+        .then((flags) => {
+          if (playRequest.current !== request) return
+          if (!flags.youtubeAvailable || !flags.youtubeEmbeddable) {
+            setPlaybackError('This video can’t play here. Open it on YouTube.')
+            return
+          }
+          playbackAuthorized.current = true
+          trackingAllowed.current = !flags.youtubeMadeForKids
+          const start = trackingAllowed.current ? Math.floor(startFor(next)) : 0
+          saved.current = { id: next.id, time: start }
+          setState({
+            ...IDLE,
+            time: start,
+            rate: trackingAllowed.current ? rateFor(next) : 1,
+          })
+          if (trackingAllowed.current)
+            markItemsSeen([next.id]).catch(() => undefined)
+          if (ready.current && frame.current) {
+            post('loadVideoById', [{ videoId, startSeconds: start }])
+          } else {
+            const params = new URLSearchParams({
+              autoplay: '1',
+              playsinline: '1',
+              rel: '0',
+              enablejsapi: '1',
+              origin: window.location.origin,
+            })
+            if (start > 0) params.set('start', String(start))
+            setSrc(`${PLAYER_ORIGIN}/embed/${videoId}?${params}`)
+          }
         })
-        if (start > 0) params.set('start', String(start))
-        setSrc(`${PLAYER_ORIGIN}/embed/${videoId}?${params}`)
-      }
+        .catch(() => {
+          if (playRequest.current === request)
+            setPlaybackError(
+              'Couldn’t check this video. Try again or open it on YouTube.'
+            )
+        })
     },
-    [post, savePosition]
+    [post, savePosition, playbackError]
   )
 
   const close = useCallback(() => {
     savePosition()
     post('pauseVideo')
     ready.current = false
+    playRequest.current++
+    trackingAllowed.current = false
+    playbackAuthorized.current = false
+    setPlaybackError(undefined)
     setItem(undefined)
     setSrc(undefined)
     setState(IDLE)
@@ -204,6 +249,7 @@ export function WatchPlayerProvider(props: { children: ReactNode }) {
       JSON.stringify({ event: 'listening', id: 'stash' }),
       PLAYER_ORIGIN
     )
+    post('addEventListener', ['onError'])
   }
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -228,10 +274,20 @@ export function WatchPlayerProvider(props: { children: ReactNode }) {
       } catch {
         return
       }
+      if (data?.event === 'onError') {
+        setPlaybackError(
+          'YouTube could not play this video here. Open it on YouTube.'
+        )
+        playbackAuthorized.current = false
+        trackingAllowed.current = false
+        setState((current) => ({ ...current, playing: false }))
+        return
+      }
       if (data?.event == 'onReady') {
         // Apply the channel's speed as soon as the player can take it.
         const item = latest.current.item
-        if (item) post('setPlaybackRate', [rateFor(item)])
+        if (item)
+          post('setPlaybackRate', [trackingAllowed.current ? rateFor(item) : 1])
         return
       }
       const info = data?.info
@@ -258,7 +314,7 @@ export function WatchPlayerProvider(props: { children: ReactNode }) {
   // counts as watched; at the end the next one starts.
   const watched = useRef(new Set<string>())
   useEffect(() => {
-    if (!item) return
+    if (!item || !trackingAllowed.current) return
     positions.set(item.id, state.time)
     if (Math.abs(state.time - saved.current.time) >= 10) savePosition()
     if (
@@ -289,13 +345,17 @@ export function WatchPlayerProvider(props: { children: ReactNode }) {
     }
   }, [savePosition])
 
-  const toggle = useCallback(
-    () => post(latest.current.state.playing ? 'pauseVideo' : 'playVideo'),
-    [post]
-  )
-  const pause = useCallback(() => post('pauseVideo'), [post])
+  const toggle = useCallback(() => {
+    if (playbackAuthorized.current)
+      post(latest.current.state.playing ? 'pauseVideo' : 'playVideo')
+  }, [post])
+  const pause = useCallback(() => {
+    playRequest.current++
+    post('pauseVideo')
+  }, [post])
   const seek = useCallback(
     (seconds: number) => {
+      if (!playbackAuthorized.current) return
       const target = Math.max(0, seconds)
       post('seekTo', [target, true])
       post('playVideo')
@@ -312,7 +372,7 @@ export function WatchPlayerProvider(props: { children: ReactNode }) {
       post('setPlaybackRate', [rate])
       setState((current) => ({ ...current, rate }))
       const item = latest.current.item
-      if (item) {
+      if (item && trackingAllowed.current) {
         const rates = readStore<Record<string, number>>(RATES_KEY, {})
         writeStore(RATES_KEY, { ...rates, [channelKey(item)]: rate })
       }
@@ -322,6 +382,7 @@ export function WatchPlayerProvider(props: { children: ReactNode }) {
 
   const value = useMemo<Player>(
     () => ({
+      playbackError,
       item,
       state,
       queue,
@@ -340,6 +401,7 @@ export function WatchPlayerProvider(props: { children: ReactNode }) {
       setSlot,
     }),
     [
+      playbackError,
       item,
       state,
       queue,

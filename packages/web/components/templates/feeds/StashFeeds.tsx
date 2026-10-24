@@ -1,3 +1,4 @@
+import { YouTubeConnection } from '../watch/YouTubeConnection'
 import {
   Archive,
   ArrowSquareOut,
@@ -1999,6 +2000,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
           <DiscoverPill />
         )}
       </Tabs>
+      {watching && <YouTubeConnection compact />}
       <Panes
         peeking={!!peekItem}
         inline={!!peekItem && peekInline}

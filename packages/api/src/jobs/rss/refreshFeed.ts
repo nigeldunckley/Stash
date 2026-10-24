@@ -1,3 +1,4 @@
+import { refreshChannel } from '../../services/youtube/ingestion'
 import axios from 'axios'
 import crypto from 'crypto'
 import { parseHTML } from 'linkedom'
@@ -1164,6 +1165,11 @@ const youtubeUploadsFeed = async (feedUrl: string, channelId: string) => {
 }
 
 export const _refreshFeed = async (request: RefreshFeedRequest) => {
+  const youtubeId = channelIdFromFeedUrl(request.feedUrl)
+  if (youtubeId) {
+    await refreshChannel(youtubeId)
+    return true
+  }
   const {
     feedUrl,
     subscriptionIds,

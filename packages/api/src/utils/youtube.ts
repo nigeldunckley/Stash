@@ -7,17 +7,22 @@ export const videoIdFromYouTubeUrl = (
     return undefined
   }
 
-  const url = new URL(urlString)
-  if (
-    !url.hostname.endsWith('youtube.com') &&
-    !url.hostname.endsWith('youtu.be')
-  ) {
+  let url: URL
+  try {
+    url = new URL(urlString)
+  } catch {
     return undefined
   }
+  if (!/(^|\.)youtube\.com$/.test(url.hostname) && url.hostname !== 'youtu.be')
+    return undefined
+  const pathId = url.pathname.match(
+    /^\/(?:shorts|live)\/([\w-]{11})(?:\/|$)/
+  )?.[1]
+  if (pathId) return pathId
 
   const videoId = url.searchParams.get('v')
   if (videoId) {
-    return videoId || undefined
+    return /^[\w-]{11}$/.test(videoId) ? videoId : undefined
   }
 
   const parsed = (() => {

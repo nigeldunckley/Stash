@@ -67,6 +67,7 @@ import { getAbsoluteUrl, keysToCamelCase } from '../../utils/helpers'
 import { Feed, parseFeed, parseOpml, rssParserConfig } from '../../utils/parser'
 import {
   channelIdFromFeedUrl,
+  channelFeedUrl,
   isYouTubeUrl,
   resolveYouTubeChannel,
   searchYouTubeChannels,
@@ -244,7 +245,8 @@ export const subscribeResolver = authorized<
       },
     })
     // use user provided url
-    const feedUrl = input.url
+    const youtubeId = channelIdFromFeedUrl(input.url)
+    const feedUrl = youtubeId ? channelFeedUrl(youtubeId) : input.url
     try {
       validateUrl(feedUrl)
     } catch (error) {
@@ -257,9 +259,9 @@ export const subscribeResolver = authorized<
 
     // validate rss feed. A YouTube channel can be followed even when its feed
     // is briefly unavailable, as long as YouTube knows the channel.
-    const feed =
-      (await parseFeed(feedUrl)) ||
-      (channelIdFromFeedUrl(feedUrl) ? await youtubeChannelFeed(feedUrl) : null)
+    const feed = channelIdFromFeedUrl(feedUrl)
+      ? await youtubeChannelFeed(feedUrl)
+      : await parseFeed(feedUrl)
     if (!feed) {
       return {
         errorCodes: [SubscribeErrorCode.NotFound],
@@ -282,6 +284,16 @@ export const subscribeResolver = authorized<
       type: SubscriptionType.Rss,
     })
     if (existingSubscription) {
+      if (channelIdFromFeedUrl(feedUrl)) {
+        await getRepository(Subscription).update(
+          { id: existingSubscription.id, user: { id: uid } },
+          {
+            youtubeManualFollow: true,
+            youtubeExcluded: false,
+            youtubeChannelId: channelIdFromFeedUrl(feedUrl),
+          }
+        )
+      }
       if (existingSubscription.status === SubscriptionStatus.Active) {
         return {
           errorCodes: [SubscribeErrorCode.AlreadySubscribed],
@@ -296,8 +308,11 @@ export const subscribeResolver = authorized<
           : existingSubscription.fetchContentType,
         folder: input.folder ?? existingSubscription.folder,
         isPrivate: input.isPrivate,
-        includeShorts:
-          input.includeShorts ?? existingSubscription.includeShorts,
+        hideShortVideos:
+          input.hideShortVideos ?? existingSubscription.hideShortVideos,
+        youtubeManualFollow: true,
+        youtubeExcluded: false,
+        youtubeChannelId: channelIdFromFeedUrl(feedUrl),
         collectionId:
           (await ownCollectionId(uid, input.collectionId)) ||
           existingSubscription.collectionId,
@@ -356,6 +371,17 @@ export const subscribeResolver = authorized<
 
     // convert to camel case
     const newSubscription = keysToCamelCase(results[0]) as Subscription
+
+    if (channelIdFromFeedUrl(feedUrl)) {
+      await getRepository(Subscription).update(
+        { id: newSubscription.id, user: { id: uid } },
+        {
+          youtubeChannelId: channelIdFromFeedUrl(feedUrl),
+          youtubeManualFollow: true,
+          hideShortVideos: input.hideShortVideos ?? false,
+        }
+      )
+    }
 
     // create a cloud task to fetch rss feed item for the new subscription
     await enqueueRssFeedFetch({

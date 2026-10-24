@@ -55,6 +55,15 @@ export class LibraryItem {
   })
   state!: LibraryItemState
 
+  @Column('boolean', { nullable: true })
+  youtubeMadeForKids?: boolean | null
+  @Column('boolean', { nullable: true })
+  youtubeEmbeddable?: boolean | null
+  @Column('boolean', { nullable: true })
+  youtubeAvailable?: boolean | null
+  @Column('timestamptz', { nullable: true })
+  youtubeMetadataAt?: Date | null
+
   @Column('text')
   originalUrl!: string
 

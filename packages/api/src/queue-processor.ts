@@ -1,3 +1,9 @@
+import {
+  youtubeMaintenance,
+  refreshChannel,
+  renewPush,
+} from './services/youtube/ingestion'
+import { syncSubscriptions } from './services/youtube/connection'
 /* eslint-disable @typescript-eslint/no-floating-promises */
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable @typescript-eslint/require-await */
@@ -168,6 +174,20 @@ export const createWorker = (connection: ConnectionOptions) =>
     async (job: Job) => {
       const executeJob = async (job: Job) => {
         switch (job.name) {
+          case 'youtube-renew-push':
+            return renewPush(job.data.channelId as string)
+          case 'youtube-maintenance':
+            return youtubeMaintenance()
+          case 'youtube-sync-user':
+            return syncSubscriptions(job.data.userId as string)
+          case 'youtube-refresh-channel':
+            return refreshChannel(job.data.channelId as string)
+          case 'youtube-notification':
+            return refreshChannel(
+              job.data.channelId as string,
+              job.data.videoId as string
+            )
+
           case 'refresh-all-feeds': {
             // Skip a sweep while the queue is still working through a backlog,
             // so a slow run can't pile checks up behind it. A feed whose check
@@ -272,6 +292,12 @@ const setupCronJobs = async () => {
     logger.error('Unable to setup cron jobs. Queue is not available.')
     return
   }
+
+  await queue.upsertJobScheduler(
+    'youtube-maintenance',
+    { every: 5 * 60 * 1000 },
+    { opts: { attempts: 3, backoff: { type: 'exponential', delay: 30000 } } }
+  )
 
   await queue.upsertJobScheduler(
     SYNC_READ_POSITIONS_JOB_NAME,
