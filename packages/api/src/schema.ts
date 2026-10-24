@@ -3009,6 +3009,72 @@ const schema = gql`
     errorCodes: [YouTubeChannelErrorCode!]!
   }
 
+  # A video on Watch › Discover, with the reason it's there.
+  type WatchDiscoverVideo {
+    videoId: String!
+    title: String!
+    url: String!
+    thumbnail: String!
+    duration: Int
+    age: String
+    views: Float
+    channelId: String
+    channelName: String
+    channelAvatar: String
+    subscribed: Boolean!
+    reason: String!
+    reasonKind: String!
+    score: Float!
+  }
+
+  # A channel you don't follow whose videos keep turning up beside yours.
+  type WatchDiscoverChannel {
+    channelId: String!
+    name: String!
+    avatar: String
+    feedUrl: String!
+    videoCount: Int!
+    reason: String!
+    sampleTitles: [String!]!
+  }
+
+  union WatchDiscoverResult = WatchDiscoverSuccess | WatchDiscoverError
+
+  type WatchDiscoverSuccess {
+    picks: [WatchDiscoverVideo!]!
+    channels: [WatchDiscoverChannel!]!
+    builtAt: Date!
+    seeds: Int!
+  }
+
+  enum WatchDiscoverErrorCode {
+    UNAUTHORIZED
+    BAD_REQUEST
+  }
+
+  type WatchDiscoverError {
+    errorCodes: [WatchDiscoverErrorCode!]!
+  }
+
+  input DismissWatchDiscoverVideoInput {
+    videoId: String!
+    channelId: String
+    # true takes a "Not for me" back
+    restore: Boolean
+  }
+
+  union DismissWatchDiscoverVideoResult =
+      DismissWatchDiscoverVideoSuccess
+    | DismissWatchDiscoverVideoError
+
+  type DismissWatchDiscoverVideoSuccess {
+    videoId: String!
+  }
+
+  type DismissWatchDiscoverVideoError {
+    errorCodes: [WatchDiscoverErrorCode!]!
+  }
+
   # A feed Stash suggests because your reading keeps leading to it.
   type FeedSuggestion {
     id: ID!
@@ -3774,6 +3840,9 @@ const schema = gql`
       input: UpdateFeedSuggestionInput!
     ): UpdateFeedSuggestionResult!
     refreshFeedSuggestions: RefreshFeedSuggestionsResult!
+    dismissWatchDiscoverVideo(
+      input: DismissWatchDiscoverVideoInput!
+    ): DismissWatchDiscoverVideoResult!
     setFeedSuggestionsEnabled(
       enabled: Boolean!
     ): SetFeedSuggestionsEnabledResult!
@@ -3914,6 +3983,7 @@ const schema = gql`
     youtubeChannel(url: String!): YouTubeChannelResult!
     youtubeChannelSearch(query: String!): YouTubeChannelSearchResult!
     youtubeTranscript(videoId: String!): YouTubeTranscriptResult!
+    watchDiscover(refresh: Boolean): WatchDiscoverResult!
     feedSuggestions(
       statuses: [FeedSuggestionStatus!]
       first: Int

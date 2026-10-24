@@ -2,7 +2,7 @@ import axios from 'axios'
 import { parseHTML } from 'linkedom'
 import Parser from 'rss-parser'
 import _ from 'underscore'
-import { Client as InnerTube } from 'youtubei'
+import { Client as InnerTube, VideoCompact } from 'youtubei'
 import { logger } from './logger'
 import { videoIdFromYouTubeUrl } from './youtube'
 
@@ -652,4 +652,80 @@ export const getYouTubeTranscript = async (
     )
     .catch(() => undefined)
   return lines
+}
+
+export type YouTubeRelatedVideo = {
+  id: string
+  title: string
+  // seconds; undefined when YouTube didn't say
+  duration?: number
+  // As YouTube words it, such as "3 weeks ago".
+  age?: string
+  views?: number
+  channelId?: string
+  channelName?: string
+  channelAvatar?: string
+}
+
+const RELATED_TTL = 24 * 60 * 60
+
+// The videos YouTube lists beside a video when you watch it ("Up next"),
+// without signing in. Kept in Redis for a day, so building Watch › Discover
+// asks YouTube about each video at most once a day.
+export const relatedYouTubeVideos = async (
+  videoId: string,
+  redis?: {
+    get: (key: string) => Promise<string | null>
+    set: (
+      key: string,
+      value: string,
+      mode: 'EX',
+      ttl: number
+    ) => Promise<unknown>
+  }
+): Promise<YouTubeRelatedVideo[]> => {
+  const key = `youtube-related:${videoId}`
+  const cached = await redis?.get(key).catch(() => null)
+  if (cached) {
+    try {
+      return JSON.parse(cached) as YouTubeRelatedVideo[]
+    } catch {
+      // Fetch it again below.
+    }
+  }
+
+  let video
+  try {
+    video = await innertube.getVideo(videoId)
+  } catch (error) {
+    logger.info('youtube: related videos failed', {
+      videoId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    throw new YouTubeUnavailableError('YouTube did not answer')
+  }
+  const related = (video?.related.items ?? [])
+    // Playlists and mixes have no single video to play.
+    .filter((item): item is VideoCompact => item instanceof VideoCompact)
+    .filter((item) => !item.isLive && !item.isShort && !!item.id)
+    .map((item) => {
+      const avatar = item.channel?.thumbnails?.length
+        ? item.channel.thumbnails.best
+        : undefined
+      return {
+        id: item.id,
+        title: item.title,
+        duration: item.duration ?? undefined,
+        age: item.uploadDate || undefined,
+        views: item.viewCount ?? undefined,
+        channelId: item.channel?.id || undefined,
+        channelName: item.channel?.name || undefined,
+        channelAvatar: avatar?.startsWith('//') ? `https:${avatar}` : avatar,
+      }
+    })
+
+  await redis
+    ?.set(key, JSON.stringify(related), 'EX', RELATED_TTL)
+    .catch(() => undefined)
+  return related
 }
