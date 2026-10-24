@@ -9,6 +9,9 @@ struct SettingsView: View {
   @AppStorage("sounds") private var sounds = false
   @AppStorage("watchOnLeave") private var onLeave = "mini"
   @AppStorage("watchOnSwitch") private var onSwitch = "float"
+  /// Kept with your account (watch.hideShorts), so the server leaves Shorts out everywhere.
+  @State private var hideShorts = true
+  @State private var shortsLoaded = false
   @Environment(\.openURL) private var openURL
 
   var body: some View {
@@ -59,6 +62,20 @@ struct SettingsView: View {
                 .controlSize(.small)
             }
           }
+
+          SettingsGroup(
+            "Watch",
+            footer: "Shorts from the channels you follow stay out of Watch, Home and their counts. Shorts you save yourself still show. A Short is a vertical video of three minutes or less."
+          ) {
+            SettingsRow("Hide Shorts", divider: false) {
+              Toggle("Hide Shorts", isOn: Binding(get: { hideShorts }, set: { setHideShorts($0) }))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .tint(Color.stAccent)
+                .controlSize(.small)
+            }
+          }
+          .disabled(!shortsLoaded)
 
           SettingsGroup("Watch: when you leave a playing video") {
             SettingsChoice("Keep playing in the mini player", detail: "It sits in the corner until you close it.", value: "mini", selection: $onLeave)
@@ -128,6 +145,11 @@ struct SettingsView: View {
       .confirmationDialog("Sign out of Stash?", isPresented: $confirmSignOut) {
         Button("Sign out", role: .destructive) { session.signOut() }
       }
+      .task {
+        guard let fields = try? await Personalization.fields() else { return }
+        hideShorts = (fields["watch"] as? [String: Any])?["hideShorts"] as? Bool != false
+        shortsLoaded = true
+      }
     }
   }
 
@@ -143,6 +165,24 @@ struct SettingsView: View {
   /// A setting kept with The Edition on your account, shared with the web app.
   private func setting<Value>(_ key: String, _ value: Value) -> Binding<Value> {
     Binding(get: { value }, set: { newValue in Task { await edition.set(key, newValue) } })
+  }
+
+  /// Saves the switch with your account, keeping Watch's other settings, then refreshes the lists.
+  private func setHideShorts(_ value: Bool) {
+    let previous = hideShorts
+    hideShorts = value
+    Task {
+      do {
+        try await Personalization.update("watch") { current in
+          var watch = current as? [String: Any] ?? [:]
+          watch["hideShorts"] = value
+          return watch
+        }
+        LibraryChanges.shared.publish()
+      } catch {
+        hideShorts = previous
+      }
+    }
   }
 
   private static var version: String {

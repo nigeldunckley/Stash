@@ -324,10 +324,6 @@ struct WatchView: View {
         }
         if let channel {
           Section(channel.name) {
-            Toggle("Include Shorts", isOn: Binding(
-              get: { channel.includeShorts ?? false },
-              set: { value in updateChannel(channel, includeShorts: value) }
-            ))
             if !collections.isEmpty {
               Picker("Collection", selection: Binding(
                 get: { channel.collectionId ?? "" },
@@ -402,10 +398,10 @@ struct WatchView: View {
     unseenByChannel = await counts
   }
 
-  private func updateChannel(_ target: Subscription, collectionId: String? = nil, includeShorts: Bool? = nil) {
+  private func updateChannel(_ target: Subscription, collectionId: String? = nil) {
     Task {
       do {
-        try await Watch.updateChannel(target.id, collectionId: collectionId, includeShorts: includeShorts)
+        try await Watch.updateChannel(target.id, collectionId: collectionId)
         subscriptions = (try? await Library.subscriptions()) ?? subscriptions
         channel = subscriptions.first { $0.id == target.id }
         await list.reload(query)
