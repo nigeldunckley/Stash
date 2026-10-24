@@ -149,15 +149,25 @@ const overwriteItemPropertiesInCache = (
   }
 }
 
+// A YouTube video link; the server saves these as videos, which list in
+// Watch (type:video) rather than Read (-type:video).
+const YOUTUBE_VIDEO_URL =
+  /^https?:\/\/((www|m)\.)?(youtube\.com\/(watch\?([^#]*&)?v=|shorts\/|live\/|embed\/|v\/)|youtu\.be\/)[\w-]{11}/i
+
 export const insertItemInCache = (
   queryClient: QueryClient,
   itemId: string,
   url: string
 ) => {
+  const isVideo = YOUTUBE_VIDEO_URL.test(url)
   const keys = queryClient
     .getQueryCache()
     .findAll({ queryKey: ['libraryItems'] })
   keys.forEach((query) => {
+    const search = String(query.queryKey[2] ?? '')
+    const wantsVideos = /(^|\s)type:video\b/i.test(search)
+    const skipsVideos = /(^|\s)-type:video\b/i.test(search)
+    if (isVideo ? skipsVideos : wantsVideos) return
     queryClient.setQueryData(query.queryKey, (data: any) => {
       if (!data) return data
       if (data.pages.length > 0) {
@@ -177,7 +187,7 @@ export const insertItemInCache = (
               folder: 'inbox',
               ownedByViewer: true,
               state: State.PROCESSING,
-              pageType: PageType.UNKNOWN,
+              pageType: isVideo ? PageType.VIDEO : PageType.UNKNOWN,
               createdAt: new Date().toISOString(),
             },
           },

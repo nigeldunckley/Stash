@@ -1,12 +1,69 @@
+import axios from 'axios'
 import { parseHTML } from 'linkedom'
+import { LibraryItem } from '../entity/library_item'
 import {
   findLibraryItemById,
   updateLibraryItem,
 } from '../services/library_item'
 import { publicVideo, playbackFlags } from '../services/youtube/ingestion'
-import { thumbnail, videoDuration } from '../services/youtube/client'
+import {
+  configuredPublic,
+  thumbnail,
+  videoDuration,
+} from '../services/youtube/client'
+import { logger } from '../utils/logger'
 import { videoIdFromYouTubeUrl } from '../utils/youtube'
-import { videoDocument } from '../utils/youtubeChannel'
+import {
+  videoDocument,
+  videoThumbnail,
+  watchUrl,
+} from '../utils/youtubeChannel'
+import { PageType } from '../generated/graphql'
+
+// A title left by the save: the link itself, or YouTube's cookie consent page.
+const placeholderTitle = (title: string, url: string) =>
+  !title.trim() ||
+  title === url ||
+  /^https?:\/\//.test(title) ||
+  /^before you continue/i.test(title)
+
+// Without a YouTube API key, oEmbed still gives the title and channel, which
+// is enough to replace what a consent page left behind.
+const fillFromOembed = async (
+  item: LibraryItem,
+  id: string,
+  userId: string
+) => {
+  if (!placeholderTitle(item.title, item.originalUrl) && item.author) return
+  try {
+    const { data } = await axios.get<{
+      title: string
+      author_name: string
+      author_url: string
+    }>('https://www.youtube.com/oembed', {
+      params: { format: 'json', url: watchUrl(id) },
+      timeout: 10000,
+    })
+    await updateLibraryItem(
+      item.id,
+      {
+        title: data.title,
+        author: data.author_name,
+        siteName: 'YouTube',
+        thumbnail: item.thumbnail || videoThumbnail(id),
+        readableContent: videoDocument({
+          videoId: id,
+          title: data.title,
+          channel: data.author_name,
+          channelUrl: data.author_url,
+        }),
+      },
+      userId
+    )
+  } catch {
+    logger.info('youtube: oembed unavailable', { id })
+  }
+}
 export interface ProcessYouTubeVideoJobData {
   userId: string
   libraryItemId: string
@@ -57,6 +114,13 @@ export const processYouTubeVideo = async (job: ProcessYouTubeVideoJobData) => {
   const item = await findLibraryItemById(job.libraryItemId, job.userId)
   const id = item && videoIdFromYouTubeUrl(item.originalUrl)
   if (!item || !id) return
+  // Belongs in Watch, even if the saved page didn't look like a video.
+  if (item.itemType !== PageType.Video) {
+    await updateLibraryItem(item.id, { itemType: PageType.Video }, job.userId)
+  }
+  if (!configuredPublic()) {
+    return fillFromOembed(item, id, job.userId)
+  }
   const v = await publicVideo(id)
   await updateLibraryItem(
     item.id,
@@ -64,6 +128,11 @@ export const processYouTubeVideo = async (job: ProcessYouTubeVideoJobData) => {
       ...playbackFlags(v),
       ...(v
         ? {
+            ...(placeholderTitle(item.title, item.originalUrl) && {
+              title: v.snippet.title,
+            }),
+            ...(!item.author && { author: v.snippet.channelTitle }),
+            siteName: 'YouTube',
             description: v.snippet.description || '',
             wordCount: Math.round(videoDuration(v) * 3.92),
             publishedAt: new Date(v.snippet.publishedAt),
