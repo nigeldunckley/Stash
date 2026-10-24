@@ -1262,7 +1262,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     )
     watcher.observe(element)
     return () => watcher.disconnect()
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, arranging])
 
   // In Watch, opening a video goes to the player page; Space still peeks.
   const openVideo = useOpenVideo()
@@ -2391,7 +2391,8 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
               )}
             </>
           )}
-          <div ref={sentinel} style={{ height: 1 }} />
+          {/* Arrange collections shows no videos, so it loads none. */}
+          {!arranging && <div ref={sentinel} style={{ height: 1 }} />}
         </section>
 
         {peekItem && !isPhone && <FeedPeekPane {...peekProps(peekItem)} />}
