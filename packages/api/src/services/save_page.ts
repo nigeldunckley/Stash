@@ -10,6 +10,7 @@ import { User } from '../entity/user'
 import { homePageURL } from '../env'
 import {
   ArticleSavingRequestStatus,
+  PageType,
   PreparedDocumentInput,
   SaveErrorCode,
   SavePageInput,
@@ -26,6 +27,7 @@ import {
 import { logger } from '../utils/logger'
 import { parsePreparedContent } from '../utils/parser'
 import { contentReaderForLibraryItem } from '../utils/uploads'
+import { canonicalYouTubeUrl, isYouTubeVideoURL } from '../utils/youtube'
 import { createPageSaveRequest } from './create_page_save_request'
 import { createHighlight } from './highlights'
 import { createAndAddLabelsToLibraryItem } from './labels'
@@ -245,6 +247,11 @@ export const parsedContentToLibraryItem = ({
   wordCount?: number
 }): DeepPartial<LibraryItem> & { originalUrl: string } => {
   logger.info('save_page', { url, state, itemId })
+  // A YouTube video is a video whatever the fetched page said: from a UK
+  // server YouTube can answer with its cookie consent page instead, which
+  // would otherwise make the video an article in Read.
+  const videoUrl = [url, canonicalUrl].find((u) => isYouTubeVideoURL(u || ''))
+  const type = videoUrl ? PageType.Video : itemType
   return {
     id: itemId || undefined,
     slug,
@@ -260,8 +267,10 @@ export const parsedContentToLibraryItem = ({
       parsedContent?.siteName ||
       url,
     author: preparedDocument?.pageInfo.author || parsedContent?.byline,
-    originalUrl: cleanUrl(canonicalUrl || url),
-    itemType,
+    originalUrl: videoUrl
+      ? canonicalYouTubeUrl(cleanUrl(videoUrl))
+      : cleanUrl(canonicalUrl || url),
+    itemType: type,
     textContentHash:
       uploadFileHash || stringToHash(parsedContent?.content || url),
     thumbnail:
@@ -286,7 +295,7 @@ export const parsedContentToLibraryItem = ({
       (parsedContent?.textContent
         ? wordsCount(parsedContent.textContent)
         : wordsCount(parsedContent?.content || '', true)),
-    contentReader: contentReaderForLibraryItem(itemType, uploadFileId),
+    contentReader: contentReaderForLibraryItem(type, uploadFileId),
     subscription: rssFeedUrl,
     folder: folder || 'inbox',
     archivedAt:

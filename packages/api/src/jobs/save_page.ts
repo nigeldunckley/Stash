@@ -14,6 +14,8 @@ import { saveFile } from '../services/save_file'
 import { savePage } from '../services/save_page'
 import { uploadFile } from '../services/upload_file'
 import { logError, logger } from '../utils/logger'
+import { enqueueProcessYouTubeVideo } from '../utils/createTask'
+import { isYouTubeVideoURL } from '../utils/youtube'
 import {
   contentFilePath,
   downloadFromBucket,
@@ -282,7 +284,9 @@ export const savePageJob = async (data: Data, attemptsMade: number) => {
     // for non-pdf content, we need to save the content
     const result = await savePage(
       {
-        url: finalUrl,
+        // YouTube can redirect a video to its cookie consent page; the video
+        // is still what was saved.
+        url: isYouTubeVideoURL(url) ? url : finalUrl,
         clientRequestId: articleSavingRequestId,
         title,
         originalContent: content,
@@ -299,6 +303,15 @@ export const savePageJob = async (data: Data, attemptsMade: number) => {
 
     if (result.__typename == 'SaveError') {
       throw new Error(result.message || result.errorCodes[0])
+    }
+
+    // The fetched page may have replaced the video's details (a consent page
+    // does), so fill them in from YouTube again now it's saved.
+    if (isYouTubeVideoURL(url)) {
+      await enqueueProcessYouTubeVideo({
+        userId,
+        libraryItemId: articleSavingRequestId,
+      })
     }
 
     isImported = true

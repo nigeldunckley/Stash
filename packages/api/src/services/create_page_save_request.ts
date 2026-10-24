@@ -12,6 +12,7 @@ import { redisDataSource } from '../redis_data_source'
 import { enqueueFetchContentJob, enqueueRescueSave } from '../utils/createTask'
 import { cleanUrl, generateSlug } from '../utils/helpers'
 import { logger } from '../utils/logger'
+import { canonicalYouTubeUrl, isYouTubeVideoURL } from '../utils/youtube'
 import { authTrx } from '../repository'
 import { libraryItemRepository } from '../repository/library_item'
 import {
@@ -145,7 +146,7 @@ export const createPageSaveRequest = async ({
   }
 
   const userId = user.id
-  url = cleanUrl(url)
+  url = canonicalYouTubeUrl(cleanUrl(url))
 
   // Saving a link again after deleting it, or after it failed to read,
   // starts it afresh rather than reviving the old copy at its old date.
@@ -181,7 +182,8 @@ export const createPageSaveRequest = async ({
       id: articleSavingRequestId || undefined,
       user: { id: userId },
       readableContent: SAVING_CONTENT,
-      itemType: PageType.Unknown,
+      // A YouTube link belongs in Watch from the moment it's saved.
+      itemType: isYouTubeVideoURL(url) ? PageType.Video : PageType.Unknown,
       slug: generateSlug(url),
       title: url,
       originalUrl: url,

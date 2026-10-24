@@ -1,6 +1,7 @@
 import 'mocha'
 import { expect } from 'chai'
 import {
+  canonicalYouTubeUrl,
   isYouTubeVideoURL,
   videoIdFromYouTubeUrl,
 } from '../../src/utils/youtube'
@@ -82,5 +83,34 @@ describe('isYouTubeVideoURL', () => {
       'https://www.youtube.com/watch?v=p4YOXmm839c'
     )
     expect(result).to.eq(true)
+  })
+})
+
+describe('canonicalYouTubeUrl', () => {
+  it('turns share, mobile and embed links into the watch link', () => {
+    for (const url of [
+      'https://youtu.be/vLfAtCbE_Jc?si=ad73DTmmXL_lbn31',
+      'https://m.youtube.com/watch?v=vLfAtCbE_Jc&feature=share',
+      'https://www.youtube.com/embed/vLfAtCbE_Jc',
+      'https://www.youtube.com/live/vLfAtCbE_Jc',
+    ]) {
+      expect(canonicalYouTubeUrl(url)).to.eq(
+        'https://www.youtube.com/watch?v=vLfAtCbE_Jc'
+      )
+    }
+  })
+
+  it('keeps Shorts as Shorts', () => {
+    expect(
+      canonicalYouTubeUrl('https://m.youtube.com/shorts/vLfAtCbE_Jc?feature=x')
+    ).to.eq('https://www.youtube.com/shorts/vLfAtCbE_Jc')
+  })
+
+  it('leaves other links alone', () => {
+    const url = 'https://www.youtube.com/@veritasium'
+    expect(canonicalYouTubeUrl(url)).to.eq(url)
+    expect(canonicalYouTubeUrl('https://example.com/a')).to.eq(
+      'https://example.com/a'
+    )
   })
 })

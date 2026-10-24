@@ -2,6 +2,7 @@ import axios from 'axios'
 import { randomBytes } from 'crypto'
 import { appDataSource } from '../../data_source'
 import { LibraryItem } from '../../entity/library_item'
+import { PageType } from '../../generated/graphql'
 import { Subscription, SubscriptionStatus } from '../../entity/subscription'
 import { env } from '../../env'
 import { redisDataSource } from '../../redis_data_source'
@@ -79,6 +80,7 @@ async function updateVideoCopies(id: string, v?: VideoResource) {
     await updateLibraryItem(
       item.id,
       {
+        itemType: PageType.Video,
         ...playbackFlags(v),
         ...(v
           ? {

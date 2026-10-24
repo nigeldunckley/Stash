@@ -64,3 +64,14 @@ export const isYouTubeVideoURL = (url: string | undefined): boolean => {
   const videoId = videoIdFromYouTubeUrl(url)
   return videoId != null
 }
+
+// One address per video, so a video saved from youtu.be, m.youtube.com or an
+// embed link is the same item as one saved from the watch page. Shorts keep
+// their /shorts/ address. Anything that isn't a video comes back unchanged.
+export const canonicalYouTubeUrl = (url: string): string => {
+  const videoId = videoIdFromYouTubeUrl(url)
+  if (!videoId) return url
+  return /\/shorts\//.test(url)
+    ? `https://www.youtube.com/shorts/${videoId}`
+    : `https://www.youtube.com/watch?v=${videoId}`
+}
