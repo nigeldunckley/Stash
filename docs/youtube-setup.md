@@ -38,6 +38,21 @@ server. Each Stash user authorizes their own YouTube connection separately.
 
 ## Configure your server
 
+The live Stash installation runs in the Mac Mini's OrbStack machine named
+`stash`, at `/opt/stash`. The public VPS forwards requests to that machine;
+its stopped Stash containers are a retired installation. Apply credentials,
+migrations and service restarts inside the OrbStack machine. For example:
+
+```sh
+ssh nigel@Nigels-Mac-mini.local
+/opt/homebrew/bin/orb -m stash -u root sh
+cd /opt/stash/deploy
+```
+
+If you restrict the API key by IP address, use this live machine's outbound
+public IP, rather than the forwarding VPS's IP. Update that restriction if the
+outbound address changes.
+
 Add these values to `deploy/.env`, which is ignored by Git:
 
 ```dotenv
