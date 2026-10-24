@@ -220,12 +220,8 @@ struct AllChannelsView: View {
 
   var body: some View {
     ScrollView {
-<<<<<<< Updated upstream
       VStack(alignment: .leading, spacing: 26) {
-=======
-      LazyVStack(alignment: .leading, spacing: 26) {
         YouTubeConnectionView { Task { await load() } }
->>>>>>> Stashed changes
         WatchAddBox { Task { await load() } }
         if !loaded {
           SkeletonCards(count: 8, minWidth: 220, height: 68)

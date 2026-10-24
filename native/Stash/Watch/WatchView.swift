@@ -324,14 +324,11 @@ struct WatchView: View {
         }
         if let channel {
           Section(channel.name) {
-<<<<<<< Updated upstream
-=======
             Toggle("Hide videos under 3 minutes", isOn: Binding(
               get: { channel.hideShortVideos ?? false },
               set: { value in updateChannel(channel, hideShortVideos: value) }
             ))
             Text("Also hides short regular videos. Applies to future imports, not Saved videos.").font(.stSmall)
->>>>>>> Stashed changes
             if !collections.isEmpty {
               Picker("Collection", selection: Binding(
                 get: { channel.collectionId ?? "" },
@@ -406,17 +403,10 @@ struct WatchView: View {
     unseenByChannel = await counts
   }
 
-<<<<<<< Updated upstream
-  private func updateChannel(_ target: Subscription, collectionId: String? = nil) {
-    Task {
-      do {
-        try await Watch.updateChannel(target.id, collectionId: collectionId)
-=======
   private func updateChannel(_ target: Subscription, collectionId: String? = nil, hideShortVideos: Bool? = nil) {
     Task {
       do {
         try await Watch.updateChannel(target.id, collectionId: collectionId, hideShortVideos: hideShortVideos)
->>>>>>> Stashed changes
         subscriptions = (try? await Library.subscriptions()) ?? subscriptions
         channel = subscriptions.first { $0.id == target.id }
         await list.reload(query)
