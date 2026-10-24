@@ -24,6 +24,9 @@ struct LibraryItem: Decodable, Identifiable, Hashable {
   let seenAt: Date?
   let readingProgressPercent: Double?
   let readingProgressAnchorIndex: Int?
+  let youtubeMadeForKids: Bool?
+  let youtubeEmbeddable: Bool?
+  let youtubeAvailable: Bool?
   let wordsCount: Int?
   let highlightsCount: Int?
 
@@ -87,7 +90,10 @@ struct Subscription: Decodable, Identifiable, Hashable {
   let status: String?
   /// The Watch collection a channel files its videos under.
   let collectionId: String?
-  let includeShorts: Bool?
+  let hideShortVideos: Bool?
+  let youtubeImported: Bool?
+  let youtubeManualFollow: Bool?
+  let youtubeExcluded: Bool?
   /// When Stash last checked the feed for new posts.
   let lastFetchedAt: Date?
 

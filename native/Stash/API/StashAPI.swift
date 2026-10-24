@@ -52,6 +52,15 @@ final class StashAPI: @unchecked Sendable {
     return plain.date(from: string)
   }
 
+  /// Invalid JSON values raise an Objective-C exception that Swift's catch cannot handle.
+  /// Validate first so malformed reader messages fail as ordinary, recoverable errors.
+  static func encodeRequestBody(_ body: [String: Any]) throws -> Data {
+    guard JSONSerialization.isValidJSONObject(body) else {
+      throw StashError.server("Stash couldn't prepare this request.")
+    }
+    return try JSONSerialization.data(withJSONObject: body)
+  }
+
   // MARK: Signing in
 
   private struct SignInResponse: Decodable {
@@ -64,7 +73,7 @@ final class StashAPI: @unchecked Sendable {
     var request = URLRequest(url: StashConfig.server.appending(path: "api/mobile-auth/email-sign-in"))
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.httpBody = try JSONSerialization.data(withJSONObject: ["email": email, "password": password])
+    request.httpBody = try Self.encodeRequestBody(["email": email, "password": password])
     let (data, response) = try await urlSession.data(for: request)
     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
     let body = try? decoder.decode(SignInResponse.self, from: data)
@@ -74,6 +83,33 @@ final class StashAPI: @unchecked Sendable {
     }
     if status == 429 { throw StashError.server("Too many attempts. Wait a minute and try again.") }
     throw StashError.server("That email and password didn't work.")
+  }
+
+  private struct YouTubeFailure: Decodable { let error: String? }
+
+  /// Account integrations use authenticated server endpoints; Google credentials stay there.
+  func youtube<T: Decodable>(_ path: String, post: Bool = false) async throws -> T {
+    #if DEBUG
+    if AppPreview.enabled {
+      let sample = path.hasPrefix("video/") ? #"{"youtubeAvailable":true,"youtubeEmbeddable":true,"youtubeMadeForKids":false}"# : #"{"configured":false,"connected":false,"importedChannels":0,"syncing":false,"authorizing":false}"#
+      return try decoder.decode(T.self, from: Data(sample.utf8))
+    }
+    #endif
+    guard let token else { throw StashError.signedOut }
+    var request = URLRequest(url: StashConfig.server.appending(path: "api/youtube/\(path)"))
+    request.setValue(token, forHTTPHeaderField: "Authorization")
+    if post {
+      request.httpMethod = "POST"
+      request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+      request.httpBody = Data("{}".utf8)
+    }
+    let (data, response) = try await urlSession.data(for: request)
+    guard let response = response as? HTTPURLResponse else { throw StashError.server("Stash did not answer.") }
+    if response.statusCode == 401 { throw StashError.signedOut }
+    guard (200..<300).contains(response.statusCode) else {
+      throw StashError.server((try? decoder.decode(YouTubeFailure.self, from: data))?.error ?? "YouTube could not be reached. Try again.")
+    }
+    return try decoder.decode(T.self, from: data)
   }
 
   // MARK: GraphQL
@@ -94,7 +130,7 @@ final class StashAPI: @unchecked Sendable {
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.setValue(token, forHTTPHeaderField: "Authorization")
-    request.httpBody = try JSONSerialization.data(withJSONObject: ["query": query, "variables": variables])
+    request.httpBody = try Self.encodeRequestBody(["query": query, "variables": variables])
 
     let (data, response) = try await urlSession.data(for: request)
     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -125,7 +161,7 @@ final class StashAPI: @unchecked Sendable {
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.setValue(token, forHTTPHeaderField: "Authorization")
-    request.httpBody = try JSONSerialization.data(withJSONObject: ["query": query, "variables": variables])
+    request.httpBody = try Self.encodeRequestBody(["query": query, "variables": variables])
     let (data, _) = try await urlSession.data(for: request)
     let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
     guard let result = json?["data"] as? [String: Any] else {

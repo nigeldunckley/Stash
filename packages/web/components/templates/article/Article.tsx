@@ -101,8 +101,9 @@ export function Article(props: ArticleProps): JSX.Element {
         id: props.articleId,
         readingProgressPercent: clampToPercent(readingProgress),
         readingProgressTopPercent: clampToPercent(topPositionPercent * 100),
-        readingProgressAnchorIndex:
-          anchorIndex == Number.NaN ? undefined : anchorIndex,
+        ...(Number.isInteger(anchorIndex) && anchorIndex >= 0
+          ? { readingProgressAnchorIndex: anchorIndex }
+          : {}),
       })
     })()
 

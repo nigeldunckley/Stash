@@ -16,6 +16,7 @@ struct MacShell: View {
   @State private var windowWidth: CGFloat = 1240
   @State private var compactSidebar = false
   private var sidebarVisible: Bool { !sidebarHidden && !readerFocus && windowWidth >= 1000 }
+  @State private var feedsCount: Int?
   @State private var channelsCount: Int?
   @State private var discoverCount: Int?
   @State private var capturing = false
@@ -47,6 +48,7 @@ struct MacShell: View {
         SidebarPanel(
           section: $section,
           collections: collections,
+          feedsCount: feedsCount,
           channelsCount: channelsCount,
           discoverCount: discoverCount,
           capturing: $capturing
@@ -111,7 +113,7 @@ struct MacShell: View {
           }
           .help("Show the sidebar (⌃⌘S)")
           .popover(isPresented: $compactSidebar) {
-            SidebarPanel(section: $section, collections: collections, channelsCount: channelsCount,
+            SidebarPanel(section: $section, collections: collections, feedsCount: feedsCount, channelsCount: channelsCount,
                          discoverCount: discoverCount, capturing: $capturing)
               .frame(height: 520)
           }
@@ -347,10 +349,12 @@ struct MacShell: View {
     if visited.count > Self.keepAlive { visited.removeFirst(visited.count - Self.keepAlive) }
   }
 
-  /// The Channels badge and Discover's "new" count.
+  /// The Feeds and Channels badges and Discover's "new" count.
   private func loadCounts() async {
+    async let articles = try? Library.search("in:following use:folders -type:video -is:seen", first: 1).pageInfo.totalCount
     async let videos = try? Library.search("in:following use:folders type:video -is:seen", first: 1).pageInfo.totalCount
     async let suggestions = try? Discover.newCount()
+    if let articles = await articles { feedsCount = articles }
     channelsCount = await videos
     discoverCount = await suggestions
   }

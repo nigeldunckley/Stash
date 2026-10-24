@@ -7,6 +7,8 @@ import SwiftUI
 struct SidebarPanel: View {
   @Binding var section: AppSection
   let collections: [WatchCollection]
+  /// Unseen articles across all feeds, matching the Feeds page's Unseen view.
+  let feedsCount: Int?
   /// Unseen videos from your channels, shown as an orange badge.
   let channelsCount: Int?
   /// New Discover suggestions, shown as "11 new".
@@ -39,7 +41,12 @@ struct SidebarPanel: View {
 
           SidebarGroupLabel(title: "Read", isOpen: $readOpen)
           if readOpen {
-            row("Feeds", "dot.radiowaves.up.forward", .feeds)
+            row("Feeds", "dot.radiowaves.up.forward", .feeds) {
+              if let feedsCount, feedsCount > 0 {
+                Count(feedsCount, style: .badge)
+                  .accessibilityLabel("\(feedsCount) unseen \(feedsCount == 1 ? "article" : "articles")")
+              }
+            }
             SidebarRow(title: "Saved", ribbon: .saved, landing: .saved, selected: section == .saved, action: { go(.saved) }) {
               LandingCount(kind: .saved)
             }

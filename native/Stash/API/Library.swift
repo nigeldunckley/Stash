@@ -5,7 +5,7 @@ enum Library {
   static let itemFields = """
     id title slug url folder pageType contentReader author image headerImage description
     siteName siteIcon subscription originalArticleUrl state createdAt savedAt publishedAt
-    readAt seenAt readingProgressPercent readingProgressAnchorIndex wordsCount highlightsCount
+    readAt seenAt readingProgressPercent readingProgressAnchorIndex wordsCount highlightsCount youtubeMadeForKids youtubeEmbeddable youtubeAvailable
     """
 
   struct Page {
@@ -55,7 +55,7 @@ enum Library {
     let gql = """
       query GetSubscriptions($sort: SortParams) {
         subscriptions(sort: $sort) {
-          ... on SubscriptionsSuccess { subscriptions { id name type url icon status collectionId includeShorts lastFetchedAt } }
+          ... on SubscriptionsSuccess { subscriptions { id name type url icon status collectionId hideShortVideos youtubeImported youtubeManualFollow youtubeExcluded lastFetchedAt } }
           ... on SubscriptionsError { errorCodes }
         }
       }

@@ -162,16 +162,16 @@ enum Watch {
           ... on SubscribeError { errorCodes }
         }
       }
-      """, variables: ["input": ["url": channel.feedUrl, "subscriptionType": "RSS", "includeShorts": false]])
+      """, variables: ["input": ["url": channel.feedUrl, "subscriptionType": "RSS", "hideShortVideos": false]])
     let codes = (data["subscribe"] as? [String: Any])?["errorCodes"] as? [String] ?? []
     if let code = codes.first, code != "ALREADY_SUBSCRIBED" { throw StashError.server(code) }
   }
 
   /// Changes a channel's collection (an empty id takes it out of one) or whether it brings in Shorts.
-  static func updateChannel(_ id: String, collectionId: String? = nil, includeShorts: Bool? = nil) async throws {
+  static func updateChannel(_ id: String, collectionId: String? = nil, hideShortVideos: Bool? = nil) async throws {
     var input: [String: Any] = ["id": id]
     if let collectionId { input["collectionId"] = collectionId }
-    if let includeShorts { input["includeShorts"] = includeShorts }
+    if let hideShortVideos { input["hideShortVideos"] = hideShortVideos }
     let data = try await StashAPI.shared.graphQLJSON("""
       mutation UpdateSubscription($input: UpdateSubscriptionInput!) {
         updateSubscription(input: $input) {

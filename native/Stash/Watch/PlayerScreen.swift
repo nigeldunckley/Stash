@@ -2,7 +2,7 @@ import SwiftUI
 import WebKit
 import UniformTypeIdentifiers
 
-/// The player page: the video, its controls, and Up next, Transcript and About beside
+/// The player page: the video, its controls, and Up next and About beside
 /// it on a Mac or underneath on iPhone.
 struct PlayerScreen: View {
   let item: LibraryItem
@@ -20,13 +20,11 @@ struct PlayerScreen: View {
   @State private var tab: PlayerTab = .upNext
   @State private var screenID = UUID()
   @State private var opened = false
-  @State private var transcript: [TranscriptLine]?
-  @State private var transcriptError = false
   @State private var draggingID: String?
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private enum PlayerTab: String, CaseIterable, Identifiable {
-    case upNext = "Up next", transcript = "Transcript", about = "About"
+    case upNext = "Up next", about = "About"
     var id: Self { self }
   }
 
@@ -75,7 +73,6 @@ struct PlayerScreen: View {
         player.screenLeft(screenID)
       }
     }
-    .task(id: current.id) { await loadTranscript() }
     .safeAreaInset(edge: .bottom) {
       if let error = player.syncError {
         HStack {
@@ -108,6 +105,19 @@ struct PlayerScreen: View {
 
   private var video: some View {
     PlayerWebView(webView: player.webView, active: player.host == .screen(screenID))
+      .overlay {
+        if let error = player.playbackError {
+          VStack(spacing: 12) {
+            Text(error).font(.stSmall).multilineTextAlignment(.center)
+            Button("Try again") { player.play(current) }.buttonStyle(.text)
+            if let url = current.originalURL { Link("Open on YouTube", destination: url).buttonStyle(.text) }
+          }
+          .foregroundStyle(Color.stInk)
+          .padding(20)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .background(Color.stPanel)
+        }
+      }
       .aspectRatio(16 / 9, contentMode: .fit)
       .background(Color.black)
   }
@@ -209,7 +219,6 @@ struct PlayerScreen: View {
   private var tabContent: some View {
     switch tab {
     case .upNext: upNext
-    case .transcript: transcriptView
     case .about: about
     }
   }
@@ -253,67 +262,12 @@ struct PlayerScreen: View {
     }
   }
 
-  // MARK: Transcript
-
-  @ViewBuilder
-  private var transcriptView: some View {
-    if let transcript, !transcript.isEmpty {
-      let currentLine = transcript.lastIndex { $0.start <= player.time }
-      ScrollViewReader { proxy in
-        LazyVStack(alignment: .leading, spacing: 2) {
-          ForEach(Array(transcript.enumerated()), id: \.offset) { index, line in
-            Button { player.seek(to: line.start) } label: {
-              HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(Watch.timecode(line.start))
-                  .font(.stDetail)
-                  .foregroundStyle(Color.stMuted)
-                  .frame(width: 52, alignment: .leading)
-                Text(line.text)
-                  .font(.ui(13, index == currentLine ? .semibold : .regular))
-                  .foregroundStyle(index == currentLine ? Color.stInk : Color.stMuted)
-                  .frame(maxWidth: .infinity, alignment: .leading)
-              }
-              .padding(.vertical, 4)
-              .padding(.horizontal, 6)
-              .background(
-                index == currentLine ? Color.stAccent.opacity(0.10) : .clear,
-                in: RoundedRectangle(cornerRadius: 6)
-              )
-              .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .id(index)
-          }
-        }
-        .onChange(of: currentLine) { _, line in
-          if let line, player.isPlaying { withAnimation(reduceMotion ? nil : StashMotion.change) { proxy.scrollTo(line, anchor: .center) } }
-        }
-      }
-    } else if transcriptError || transcript?.isEmpty == true {
-      Text("This video has no transcript.")
-        .font(.ui(13))
-        .foregroundStyle(Color.stMuted)
-    } else {
-      ProgressView().frame(maxWidth: .infinity)
-    }
-  }
-
-  private func loadTranscript() async {
-    transcript = nil
-    transcriptError = false
-    guard let id = Watch.videoID(current) else { transcriptError = true; return }
-    do {
-      transcript = try await Watch.transcript(id)
-    } catch {
-      transcriptError = true
-    }
-  }
-
   // MARK: About
 
   private var about: some View {
     let chapters = Watch.chapters(current.description)
     return VStack(alignment: .leading, spacing: 14) {
+      Text("Captions are available through the YouTube player’s controls.").font(.stSmall).foregroundStyle(Color.stMuted)
       if !chapters.isEmpty {
         VStack(alignment: .leading, spacing: 2) {
           Text("Chapters").font(.stSection)

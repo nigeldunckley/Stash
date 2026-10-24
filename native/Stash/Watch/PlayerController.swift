@@ -40,6 +40,10 @@ final class PlayerController: NSObject {
   @ObservationIgnored private var savedTime: Double = 0
   @ObservationIgnored private var savingPosition = false
   @ObservationIgnored private var pendingPositions: [String: (seconds: Double, duration: Double)] = [:]
+  private(set) var playbackError: String?
+  @ObservationIgnored private var playbackRequest = UUID()
+  @ObservationIgnored private var trackingAllowed = false
+  @ObservationIgnored private var playbackAuthorized = false
   private(set) var syncError: String?
   @ObservationIgnored private var watched: Set<String> = []
   @ObservationIgnored private var pageLoaded = false
@@ -83,31 +87,55 @@ final class PlayerController: NSObject {
 
   func play(_ next: LibraryItem) {
     guard let videoID = Watch.videoID(next) else { return }
-    if item?.id == next.id {
+    if item?.id == next.id && playbackError == nil && pageLoaded && playbackAuthorized {
       command("playVideo")
       return
     }
     savePosition()
-    let start = Watch.startTime(next).rounded(.down)
+    command("pauseVideo")
+    trackingAllowed = false
+    playbackAuthorized = false
+    playbackError = nil
+    let request = UUID()
+    playbackRequest = request
     item = next
-    time = start
+    time = 0
     duration = Watch.duration(next) ?? 0
     isPlaying = false
-    savedTime = start
-    rate = Self.rate(for: next)
-    Task { try? await Library.markSeen([next.id]) }
-
-    if pageLoaded {
-      command("loadVideoById", [["videoId": videoID, "startSeconds": start]])
-    } else {
-      webView.loadHTMLString(Self.page(videoID: videoID, start: Int(start)), baseURL: StashConfig.server)
+    Task {
+      do {
+        struct Flags: Decodable { let youtubeAvailable: Bool; let youtubeEmbeddable: Bool; let youtubeMadeForKids: Bool }
+        let flags: Flags = try await StashAPI.shared.youtube("video/\(videoID)")
+        guard request == playbackRequest else { return }
+        guard flags.youtubeAvailable && flags.youtubeEmbeddable else {
+          playbackError = "This video can’t play here. Open it on YouTube."
+          return
+        }
+        trackingAllowed = !flags.youtubeMadeForKids
+        let start = trackingAllowed ? Watch.startTime(next).rounded(.down) : 0
+        time = start
+        savedTime = start
+        rate = trackingAllowed ? Self.rate(for: next) : 1
+        if trackingAllowed { try? await Library.markSeen([next.id]) }
+        guard request == playbackRequest else { return }
+        playbackAuthorized = true
+        if pageLoaded {
+          command("loadVideoById", [["videoId": videoID, "startSeconds": start]])
+        } else {
+          webView.loadHTMLString(Self.page(videoID: videoID, start: Int(start)), baseURL: StashConfig.server)
+        }
+      } catch {
+        guard request == playbackRequest else { return }
+        playbackError = "Couldn’t check this video. Try again or open it on YouTube."
+      }
     }
   }
 
-  func toggle() { command(isPlaying ? "pauseVideo" : "playVideo") }
-  func pause() { command("pauseVideo") }
+  func toggle() { guard playbackAuthorized else { return }; command(isPlaying ? "pauseVideo" : "playVideo") }
+  func pause() { playbackRequest = UUID(); command("pauseVideo") }
 
   func seek(to seconds: Double) {
+    guard playbackAuthorized else { return }
     let target = max(0, seconds)
     command("seekTo", [target, true])
     command("playVideo")
@@ -119,7 +147,7 @@ final class PlayerController: NSObject {
   func setRate(_ value: Double) {
     command("setPlaybackRate", [value])
     rate = value
-    if let item {
+    if let item, trackingAllowed {
       var rates = UserDefaults.standard.dictionary(forKey: "watchRates") as? [String: Double] ?? [:]
       rates[Self.channelKey(item)] = value
       UserDefaults.standard.set(rates, forKey: "watchRates")
@@ -206,9 +234,14 @@ final class PlayerController: NSObject {
     switch event {
     case "frame":
       videoFrame = frame
+    case "error":
+      playbackError = "YouTube could not play this video here. Open it on YouTube."
+      playbackAuthorized = false
+      trackingAllowed = false
+      isPlaying = false
     case "ready":
       pageLoaded = true
-      if let item { command("setPlaybackRate", [Self.rate(for: item)]) }
+      if let item { command("setPlaybackRate", [trackingAllowed ? Self.rate(for: item) : 1]) }
     case "info":
       if let value = message["time"] as? Double { time = value }
       if let value = message["duration"] as? Double, value > 0 { duration = value }
@@ -225,7 +258,7 @@ final class PlayerController: NSObject {
 
   /// Every so often, remember the place; at 90% the video counts as watched.
   private func progressChanged() {
-    guard let item else { return }
+    guard let item, trackingAllowed else { return }
     Watch.positions[item.id] = Int(time)
     if abs(time - savedTime) >= 10 { savePosition() }
     if duration > 0, time / duration >= 0.9, !watched.contains(item.id) {
@@ -244,7 +277,7 @@ final class PlayerController: NSObject {
   }
 
   private func savePosition() {
-    guard let item, duration > 0, abs(time - savedTime) >= 2 else { return }
+    guard let item, trackingAllowed, duration > 0, abs(time - savedTime) >= 2 else { return }
     pendingPositions[item.id] = (time, duration)
     flushPositions()
   }
@@ -291,7 +324,7 @@ final class PlayerController: NSObject {
     let originParam = StashConfig.server.absoluteString
       .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
       .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
-    let src = "\(origin)/embed/\(videoID)?autoplay=1&playsinline=1&rel=0&enablejsapi=1&origin=\(originParam)"
+    let src = "\(origin)/embed/\(videoID)?autoplay=1&playsinline=1&rel=0&cc_load_policy=0&enablejsapi=1&origin=\(originParam)"
       + (start > 0 ? "&start=\(start)" : "")
     return """
     <!DOCTYPE html>
@@ -311,23 +344,43 @@ final class PlayerController: NSObject {
           const frame = document.getElementById('player')
           const send = (message) => window.webkit.messageHandlers.player.postMessage(message)
           let ready = false
+          let expectedVideoID = '\(videoID)'
+          let currentVideoID = null
+          let captionDefaultPending = true
+          const command = (func, args = []) => frame.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func, args }), ORIGIN)
+          // cc_load_policy alone still follows YouTube's saved preference. Reset the
+          // caption module at startup, then leave the CC button under the viewer's control.
+          const captionsOff = () => command('unloadModule', ['captions'])
           window.stashPlayer = {
-            command: (func, args) => frame.contentWindow.postMessage(
-              JSON.stringify({ event: 'command', func, args: args || [] }), ORIGIN)
+            command: (func, args) => {
+              if (func === 'loadVideoById') {
+                expectedVideoID = args[0].videoId
+                captionDefaultPending = true
+                captionsOff()
+              }
+              command(func, args || [])
+            }
           }
           // The player only reports back once asked to; keep asking until it answers.
           const listen = () => frame.contentWindow.postMessage(
             JSON.stringify({ event: 'listening', id: 'stash' }), ORIGIN)
-          frame.addEventListener('load', listen)
+          frame.addEventListener('load', () => { listen(); command('addEventListener', ['onError']) })
           const asking = setInterval(() => ready ? clearInterval(asking) : listen(), 500)
           window.addEventListener('message', (event) => {
-            if (event.origin !== ORIGIN) return
+            if (event.origin !== ORIGIN || event.source !== frame.contentWindow) return
             let data
             try { data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data } catch { return }
-            if (data.event === 'onReady') { ready = true; send({ event: 'ready' }); return }
-            if (data.event !== 'infoDelivery' || !data.info) return
+            if (data.event === 'onError') { send({ event: 'error' }); return }
+            if (data.event === 'onReady') { ready = true; captionsOff(); send({ event: 'ready' }); return }
+            if (!['initialDelivery', 'infoDelivery'].includes(data.event) || !data.info) return
             ready = true
             const info = data.info
+            if (info.videoData?.video_id) currentVideoID = info.videoData.video_id
+            if (captionDefaultPending && currentVideoID === expectedVideoID && info.playerState === 1) {
+              captionDefaultPending = false
+              captionsOff()
+            }
             send({
               event: 'info',
               time: info.currentTime ?? null,

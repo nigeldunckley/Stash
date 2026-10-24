@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Stash — Home, Reader & Watch</title>
+  <link rel="stylesheet" href="concepts.css">
+  <script src="concepts.js" defer></script>
+</head>
+<body>
+  <header class="review-header">
+    <a class="review-brand" href="#home" aria-label="Stash design concepts"><img src="assets/mark.png" alt=""><strong>Stash</strong><span>Design studies</span></a>
+    <nav class="concept-tabs" aria-label="Design concept">
+      <button data-concept="home" aria-pressed="true">Home</button>
+      <button data-concept="reader" aria-pressed="false">Reader</button>
+      <button data-concept="watch" aria-pressed="false">Watch</button>
+    </nav>
+    <div class="review-options">
+      <button id="theme-toggle" class="review-icon" aria-label="Switch to light appearance" title="Switch appearance"></button>
+      <button id="notes-toggle" class="review-icon" aria-label="Show design notes" title="Design notes"></button>
+    </div>
+  </header>
+  <main class="review-main">
+    <section class="study-heading" aria-label="About this concept">
+      <div><h1 id="study-title">Your front page. A little more personal.</h1><p id="study-description">A considered balance of new discoveries and the things you want to return to.</p></div>
+      <div class="device-tabs" role="group" aria-label="Preview device">
+        <button data-device="mac" aria-pressed="true">Mac</button>
+        <button data-device="ipad" aria-pressed="false">iPad</button>
+        <button data-device="iphone" aria-pressed="false">iPhone</button>
+        <button id="layout-toggle" aria-pressed="false" aria-label="Use compact Mac window">Compact</button>
+      </div>
+    </section>
+    <div id="stage" class="stage"><div id="device" class="device mac" data-theme="dark"><div id="app" class="app"></div></div></div>
+    <footer class="review-footer"><span id="interaction-hint">Open a story, resume a video, or show the new arrivals.</span><div><span class="fixture-label">Interactive concept · Sample content</span><label><input id="reduce-motion" type="checkbox"> Reduce motion</label><button id="reset">Reset concept</button></div></footer>
+    <section id="design-notes" class="design-notes" hidden aria-label="Design notes"></section>
+  </main>
+  <div id="live" class="sr-only" role="status" aria-live="polite"></div>
+</body>
+</html>

@@ -220,7 +220,12 @@ struct AllChannelsView: View {
 
   var body: some View {
     ScrollView {
+<<<<<<< Updated upstream
       VStack(alignment: .leading, spacing: 26) {
+=======
+      LazyVStack(alignment: .leading, spacing: 26) {
+        YouTubeConnectionView { Task { await load() } }
+>>>>>>> Stashed changes
         WatchAddBox { Task { await load() } }
         if !loaded {
           SkeletonCards(count: 8, minWidth: 220, height: 68)
@@ -484,6 +489,7 @@ struct AllChannelsView: View {
           .font(.ui(14, .medium))
           .foregroundStyle(Color.stInk)
           .lineLimit(1)
+        if channel.youtubeImported == true { Text("From YouTube").font(.stDetail).foregroundStyle(Color.stMuted) }
         if count > 0 {
           Text("\(count) new").font(.mono(11)).foregroundStyle(Color.stAccentText)
         }

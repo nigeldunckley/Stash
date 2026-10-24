@@ -28,6 +28,8 @@ struct SettingsView: View {
             }
           }
 
+          YouTubeConnectionView()
+
           SettingsGroup("Reading") {
             SettingsRow("Font") {
               Picker("Font", selection: $fontFamily) {

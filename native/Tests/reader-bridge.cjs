@@ -24,4 +24,25 @@ vm.runInNewContext(bridge + '\nwindow.testMutation = mutation;', {
   [...timers.values()][0](); await timedOut;
   window.stashReply(999,{});
   console.log('PASS: native reader replies, document correlation, failure rejection and timeout');
+
+  // Exercise the production progress effect before WebKit can convert its values to NSNumber.
+  const article = fs.readFileSync('packages/web/components/templates/article/Article.tsx', 'utf8');
+  const progressEffect = article.slice(article.indexOf(';(async () => {'), article.indexOf('// We don\'t react to changes to readingAnchorIndex'));
+  for (const anchor of [undefined, 'NaN', 'Infinity', '-1', '1.5', '12', '0']) {
+    let saved;
+    await vm.runInNewContext(progressEffect, {
+      readingProgress: 100,
+      articleContentRef: {current: {}},
+      window: {scrollY: 930, document: {scrollingElement: {scrollHeight: 1000}}},
+      getTopOmnivoreAnchorElement: () => anchor,
+      clampToPercent: value => Math.floor(Math.max(0, Math.min(100, value))),
+      props: {articleId: 'article', articleMutations: {articleReadingProgressMutation: input => { saved = input; }}},
+    });
+    assert.equal(saved.id, 'article');
+    assert.equal(saved.readingProgressPercent, 100);
+    assert.equal(saved.readingProgressTopPercent, 93);
+    if (anchor === '12' || anchor === '0') assert.equal(saved.readingProgressAnchorIndex, Number(anchor));
+    else assert.equal(Object.hasOwn(saved, 'readingProgressAnchorIndex'), false, `Invalid anchor ${anchor} must be omitted`);
+  }
+  console.log('PASS: missing and invalid reader anchors are omitted while valid progress and anchors are preserved');
 })().catch(error=>{console.error(error);process.exitCode=1});
