@@ -112,7 +112,8 @@ extension Subscription {
   func filed(in collectionId: String?) -> Subscription {
     Subscription(
       id: id, name: name, type: type, url: url, icon: icon, status: status,
-      collectionId: collectionId, includeShorts: includeShorts, lastFetchedAt: lastFetchedAt
+      collectionId: collectionId, hideShortVideos: hideShortVideos, youtubeImported: youtubeImported,
+      youtubeManualFollow: youtubeManualFollow, youtubeExcluded: youtubeExcluded, lastFetchedAt: lastFetchedAt
     )
   }
 }
