@@ -36,6 +36,7 @@ import {
 } from '../utils/helpers'
 import { logger } from '../utils/logger'
 import { parseSearchQuery } from '../utils/search'
+import { asksForShorts, HIDE_SHORTS_SQL } from './youtube/shorts'
 import { deleteHighlightByLibraryItemId, HighlightEvent } from './highlights'
 import {
   addLabelsToLibraryItem,
@@ -74,6 +75,7 @@ enum ReadFilter {
   READING = 'reading',
   UNREAD = 'unread',
   SEEN = 'seen',
+  SHORT = 'short',
 }
 
 enum InFilter {
@@ -348,6 +350,8 @@ export const buildQueryString = (
               return 'library_item.reading_progress_bottom_percent < 2'
             case ReadFilter.SEEN:
               return 'library_item.seen_at IS NOT NULL'
+            case ReadFilter.SHORT:
+              return 'library_item.youtube_short IS TRUE'
             default:
               throw new Error(`Unexpected keyword: ${value}`)
           }
@@ -709,6 +713,12 @@ export const createSearchQueryBuilder = (
     queryBuilder
       .andWhere(`(${queryString})`)
       .setParameters(paramtersToObject(parameters))
+  }
+
+  // Shorts that channels bring in stay out of every list while Settings ›
+  // Watch › Hide Shorts is on (the default).
+  if (!asksForShorts(args.query)) {
+    queryBuilder.andWhere(HIDE_SHORTS_SQL)
   }
 
   // default order by saved at descending
@@ -1582,6 +1592,8 @@ export const filterItemEvents = (
               !event.readingProgressBottomPercent ||
               event.readingProgressBottomPercent < 2
             )
+          case ReadFilter.SHORT:
+            return event.youtubeShort === true
           default:
             throw new Error(`Unexpected keyword: ${lowercasedValue}`)
         }

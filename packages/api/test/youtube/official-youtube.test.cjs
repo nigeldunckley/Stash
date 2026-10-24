@@ -449,6 +449,7 @@ test('upload backfill paginates, filters duration, deduplicates and retains chec
         videoDuration: (v) =>
           security.durationSeconds(v.contentDetails.duration),
         finishedVideo: (v) => v.snippet.liveBroadcastContent === 'none',
+        isShortVideo: () => false,
         videos: async (ids) =>
           [...resources, old].filter((v) => ids.includes(v.id)),
         youtubeList: async (_r, p) => {

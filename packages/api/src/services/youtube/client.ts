@@ -37,12 +37,27 @@ export type VideoResource = {
     uploadStatus?: string
   }
   liveStreamingDetails?: { actualEndTime?: string; scheduledStartTime?: string }
+  // Sized to the video's shape when YouTube knows it (videos() asks for this).
+  player?: { embedWidth?: string | number; embedHeight?: string | number }
 }
 export type ListResponse<T> = { items: T[]; nextPageToken?: string }
 export const thumbnail = (images?: Record<string, Thumbnail>) =>
   images?.high?.url || images?.medium?.url || images?.default?.url
 export const videoDuration = (video: VideoResource) =>
   durationSeconds(video.contentDetails.duration)
+// YouTube's API has no Shorts flag. A Short is at most three minutes long and
+// vertical or square (its embed is at least as tall as wide), or tagged #shorts when YouTube
+// doesn't know its shape.
+export const isShortVideo = (video: VideoResource) => {
+  const seconds = videoDuration(video)
+  if (seconds <= 0 || seconds > 180) return false
+  const width = Number(video.player?.embedWidth)
+  const height = Number(video.player?.embedHeight)
+  if (width > 0 && height > 0) return height >= width
+  return /#shorts\b/i.test(
+    `${video.snippet.title} ${video.snippet.description || ''}`
+  )
+}
 export const finishedVideo = (video: VideoResource) =>
   video.snippet.liveBroadcastContent !== 'live' &&
   video.snippet.liveBroadcastContent !== 'upcoming' &&
@@ -176,7 +191,9 @@ export async function videos(ids: string[]): Promise<VideoResource[]> {
     result.push(
       ...(
         await youtubeList<VideoResource>('videos', {
-          part: 'snippet,contentDetails,status,liveStreamingDetails',
+          part: 'snippet,contentDetails,status,liveStreamingDetails,player',
+          // Any size makes YouTube report the embed's shape (see isShortVideo).
+          maxWidth: 1000,
           id: ids.slice(start, start + 50).join(','),
         })
       ).items
