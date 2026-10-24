@@ -123,12 +123,4 @@ struct SidebarIconButton: View {
   }
 }
 
-extension Color {
-  /// A colour from the web's "#RRGGBB" strings, such as a collection's label colour.
-  init?(hexString: String) {
-    let digits = hexString.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-    guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return nil }
-    self.init(hex: value)
-  }
-}
 #endif
