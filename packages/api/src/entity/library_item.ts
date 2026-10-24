@@ -63,6 +63,9 @@ export class LibraryItem {
   youtubeAvailable?: boolean | null
   @Column('timestamptz', { nullable: true })
   youtubeMetadataAt?: Date | null
+  // A YouTube Short; Watch hides the ones channels bring in (see search).
+  @Column('boolean', { nullable: true })
+  youtubeShort?: boolean | null
 
   @Column('text')
   originalUrl!: string

@@ -38,7 +38,9 @@ export const COLLECTION_COLORS = [
   '#8B8D98',
 ]
 
-type Fields = Record<string, unknown> & { watch?: { collections?: unknown } }
+type Fields = Record<string, unknown> & {
+  watch?: { collections?: unknown; hideShorts?: unknown }
+}
 
 const GQL_GET_FIELDS = gql`
   query WatchFields {
@@ -91,6 +93,17 @@ const idsOf = (fields: Fields) => listOf(fields, 'collections')
 export const readWatchList = async (key: ListKey) =>
   listOf(await readFields(), key)
 
+const writeWatch = async (fields: Fields, values: Record<string, unknown>) => {
+  const data = (await gqlFetcher(GQL_SET_FIELDS, {
+    input: {
+      fields: { ...fields, watch: { ...fields.watch, ...values } },
+    },
+  })) as { setUserPersonalization?: { errorCodes?: string[] } }
+  if (data.setUserPersonalization?.errorCodes?.length) {
+    throw new Error(data.setUserPersonalization.errorCodes[0])
+  }
+}
+
 // Changes one of Watch's saved lists. Reads the latest copy first so other
 // settings kept in the same place are left as they are.
 export const updateWatchList = async (
@@ -99,16 +112,17 @@ export const updateWatchList = async (
 ) => {
   const fields = await readFields()
   const ids = change(listOf(fields, key))
-  const data = (await gqlFetcher(GQL_SET_FIELDS, {
-    input: {
-      fields: { ...fields, watch: { ...fields.watch, [key]: ids } },
-    },
-  })) as { setUserPersonalization?: { errorCodes?: string[] } }
-  if (data.setUserPersonalization?.errorCodes?.length) {
-    throw new Error(data.setUserPersonalization.errorCodes[0])
-  }
+  await writeWatch(fields, { [key]: ids })
   return ids
 }
+
+// Settings › Watch › Hide Shorts, on unless switched off. The server reads
+// the same setting and leaves Shorts that channels bring in out of lists.
+export const readHideShorts = async () =>
+  (await readFields()).watch?.hideShorts !== false
+
+export const updateHideShorts = async (hideShorts: boolean) =>
+  writeWatch(await readFields(), { hideShorts })
 
 const updateIds = (change: (ids: string[]) => string[]) =>
   updateWatchList('collections', change)

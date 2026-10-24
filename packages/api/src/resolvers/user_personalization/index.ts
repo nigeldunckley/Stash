@@ -9,6 +9,7 @@ import {
   SetUserPersonalizationSuccess,
   SortOrder,
 } from '../../generated/graphql'
+import { deleteCachedTotalCount } from '../../services/library_item'
 import { authorized } from '../../utils/gql-utils'
 
 export const setUserPersonalizationResolver = authorized<
@@ -35,6 +36,9 @@ export const setUserPersonalizationResolver = authorized<
       errorCodes: [SetUserPersonalizationErrorCode.NotFound],
     }
   }
+
+  // Settings such as Watch › Hide Shorts change what lists count.
+  await deleteCachedTotalCount(uid)
 
   const updatedUserPersonalization = await authTrx((t) =>
     t

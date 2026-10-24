@@ -188,8 +188,9 @@ export function YouTubeConnection({
           player.
         </p>
         <p>
-          The old Shorts setting has been replaced by an optional duration
-          filter in each channel’s settings.
+          Shorts are hidden in <a href="/settings/watch">Settings › Watch</a>.
+          Each channel’s settings can also leave out every video under three
+          minutes.
         </p>
         <p>
           <a href="/settings/youtube-privacy">YouTube privacy and data</a>

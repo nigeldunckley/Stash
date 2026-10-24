@@ -20,6 +20,7 @@ import {
   ChannelResource,
   configuredPublic,
   finishedVideo,
+  isShortVideo,
   thumbnail,
   VideoResource,
   videoDuration,
@@ -65,6 +66,8 @@ export const playbackFlags = (v?: VideoResource) => ({
   youtubeEmbeddable: v?.status.embeddable === true,
   youtubeMadeForKids: v?.status.madeForKids ?? true,
   youtubeMetadataAt: new Date(),
+  // Kept as it was when YouTube can't say, so a vanished Short stays hidden.
+  ...(v ? { youtubeShort: isShortVideo(v) } : {}),
 })
 
 async function updateVideoCopies(id: string, v?: VideoResource) {
@@ -414,6 +417,20 @@ export async function youtubeMaintenance() {
       { libraryItemId: item.id, userId: item.user_id },
       item.id
     )
+  // Videos saved before Stash told Shorts apart get checked once.
+  const unchecked = (await appDataSource.query(
+    `SELECT DISTINCT substring(original_url from 'v=([\\w-]{11})') AS video_id FROM omnivore.library_item WHERE original_url ~ '^https://www\\.youtube\\.com/watch\\?v=[\\w-]{11}$' AND youtube_short IS NULL AND youtube_metadata_at IS NOT NULL AND youtube_available IS NOT FALSE AND state<>'DELETED' LIMIT 100`
+  )) as { video_id: string }[]
+  if (unchecked.length) {
+    const ids = unchecked.map((v) => v.video_id)
+    const found = await videos(ids)
+    await cacheVideos(found)
+    for (const id of ids)
+      await updateVideoCopies(
+        id,
+        found.find((v) => v.id === id)
+      )
+  }
   const staleChannels = (await appDataSource.query(
     "SELECT channel_id FROM omnivore.youtube_channels WHERE fetched_at<now()-interval '27 days' LIMIT 50"
   )) as { channel_id: string }[]
