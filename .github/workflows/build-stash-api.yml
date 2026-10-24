@@ -10,6 +10,7 @@ on:
       - main
     paths:
       - 'packages/api/**'
+      - 'packages/db/migrations/**'
       - 'packages/readabilityjs/**'
       - 'packages/text-to-speech/**'
       - 'packages/content-handler/**'
@@ -22,6 +23,7 @@ on:
   pull_request:
     paths:
       - 'packages/api/**'
+      - 'packages/db/migrations/**'
       - 'packages/readabilityjs/**'
       - 'packages/text-to-speech/**'
       - 'packages/content-handler/**'

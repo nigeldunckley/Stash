@@ -13,6 +13,7 @@ COPY packages/content-handler ./packages/content-handler
 COPY packages/liqe ./packages/liqe
 COPY packages/utils ./packages/utils
 COPY packages/api ./packages/api
+COPY packages/db/migrations ./packages/db/migrations
 
 RUN yarn install --pure-lockfile --network-timeout=300000 && \
     yarn workspace @omnivore/utils build && \
