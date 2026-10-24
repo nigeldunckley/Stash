@@ -220,12 +220,33 @@ export function useWatchCollections() {
     [queryClient, refresh]
   )
 
+  // Puts the collections in a new order: the ids, first to last.
+  const reorder = useCallback(
+    async (order: string[]) => {
+      queryClient.setQueryData<string[]>(IDS_KEY, (old) => [
+        ...order,
+        ...(old ?? []).filter((id) => !order.includes(id)),
+      ])
+      try {
+        await updateIds((old) => [
+          ...order.filter((id) => old.includes(id)),
+          ...old.filter((id) => !order.includes(id)),
+        ])
+      } catch {
+        showErrorToast('Could not reorder your collections')
+      }
+      await queryClient.invalidateQueries({ queryKey: IDS_KEY })
+    },
+    [queryClient]
+  )
+
   return {
     collections,
     ready: !labelsPending && !idsPending,
     create,
     update,
     remove,
+    reorder,
   }
 }
 

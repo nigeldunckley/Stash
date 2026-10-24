@@ -16,6 +16,7 @@ import {
   Rss,
   SidebarSimple,
   SquaresFour,
+  FolderSimple,
 } from '@phosphor-icons/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/router'
@@ -95,6 +96,7 @@ import {
 import { markVideoWatched } from '../../../lib/networking/subscriptions/youtube'
 import { useOpenVideo } from '../../../lib/watch/player'
 import { WatchAddBox } from '../watch/WatchAddBox'
+import { AllChannels } from '../watch/AllChannels'
 import { AddFeedPanel } from './AddFeedPanel'
 import { VideoCard, VideoGrid, VideoGroup, VideoGroups } from './VideoCard'
 import {
@@ -664,6 +666,9 @@ function SourceList(props: {
   // Watch groups its channels by collection.
   collections?: Collection[]
   onMove?: (subscription: Subscription, collectionId: string | null) => void
+  // Watch's page for sorting channels into collections.
+  arranging?: boolean
+  onArrange?: () => void
 }): JSX.Element {
   const all = props.tab == 'watch' ? 'All channels' : 'All feeds'
   const { collections, onMove } = props
@@ -690,7 +695,7 @@ function SourceList(props: {
   return (
     <>
       <Source
-        aria-current={!props.selected}
+        aria-current={!props.selected && !props.arranging}
         onClick={() => props.onSelect(undefined)}
         title={all}
       >
@@ -704,6 +709,22 @@ function SourceList(props: {
         <span>{all}</span>
         <SourceCount tab={props.tab} />
       </Source>
+      {props.onArrange && (
+        <Source
+          aria-current={!!props.arranging}
+          onClick={props.onArrange}
+          title="Sort channels into collections"
+        >
+          <AllIcon
+            aria-hidden="true"
+            css={{ background: '$stSunken', color: '$stInk2' }}
+          >
+            <FolderSimple size={11} weight="bold" />
+          </AllIcon>
+          <span>Arrange collections</span>
+          <span />
+        </Source>
+      )}
       {grouped && collections ? (
         <>
           {collections.map((collection) => {
@@ -783,6 +804,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     create: createCollection,
     update: updateCollection,
     remove: removeCollection,
+    reorder: reorderCollections,
   } = useWatchCollections()
   const setChannelCollection = useSetChannelCollection()
   const setVideoCollection = useSetVideoCollection()
@@ -808,6 +830,8 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
   // Watch's Saved list lives in the address (?view=saved) so the sidebar
   // and the iPhone pills can link to it.
   const savedInAddress = watching && router.query.view == 'saved'
+  // Watch's page of every channel, to drag them into collections.
+  const arranging = watching && router.query.view == 'channels'
   const [view, setViewState] = useState<View>(
     savedInAddress ? 'later' : 'unseen'
   )
@@ -900,6 +924,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     (subscription?: Subscription) => {
       const query = { ...router.query }
       delete query.collection
+      if (query.view == 'channels') delete query.view
       if (subscription) {
         query.source = subscription.id
       } else {
@@ -919,6 +944,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     (next?: Collection) => {
       const query = { ...router.query }
       delete query.source
+      if (query.view == 'channels') delete query.view
       if (next) {
         query.collection = next.id
       } else {
@@ -931,6 +957,17 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     },
     [router]
   )
+
+  const arrange = useCallback(() => {
+    router.replace(
+      { pathname: router.pathname, query: { view: 'channels' } },
+      undefined,
+      { shallow: true }
+    )
+    setSourcesOpen(false)
+    setPeekItem(undefined)
+    window.scrollTo({ top: 0 })
+  }, [router])
 
   const moveChannel = useCallback(
     (subscription: Subscription, id: string | null) => {
@@ -1448,6 +1485,7 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement
       if (
+        arranging ||
         event.metaKey ||
         event.ctrlKey ||
         target.closest('input, textarea, [contenteditable="true"]') ||
@@ -1547,10 +1585,11 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
     onResize: resizePeek,
   })
 
-  const title =
-    selected?.name ??
-    collection?.name ??
-    (tab == 'watch' ? 'All channels' : 'All feeds')
+  const title = arranging
+    ? 'Arrange collections'
+    : selected?.name ??
+      collection?.name ??
+      (tab == 'watch' ? 'All channels' : 'All feeds')
   const folio = useFeedsFolio(watching ? 'channels' : 'feeds')
   const meta =
     total === undefined
@@ -1567,6 +1606,8 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
       onSelect={select}
       collections={watching ? collections : undefined}
       onMove={watching ? moveChannel : undefined}
+      arranging={arranging}
+      onArrange={watching ? arrange : undefined}
     />
   )
 
@@ -2031,162 +2072,31 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
         </Sources>
 
         <section aria-label={title}>
-          {watching && (
-            <CollectionChips
-              collections={collections}
-              selected={collection}
-              allCount={allUnseen}
-              onSelect={selectCollection}
-              onCreate={(name, color) => createCollection(name, color)}
-              onUpdate={(c, name, color) =>
-                updateCollection(c, { name, color })
-              }
-              onRemove={async (c) => {
-                if (collection?.id == c.id) selectCollection(undefined)
-                await removeCollection(c)
-                showUndoToast(`Deleted ${c.name}`)
-              }}
-              onDropChannel={(id, c) => {
-                const channel = subscriptions.find((s) => s.id == id)
-                if (channel) moveChannel(channel, c.id)
-              }}
-            />
-          )}
-          <Toolbar>
-            <ListTitle css={{ '@mdDown': { display: 'none' } }}>
-              {title}
-            </ListTitle>
-            <Popover
-              label="Sources"
-              align="start"
-              open={sourcesOpen}
-              onOpenChange={setSourcesOpen}
-              trigger={
-                <TitleButton
-                  aria-label={watching ? 'Choose a channel' : 'Choose a source'}
+          {arranging ? (
+            <>
+              <Toolbar>
+                <ListTitle css={{ '@mdDown': { display: 'none' } }}>
+                  {title}
+                </ListTitle>
+                <Popover
+                  label="Sources"
+                  align="start"
+                  open={sourcesOpen}
+                  onOpenChange={setSourcesOpen}
+                  trigger={
+                    <TitleButton aria-label="Choose a channel">
+                      <ListTitle>{title}</ListTitle>
+                      <CaretDown size={14} />
+                    </TitleButton>
+                  }
                 >
-                  <ListTitle>
-                    {selected?.name ??
-                      collection?.name ??
-                      (watching ? 'Channels' : 'Sources')}
-                  </ListTitle>
-                  <CaretDown size={14} />
-                </TitleButton>
-              }
-            >
-              <MobileSources>{sourceList}</MobileSources>
-            </Popover>
-            {meta && (
-              <PageMeta css={{ '@smDown': { display: 'none' } }}>
-                {meta}
-              </PageMeta>
-            )}
-            <span style={{ flex: 1 }} />
-            {watching && (
-              <WatchFilterMenu filters={filters} onChange={setFilters} />
-            )}
-            {watching && (
-              <LayoutToggle role="group" aria-label="Layout">
-                <IconButton
-                  label="Grid"
-                  size="sm"
-                  active={layout == 'grid'}
-                  onClick={() => changeLayout('grid')}
-                >
-                  <SquaresFour size={15} />
-                </IconButton>
-                <IconButton
-                  label="List"
-                  size="sm"
-                  active={layout == 'rows'}
-                  onClick={() => changeLayout('rows')}
-                >
-                  <Rows size={15} />
-                </IconButton>
-              </LayoutToggle>
-            )}
-            {!watching && (
-              <LayoutToggle role="group" aria-label="Layout">
-                <IconButton
-                  label="Cards"
-                  size="sm"
-                  active={readLayout == 'cards'}
-                  onClick={() => changeReadLayout('cards')}
-                >
-                  <Rows size={15} />
-                </IconButton>
-                <IconButton
-                  label="Wire"
-                  size="sm"
-                  active={readLayout == 'wire'}
-                  onClick={() => changeReadLayout('wire')}
-                >
-                  <ListDashes size={15} />
-                </IconButton>
-              </LayoutToggle>
-            )}
-            {!watching && unseenOnScreen.length >= 3 && (
-              <TextButton
-                aria-label="Sort the new items one at a time"
-                title="Sort the new items one at a time"
-                onClick={() => setSorting(true)}
-              >
-                <Stack size={14} />
-                <Wide css={peekItem ? { display: 'none' } : undefined}>
-                  Sort {unseenOnScreen.length}
-                </Wide>
-              </TextButton>
-            )}
-            <SegmentedControl
-              label="Show"
-              value={view}
-              onChange={(next) => {
-                setView(next)
-                setSeen(new Set())
-                setPeekItem(undefined)
-              }}
-              options={
-                watching
-                  ? [
-                      { value: 'unseen', label: 'New' },
-                      { value: 'all', label: 'All' },
-                      { value: 'later', label: 'Saved' },
-                    ]
-                  : [
-                      { value: 'unseen', label: 'Unseen' },
-                      { value: 'all', label: 'All' },
-                    ]
-              }
-            />
-            {!later && (
-              <TextButton
-                aria-label="Mark all seen"
-                title="Mark all seen"
-                onClick={markAllSeen}
-                disabled={!unseenOnScreen.length || bulkAction.isPending}
-              >
-                <Checks size={14} />
-                <Wide css={peekItem ? { display: 'none' } : undefined}>
-                  Mark all seen
-                </Wide>
-              </TextButton>
-            )}
-            {selected ? (
-              <Popover
-                label={`${selected.name} settings`}
-                trigger={
-                  <IconButton label="Source settings">
-                    <GearSix size={16} />
-                  </IconButton>
-                }
-              >
-                <SourceSettings
-                  subscription={selected}
-                  onUnsubscribed={() => select(undefined)}
-                />
-              </Popover>
-            ) : (
-              <span style={{ display: 'contents' }}>
+                  <MobileSources>{sourceList}</MobileSources>
+                </Popover>
+                <PageMeta>
+                  {subscriptions.length}{' '}
+                  {subscriptions.length == 1 ? 'channel' : 'channels'}
+                </PageMeta>
+                <span style={{ flex: 1 }} />
                 <Popover
                   label={addLabel}
                   trigger={
@@ -2197,88 +2107,287 @@ export function StashFeeds(props: { mode: Tab }): JSX.Element {
                 >
                   {addPanel()}
                 </Popover>
-              </span>
-            )}
-          </Toolbar>
-
-          {/* Shown even when nothing new is waiting below. */}
-          {watching && !later && !selected && (
-            <ContinueWatching
-              scope={[
-                collectionId ? `collection:${collectionId}` : '',
-                filterQuery({ ...filters, hideWatched: false }),
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              menuFor={videoMenuFor}
-              now={now}
-              sourceName={sourceName}
-              sourceIcon={sourceIcon}
-              onOpen={open}
-              onSave={save}
-              onArchive={archive}
-              onOpenOriginal={openOriginal}
-            />
-          )}
-          {noFeeds && !later ? (
-            <Empty>
-              {watching
-                ? 'No channels yet. Follow a YouTube channel and its new videos land here.'
-                : 'No feeds yet. Add a site or feed address, or import an OPML file from another reader.'}
-              <div
-                style={{
-                  marginTop: 16,
-                  textAlign: 'left',
-                  display: 'flex',
-                  justifyContent: 'center',
-                }}
-              >
-                {addPanel()}
-              </div>
-            </Empty>
-          ) : itemsQuery.isPending && listed.length == 0 ? (
-            <ListSkeleton />
-          ) : listed.length == 0 ? (
-            <Empty>
-              {later
-                ? 'Nothing saved yet. Press Save on a video, or share a YouTube link to Stash.'
-                : watching && filterQuery(filters)
-                ? 'No videos match these filters.'
-                : view == 'unseen'
-                ? collection
-                  ? `Nothing new in ${collection.name}.`
-                  : 'You are all caught up.'
-                : collection
-                ? `No videos in ${collection.name} yet. Right-click a channel (or press and hold on iPhone) to move it here.`
-                : watching
-                ? 'No videos from this channel yet.'
-                : 'Nothing from this source yet.'}
-            </Empty>
+              </Toolbar>
+              {noFeeds ? (
+                <Empty>
+                  No channels yet. Follow a YouTube channel, then sort it into a
+                  collection here.
+                </Empty>
+              ) : (
+                <AllChannels
+                  channels={subscriptions}
+                  collections={collections}
+                  count={(channel) => (
+                    <SourceCount tab="watch" subscription={channel} />
+                  )}
+                  onOpen={(channel) => select(channel)}
+                  onMove={moveChannel}
+                  onReorder={reorderCollections}
+                  onCreate={createCollection}
+                  onUpdate={(c, name, color) =>
+                    updateCollection(c, { name, color })
+                  }
+                  onRemove={async (c) => {
+                    await removeCollection(c)
+                    showUndoToast(`Deleted ${c.name}`)
+                  }}
+                />
+              )}
+            </>
           ) : (
             <>
-              {hasNewItems && (
-                <NewItemsBar>
-                  <button onClick={showNewItems}>
-                    <ArrowUp size={13} weight="bold" />
-                    {watching ? 'New videos' : 'New items'}
-                  </button>
-                </NewItemsBar>
+              {watching && (
+                <CollectionChips
+                  collections={collections}
+                  selected={collection}
+                  allCount={allUnseen}
+                  onSelect={selectCollection}
+                  onCreate={(name, color) => createCollection(name, color)}
+                  onUpdate={(c, name, color) =>
+                    updateCollection(c, { name, color })
+                  }
+                  onRemove={async (c) => {
+                    if (collection?.id == c.id) selectCollection(undefined)
+                    await removeCollection(c)
+                    showUndoToast(`Deleted ${c.name}`)
+                  }}
+                  onDropChannel={(id, c) => {
+                    const channel = subscriptions.find((s) => s.id == id)
+                    if (channel) moveChannel(channel, c.id)
+                  }}
+                />
               )}
-              {watching && layout == 'grid' && later ? (
-                <VideoGrid>{listed.map(cardFor)}</VideoGrid>
-              ) : watching && layout == 'grid' ? (
-                <VideoGroups>
-                  {videoGroups.map((group) => (
-                    <section key={group.label} aria-label={group.label}>
-                      <VideoGroup>{group.label}</VideoGroup>
-                      <VideoGrid>{group.items.map(cardFor)}</VideoGrid>
-                    </section>
-                  ))}
-                </VideoGroups>
-              ) : onWire ? (
-                <ItemList>{wire()}</ItemList>
+              <Toolbar>
+                <ListTitle css={{ '@mdDown': { display: 'none' } }}>
+                  {title}
+                </ListTitle>
+                <Popover
+                  label="Sources"
+                  align="start"
+                  open={sourcesOpen}
+                  onOpenChange={setSourcesOpen}
+                  trigger={
+                    <TitleButton
+                      aria-label={
+                        watching ? 'Choose a channel' : 'Choose a source'
+                      }
+                    >
+                      <ListTitle>
+                        {selected?.name ??
+                          collection?.name ??
+                          (watching ? 'Channels' : 'Sources')}
+                      </ListTitle>
+                      <CaretDown size={14} />
+                    </TitleButton>
+                  }
+                >
+                  <MobileSources>{sourceList}</MobileSources>
+                </Popover>
+                {meta && (
+                  <PageMeta css={{ '@smDown': { display: 'none' } }}>
+                    {meta}
+                  </PageMeta>
+                )}
+                <span style={{ flex: 1 }} />
+                {watching && (
+                  <WatchFilterMenu filters={filters} onChange={setFilters} />
+                )}
+                {watching && (
+                  <LayoutToggle role="group" aria-label="Layout">
+                    <IconButton
+                      label="Grid"
+                      size="sm"
+                      active={layout == 'grid'}
+                      onClick={() => changeLayout('grid')}
+                    >
+                      <SquaresFour size={15} />
+                    </IconButton>
+                    <IconButton
+                      label="List"
+                      size="sm"
+                      active={layout == 'rows'}
+                      onClick={() => changeLayout('rows')}
+                    >
+                      <Rows size={15} />
+                    </IconButton>
+                  </LayoutToggle>
+                )}
+                {!watching && (
+                  <LayoutToggle role="group" aria-label="Layout">
+                    <IconButton
+                      label="Cards"
+                      size="sm"
+                      active={readLayout == 'cards'}
+                      onClick={() => changeReadLayout('cards')}
+                    >
+                      <Rows size={15} />
+                    </IconButton>
+                    <IconButton
+                      label="Wire"
+                      size="sm"
+                      active={readLayout == 'wire'}
+                      onClick={() => changeReadLayout('wire')}
+                    >
+                      <ListDashes size={15} />
+                    </IconButton>
+                  </LayoutToggle>
+                )}
+                {!watching && unseenOnScreen.length >= 3 && (
+                  <TextButton
+                    aria-label="Sort the new items one at a time"
+                    title="Sort the new items one at a time"
+                    onClick={() => setSorting(true)}
+                  >
+                    <Stack size={14} />
+                    <Wide css={peekItem ? { display: 'none' } : undefined}>
+                      Sort {unseenOnScreen.length}
+                    </Wide>
+                  </TextButton>
+                )}
+                <SegmentedControl
+                  label="Show"
+                  value={view}
+                  onChange={(next) => {
+                    setView(next)
+                    setSeen(new Set())
+                    setPeekItem(undefined)
+                  }}
+                  options={
+                    watching
+                      ? [
+                          { value: 'unseen', label: 'New' },
+                          { value: 'all', label: 'All' },
+                          { value: 'later', label: 'Saved' },
+                        ]
+                      : [
+                          { value: 'unseen', label: 'Unseen' },
+                          { value: 'all', label: 'All' },
+                        ]
+                  }
+                />
+                {!later && (
+                  <TextButton
+                    aria-label="Mark all seen"
+                    title="Mark all seen"
+                    onClick={markAllSeen}
+                    disabled={!unseenOnScreen.length || bulkAction.isPending}
+                  >
+                    <Checks size={14} />
+                    <Wide css={peekItem ? { display: 'none' } : undefined}>
+                      Mark all seen
+                    </Wide>
+                  </TextButton>
+                )}
+                {selected ? (
+                  <Popover
+                    label={`${selected.name} settings`}
+                    trigger={
+                      <IconButton label="Source settings">
+                        <GearSix size={16} />
+                      </IconButton>
+                    }
+                  >
+                    <SourceSettings
+                      subscription={selected}
+                      onUnsubscribed={() => select(undefined)}
+                    />
+                  </Popover>
+                ) : (
+                  <span style={{ display: 'contents' }}>
+                    <Popover
+                      label={addLabel}
+                      trigger={
+                        <IconButton label={addLabel}>
+                          <Plus size={16} />
+                        </IconButton>
+                      }
+                    >
+                      {addPanel()}
+                    </Popover>
+                  </span>
+                )}
+              </Toolbar>
+
+              {/* Shown even when nothing new is waiting below. */}
+              {watching && !later && !selected && (
+                <ContinueWatching
+                  scope={[
+                    collectionId ? `collection:${collectionId}` : '',
+                    filterQuery({ ...filters, hideWatched: false }),
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  menuFor={videoMenuFor}
+                  now={now}
+                  sourceName={sourceName}
+                  sourceIcon={sourceIcon}
+                  onOpen={open}
+                  onSave={save}
+                  onArchive={archive}
+                  onOpenOriginal={openOriginal}
+                />
+              )}
+              {noFeeds && !later ? (
+                <Empty>
+                  {watching
+                    ? 'No channels yet. Follow a YouTube channel and its new videos land here.'
+                    : 'No feeds yet. Add a site or feed address, or import an OPML file from another reader.'}
+                  <div
+                    style={{
+                      marginTop: 16,
+                      textAlign: 'left',
+                      display: 'flex',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {addPanel()}
+                  </div>
+                </Empty>
+              ) : itemsQuery.isPending && listed.length == 0 ? (
+                <ListSkeleton />
+              ) : listed.length == 0 ? (
+                <Empty>
+                  {later
+                    ? 'Nothing saved yet. Press Save on a video, or share a YouTube link to Stash.'
+                    : watching && filterQuery(filters)
+                    ? 'No videos match these filters.'
+                    : view == 'unseen'
+                    ? collection
+                      ? `Nothing new in ${collection.name}.`
+                      : 'You are all caught up.'
+                    : collection
+                    ? `No videos in ${collection.name} yet. Use Arrange collections in the channel list to drag channels into it.`
+                    : watching
+                    ? 'No videos from this channel yet.'
+                    : 'Nothing from this source yet.'}
+                </Empty>
               ) : (
-                <ItemList>{listed.map(rowFor)}</ItemList>
+                <>
+                  {hasNewItems && (
+                    <NewItemsBar>
+                      <button onClick={showNewItems}>
+                        <ArrowUp size={13} weight="bold" />
+                        {watching ? 'New videos' : 'New items'}
+                      </button>
+                    </NewItemsBar>
+                  )}
+                  {watching && layout == 'grid' && later ? (
+                    <VideoGrid>{listed.map(cardFor)}</VideoGrid>
+                  ) : watching && layout == 'grid' ? (
+                    <VideoGroups>
+                      {videoGroups.map((group) => (
+                        <section key={group.label} aria-label={group.label}>
+                          <VideoGroup>{group.label}</VideoGroup>
+                          <VideoGrid>{group.items.map(cardFor)}</VideoGrid>
+                        </section>
+                      ))}
+                    </VideoGroups>
+                  ) : onWire ? (
+                    <ItemList>{wire()}</ItemList>
+                  ) : (
+                    <ItemList>{listed.map(rowFor)}</ItemList>
+                  )}
+                </>
               )}
             </>
           )}

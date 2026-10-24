@@ -220,7 +220,7 @@ function CollectionChip(props: {
 export const CHANNEL_DRAG = 'application/x-stash-channel'
 
 // Name and colour for a new or existing collection.
-function CollectionForm(props: {
+export function CollectionForm(props: {
   collection?: Collection
   nextColor: string
   onSave: (name: string, color: string) => void
