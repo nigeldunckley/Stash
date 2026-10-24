@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Making, changing and ordering Watch collections, as the web does. Each collection is a
 /// label marked "Watch collection"; which labels are collections, and their order, is the
@@ -69,13 +70,9 @@ extension Watch {
     }
   }
 
-  /// Deleting the label also takes it off its channels and videos.
+  /// Deleting the label also takes it off its channels and videos. The label goes first, so
+  /// if that fails the collection is still listed.
   static func deleteCollection(_ collection: WatchCollection) async throws {
-    try await Personalization.update("watch") { current in
-      var watch = current as? [String: Any] ?? [:]
-      watch["collections"] = (watch["collections"] as? [String] ?? []).filter { $0 != collection.id }
-      return watch
-    }
     let data = try await StashAPI.shared.graphQLJSON("""
       mutation DeleteLabel($id: ID!) {
         deleteLabel(id: $id) {
@@ -87,7 +84,27 @@ extension Watch {
     if let code = ((data["deleteLabel"] as? [String: Any])?["errorCodes"] as? [String])?.first {
       throw StashError.server(code)
     }
+    try await Personalization.update("watch") { current in
+      var watch = current as? [String: Any] ?? [:]
+      watch["collections"] = (watch["collections"] as? [String] ?? []).filter { $0 != collection.id }
+      return watch
+    }
   }
+}
+
+/// A channel or collection being dragged on All channels. Its own type, so only this app's
+/// drop areas take it, never a text field.
+struct ArrangeDrag: Codable, Transferable {
+  let kind: String
+  let id: String
+
+  static var transferRepresentation: some TransferRepresentation {
+    CodableRepresentation(contentType: .stashArrange)
+  }
+}
+
+extension UTType {
+  static let stashArrange = UTType(exportedAs: "com.nigeldunckley.stash.arrange")
 }
 
 extension Subscription {

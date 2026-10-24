@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Latest's length filter: useful when you have ten minutes.
 enum LengthFilter: String, CaseIterable, Identifiable {
@@ -139,12 +140,17 @@ struct AllChannelsView: View {
   @State private var loaded = false
   /// What's being dragged, and the section it's over.
   @State private var dragging: Drag?
+  /// The last thing picked up. On iPhone the same press can open a menu instead, so nothing
+  /// changes on screen until the drag is actually over the page.
+  @State private var pending: Drag?
   @State private var target: String?
   /// Every drop area the drag is over right now. Drags don't say when they end, so when it's
   /// over none of them for a moment, it's taken as finished.
   @State private var hovered: Set<String> = []
   @State private var endDrag: Task<Void, Never>?
   @State private var orderBeforeCarry: [String] = []
+  /// Order saves run one after another, so quick Move up, Move up can't land out of order.
+  @State private var orderSave: Task<Void, Never>?
   @State private var sheet: CollectionSheet.Purpose?
   @State private var deleting: WatchCollection?
   @State private var toaster = Toaster()
@@ -154,6 +160,13 @@ struct AllChannelsView: View {
   private enum Drag: Equatable {
     case channel(String)
     case collection(String)
+
+    var payload: ArrangeDrag {
+      switch self {
+      case .channel(let id): ArrangeDrag(kind: "channel", id: id)
+      case .collection(let id): ArrangeDrag(kind: "collection", id: id)
+      }
+    }
   }
 
   private struct ChannelSection: Identifiable {
@@ -229,9 +242,11 @@ struct AllChannelsView: View {
     }
     .background(Color.stPage)
     // Dropped anywhere else on the page: nothing moves, but the drag is over.
-    .dropDestination(for: String.self) { _, _ in
-      finishDrag()
-      return false
+    .dropDestination(for: ArrangeDrag.self) { items, _ in
+      // Nothing moves, except a carried collection, which stays where it's showing.
+      let carried = items.first?.kind == "collection"
+      finishDrag(commit: true)
+      return carried
     } isTargeted: { track(Self.page, $0) }
     .stashPage("All channels", detail: loaded ? "\(channels.count) channels" : nil)
     .toasts(toaster)
@@ -279,7 +294,7 @@ struct AllChannelsView: View {
         .allowsHitTesting(false)
     }
     .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: lit)
-    .dropDestination(for: String.self) { items, _ in
+    .dropDestination(for: ArrangeDrag.self) { items, _ in
       drop(items, on: section.id)
     } isTargeted: { track(section.id, $0) }
   }
@@ -300,7 +315,6 @@ struct AllChannelsView: View {
           .contentShape(Rectangle())
           .onDrag {
             begin(.collection(collection.id))
-            return NSItemProvider(object: "collection:\(collection.id)" as NSString)
           }
           .help("Drag to change the order")
           .accessibilityHidden(true)
@@ -377,7 +391,7 @@ struct AllChannelsView: View {
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .dropDestination(for: String.self) { items, _ in
+    .dropDestination(for: ArrangeDrag.self) { items, _ in
       drop(items, on: Self.newCollection)
     } isTargeted: { track(Self.newCollection, $0) }
   }
@@ -429,7 +443,6 @@ struct AllChannelsView: View {
       .contextMenu { moveMenu(channel) }
       .onDrag {
         begin(.channel(channel.id))
-        return NSItemProvider(object: "channel:\(channel.id)" as NSString)
       } preview: {
         liftedCard(channel)
       }
@@ -486,19 +499,30 @@ struct AllChannelsView: View {
 
   // MARK: Dragging
 
-  private func begin(_ drag: Drag) {
-    withAnimation(motion) {
-      dragging = drag
-      target = nil
-    }
+  /// Picks something up, and hands the drag its payload. Only this app's own drop areas take
+  /// it, so it can't be dropped into a text field as text.
+  private func begin(_ drag: Drag) -> NSItemProvider {
+    endDrag?.cancel()
+    pending = drag
+    dragging = nil
+    target = nil
     hovered = []
     orderBeforeCarry = collections.map(\.id)
-    // A press that never turns into a drag (on iPhone, opening the menu) ends it here.
-    scheduleEnd()
+    let provider = NSItemProvider()
+    let data = (try? JSONEncoder().encode(drag.payload)) ?? Data()
+    provider.registerDataRepresentation(forTypeIdentifier: UTType.stashArrange.identifier, visibility: .ownProcess) { done in
+      done(data, nil)
+      return nil
+    }
+    return provider
   }
 
   private func track(_ key: String, _ isOver: Bool) {
     if isOver {
+      // The drag is really happening (or back over the page after leaving it).
+      if dragging == nil, let pending {
+        withAnimation(motion) { dragging = pending }
+      }
       hovered.insert(key)
       if key != Self.page { target = key }
       if key != Self.page, case .collection(let id) = dragging { carry(id, over: key) }
@@ -515,19 +539,29 @@ struct AllChannelsView: View {
     endDrag = Task {
       try? await Task.sleep(for: .seconds(1.2))
       guard !Task.isCancelled else { return }
-      finishDrag()
+      finishDrag(commit: false)
     }
   }
 
-  private func finishDrag() {
+  /// Letting go saves a carried collection's new place; a drag that wanders off and isn't
+  /// dropped puts it back. It can still pick up again if the drag comes back.
+  private func finishDrag(commit: Bool) {
     endDrag?.cancel()
     let carried = carrying
     withAnimation(motion) {
       dragging = nil
       target = nil
+      if carried, !commit {
+        let byID = Dictionary(uniqueKeysWithValues: collections.map { ($0.id, $0) })
+        let restored = orderBeforeCarry.compactMap { byID[$0] }
+        if restored.count == collections.count { collections = restored }
+      }
     }
     hovered = []
-    if carried, collections.map(\.id) != orderBeforeCarry { saveOrder() }
+    if commit {
+      pending = nil
+      if carried, collections.map(\.id) != orderBeforeCarry { saveOrder() }
+    }
   }
 
   /// A carried collection takes the place of the one it's over; the others slide to make room.
@@ -548,11 +582,11 @@ struct AllChannelsView: View {
     }
   }
 
-  private func drop(_ items: [String], on key: String) -> Bool {
-    defer { finishDrag() }
+  private func drop(_ items: [ArrangeDrag], on key: String) -> Bool {
+    defer { finishDrag(commit: true) }
     guard let payload = items.first else { return false }
-    if payload.hasPrefix("channel:") {
-      let id = String(payload.dropFirst("channel:".count))
+    if payload.kind == "channel" {
+      let id = payload.id
       guard let channel = channels.first(where: { $0.id == id }) else { return false }
       if key == Self.newCollection {
         sheet = .new(channel, color: nextColor)
@@ -562,7 +596,7 @@ struct AllChannelsView: View {
       return true
     }
     // A collection's new place is already showing; letting go saves it.
-    return payload.hasPrefix("collection:")
+    return payload.kind == "collection"
   }
 
   // MARK: Changes
@@ -583,8 +617,13 @@ struct AllChannelsView: View {
         toaster.show(message) {
           file(channel.id, in: from)
           Task {
-            try? await Watch.updateChannel(channel.id, collectionId: from ?? "")
-            LibraryChanges.shared.publish()
+            do {
+              try await Watch.updateChannel(channel.id, collectionId: from ?? "")
+              LibraryChanges.shared.publish()
+            } catch {
+              file(channel.id, in: collectionId)
+              toaster.show("Couldn't put \(channel.name) back")
+            }
           }
         }
       } catch {
@@ -610,7 +649,9 @@ struct AllChannelsView: View {
 
   private func saveOrder() {
     let ids = collections.map(\.id)
-    Task {
+    let previous = orderSave
+    orderSave = Task {
+      await previous?.value
       do {
         try await Watch.setCollectionOrder(ids)
         LibraryChanges.shared.publish()

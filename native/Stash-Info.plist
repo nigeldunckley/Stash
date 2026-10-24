@@ -6,6 +6,19 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<!-- Lets a video's sound carry on in Picture in Picture and with the screen locked. -->
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.nigeldunckley.stash.arrange</string>
+			<key>UTTypeDescription</key>
+			<string>Stash channel or collection</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
