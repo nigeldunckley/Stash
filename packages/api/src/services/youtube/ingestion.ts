@@ -2,7 +2,6 @@ import axios from 'axios'
 import { randomBytes } from 'crypto'
 import { appDataSource } from '../../data_source'
 import { LibraryItem } from '../../entity/library_item'
-import { PageType } from '../../generated/graphql'
 import { Subscription, SubscriptionStatus } from '../../entity/subscription'
 import { env } from '../../env'
 import { redisDataSource } from '../../redis_data_source'
@@ -80,7 +79,9 @@ async function updateVideoCopies(id: string, v?: VideoResource) {
     await updateLibraryItem(
       item.id,
       {
-        itemType: PageType.Video,
+        // PageType.Video, spelled out: this file's tests load it without the
+        // generated GraphQL types.
+        itemType: 'VIDEO',
         ...playbackFlags(v),
         ...(v
           ? {
