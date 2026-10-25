@@ -71,6 +71,12 @@ func page(_ ids: [String], cursor: String? = nil, more: Bool = false, total: Int
     slow.text = "example.com/slow"
     await slow.submit()
     try check(slow.phase == .queued && !slow.busy && slow.accepted, "Slow preparation needs non-busy accepted state")
+    var lookups = 0
+    let video = LinkCapture(save: { _ in "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }, find: { _ in lookups += 1; return false }, pause: { _ in })
+    video.text = "https://youtu.be/dQw4w9WgXcQ"
+    await video.submit()
+    try check(video.phase == .saved && video.message == "Saved to Watch." && lookups == 0, "YouTube links are saved to Watch at once")
+    try check(YouTubeLink.isVideo("https://m.youtube.com/shorts/abcdefghijk") && !YouTubeLink.isVideo("https://example.com/watch?v=1"), "YouTube link detection")
   }
   @MainActor static func race() async throws {
     let transport = Transport(); let list = ItemList(search: transport.search)

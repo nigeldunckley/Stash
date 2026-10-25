@@ -41,8 +41,10 @@ final class Moments {
   /// Where the icons of the sidebar's Saved, Watch Saved, Archive and Trash entries are.
   @ObservationIgnored var targets: [MomentKind: CGRect] = [:]
 
-  func saved(_ item: LibraryItem? = nil, title: String? = nil) {
-    post(item.map(Watch.isVideo) == true ? .savedVideo : .saved, item: item, title: title)
+  /// Videos fly to Watch › Saved. With no item, a saved link counts as a video if it's a YouTube link.
+  func saved(_ item: LibraryItem? = nil, title: String? = nil, link: String? = nil) {
+    let video = item.map(Watch.isVideo) ?? link.map(YouTubeLink.isVideo) ?? false
+    post(video ? .savedVideo : .saved, item: item, title: title)
   }
   /// Videos aren't in the article Archive, so they don't fly there on Mac (on iPhone they go
   /// to the Watch tab).

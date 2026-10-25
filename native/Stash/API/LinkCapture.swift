@@ -20,6 +20,30 @@ enum LinkValidation {
   }
 }
 
+/// YouTube video links in any of their forms: watch, youtu.be, Shorts, embed and live.
+enum YouTubeLink {
+  static func videoID(_ url: URL) -> String? {
+    guard let host = url.host()?.lowercased() else { return nil }
+    if host == "youtu.be" {
+      let id = String(url.path().dropFirst().prefix(11))
+      return id.isEmpty ? nil : id
+    }
+    guard host.hasSuffix("youtube.com") else { return nil }
+    if let v = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "v" })?.value {
+      return v
+    }
+    let parts = url.path().split(separator: "/")
+    if parts.count >= 2, ["shorts", "embed", "live", "v"].contains(String(parts[0])) {
+      return String(parts[1].prefix(11))
+    }
+    return nil
+  }
+
+  static func isVideo(_ text: String) -> Bool {
+    URL(string: text).flatMap(videoID) != nil
+  }
+}
+
 @MainActor
 @Observable
 final class LinkCapture {
@@ -54,6 +78,13 @@ final class LinkCapture {
       phase = .saving
       message = "Saving…"
       let canonical = try await saveURL(url)
+      // A YouTube video is ready the moment it's saved, under its own watch link.
+      if YouTubeLink.isVideo(url) {
+        phase = .saved
+        message = "Saved to Watch."
+        LibraryChanges.shared.publish()
+        return
+      }
       phase = .preparing
       message = "Saved. The article is being prepared."
       LibraryChanges.shared.publish()
