@@ -12,7 +12,13 @@ import { redisDataSource } from '../redis_data_source'
 import { enqueueFetchContentJob, enqueueRescueSave } from '../utils/createTask'
 import { cleanUrl, generateSlug } from '../utils/helpers'
 import { logger } from '../utils/logger'
-import { canonicalYouTubeUrl, isYouTubeVideoURL } from '../utils/youtube'
+import { canonicalYouTubeUrl, videoIdFromYouTubeUrl } from '../utils/youtube'
+import {
+  videoDocument,
+  videoThumbnail,
+  watchUrl,
+} from '../utils/youtubeChannel'
+import { createAndAddLabelsToLibraryItem } from './labels'
 import { authTrx } from '../repository'
 import { libraryItemRepository } from '../repository/library_item'
 import {
@@ -176,14 +182,51 @@ export const createPageSaveRequest = async ({
     }
   }
 
+  // A YouTube video needs no page fetch: it's saved as a video straight
+  // away, and the YouTube video job fills in its title, channel and length.
+  // (The page itself can be YouTube's cookie consent page from a UK server.)
+  const videoId = videoIdFromYouTubeUrl(url)
+  if (videoId) {
+    const archived = state === ArticleSavingRequestStatus.Archived
+    const video = await createOrUpdateLibraryItem(
+      {
+        id: articleSavingRequestId || undefined,
+        user: { id: userId },
+        readableContent: videoDocument({
+          videoId,
+          title: url,
+          channel: 'YouTube',
+          channelUrl: watchUrl(videoId),
+        }),
+        itemType: PageType.Video,
+        slug: generateSlug(url),
+        title: url,
+        originalUrl: url,
+        siteName: 'YouTube',
+        thumbnail: videoThumbnail(videoId),
+        wordCount: 0,
+        state: archived ? LibraryItemState.Archived : LibraryItemState.Succeeded,
+        publishedAt,
+        folder,
+        subscription,
+        savedAt,
+        archivedAt: archived ? new Date() : unarchive ? null : undefined,
+      },
+      userId,
+      pubsub
+    )
+    await createAndAddLabelsToLibraryItem(video.id, userId, labels, subscription)
+    await addRecentSavedItem(userId)
+    return video
+  }
+
   // create processing item
   const libraryItem = await createOrUpdateLibraryItem(
     {
       id: articleSavingRequestId || undefined,
       user: { id: userId },
       readableContent: SAVING_CONTENT,
-      // A YouTube link belongs in Watch from the moment it's saved.
-      itemType: isYouTubeVideoURL(url) ? PageType.Video : PageType.Unknown,
+      itemType: PageType.Unknown,
       slug: generateSlug(url),
       title: url,
       originalUrl: url,

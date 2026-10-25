@@ -20,9 +20,11 @@ import {
 } from '../utils/youtubeChannel'
 import { PageType } from '../generated/graphql'
 
-// A title left by the save: the link itself, or YouTube's cookie consent page.
+// A title left by the save (the link itself, or YouTube's cookie consent
+// page) or by expired metadata.
 const placeholderTitle = (title: string, url: string) =>
   !title.trim() ||
+  title === 'YouTube video' ||
   title === url ||
   /^https?:\/\//.test(title) ||
   /^before you continue/i.test(title)
@@ -34,7 +36,12 @@ const fillFromOembed = async (
   id: string,
   userId: string
 ) => {
-  if (!placeholderTitle(item.title, item.originalUrl) && item.author) return
+  // Marked as looked up either way, so the maintenance job doesn't keep
+  // queueing a video oEmbed can't describe.
+  const checked = { youtubeMetadataAt: new Date() }
+  if (!placeholderTitle(item.title, item.originalUrl) && item.author) {
+    return updateLibraryItem(item.id, checked, userId)
+  }
   try {
     const { data } = await axios.get<{
       title: string
@@ -47,6 +54,7 @@ const fillFromOembed = async (
     await updateLibraryItem(
       item.id,
       {
+        ...checked,
         title: data.title,
         author: data.author_name,
         siteName: 'YouTube',
@@ -62,6 +70,7 @@ const fillFromOembed = async (
     )
   } catch {
     logger.info('youtube: oembed unavailable', { id })
+    await updateLibraryItem(item.id, checked, userId)
   }
 }
 export interface ProcessYouTubeVideoJobData {

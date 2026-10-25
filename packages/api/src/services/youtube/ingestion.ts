@@ -387,6 +387,17 @@ export async function renewPush(channelId: string, unsubscribe = false) {
 
 export async function youtubeMaintenance() {
   await expireMetadata()
+  // Saved videos still missing their details. Without an API key the video
+  // job falls back to oEmbed, so this runs either way.
+  const legacy = (await appDataSource.query(
+    `SELECT id,user_id FROM omnivore.library_item WHERE original_url ~ '^https://(www\\.)?(youtube\\.com/watch\\?v=|youtu\\.be/)' AND youtube_metadata_at IS NULL AND state<>'DELETED' LIMIT 100`
+  )) as { id: string; user_id: string }[]
+  for (const item of legacy)
+    await queueYouTube(
+      'process-youtube-video',
+      { libraryItemId: item.id, userId: item.user_id },
+      item.id
+    )
   if (!configuredPublic()) return
   const connections = (await appDataSource.query(
     `SELECT user_id FROM omnivore.youtube_connections WHERE credentials<>'' AND (synced_at IS NULL OR synced_at<now()-interval '1 hour')`
@@ -411,15 +422,6 @@ export async function youtubeMaintenance() {
     `SELECT channel_id FROM omnivore.youtube_channels c WHERE lease_expires_at>now() AND NOT EXISTS(SELECT 1 FROM omnivore.subscriptions s WHERE s.youtube_channel_id=c.channel_id AND s.status='ACTIVE' AND NOT s.youtube_excluded)`
   )) as { channel_id: string }[]
   for (const c of unused) await renewPush(c.channel_id, true)
-  const legacy = (await appDataSource.query(
-    `SELECT id,user_id FROM omnivore.library_item WHERE original_url ~ '^https://(www\\.)?(youtube\\.com/watch\\?v=|youtu\\.be/)' AND youtube_metadata_at IS NULL AND state<>'DELETED' LIMIT 100`
-  )) as { id: string; user_id: string }[]
-  for (const item of legacy)
-    await queueYouTube(
-      'process-youtube-video',
-      { libraryItemId: item.id, userId: item.user_id },
-      item.id
-    )
   // Videos saved before Stash told Shorts apart get checked once.
   const unchecked = (await appDataSource.query(
     `SELECT DISTINCT substring(original_url from 'v=([\\w-]{11})') AS video_id FROM omnivore.library_item WHERE original_url ~ '^https://www\\.youtube\\.com/watch\\?v=[\\w-]{11}$' AND youtube_short IS NULL AND youtube_metadata_at IS NOT NULL AND youtube_available IS NOT FALSE AND state<>'DELETED' LIMIT 100`
@@ -478,9 +480,12 @@ export async function youtubeMaintenance() {
   )
 }
 
+// Clearing youtube_metadata_at lets the maintenance job look the video up
+// again, so an expired video gets fresh details rather than staying blank.
 async function expireMetadata() {
   await appDataSource.query(`UPDATE omnivore.library_item SET title='YouTube video',author=NULL,description=NULL,thumbnail=NULL,word_count=0,
-    readable_content='<p>YouTube metadata expired. Open the original video on YouTube.</p>',youtube_available=NULL,youtube_embeddable=NULL,youtube_made_for_kids=NULL
+    readable_content='<p>YouTube metadata expired. Open the original video on YouTube.</p>',youtube_available=NULL,youtube_embeddable=NULL,youtube_made_for_kids=NULL,
+    youtube_metadata_at=NULL
     WHERE youtube_metadata_at<now()-interval '30 days'`)
   await appDataSource.query(
     "DELETE FROM omnivore.youtube_videos WHERE fetched_at<now()-interval '30 days'"
