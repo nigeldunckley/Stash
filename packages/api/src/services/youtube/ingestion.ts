@@ -390,7 +390,7 @@ export async function youtubeMaintenance() {
   // Saved videos still missing their details. Without an API key the video
   // job falls back to oEmbed, so this runs either way.
   const legacy = (await appDataSource.query(
-    `SELECT id,user_id FROM omnivore.library_item WHERE original_url ~ '^https://(www\\.)?(youtube\\.com/watch\\?v=|youtu\\.be/)' AND youtube_metadata_at IS NULL AND state<>'DELETED' LIMIT 100`
+    `SELECT id,user_id FROM omnivore.library_item WHERE original_url ~ '^https://(www\\.)?(youtube\\.com/(watch\\?v=|shorts/)|youtu\\.be/)' AND youtube_metadata_at IS NULL AND state<>'DELETED' LIMIT 100`
   )) as { id: string; user_id: string }[]
   for (const item of legacy)
     await queueYouTube(
