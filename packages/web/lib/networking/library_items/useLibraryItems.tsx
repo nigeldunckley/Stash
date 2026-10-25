@@ -948,7 +948,11 @@ export const useAddItem = () => {
       timezone: string | undefined
       locale: string | undefined
     }) => {
-      announceMoment('saved', hostOf(variables.url))
+      announceMoment(
+        'saved',
+        hostOf(variables.url),
+        YOUTUBE_VIDEO_URL.test(variables.url) ? 'watch-saved' : 'saved'
+      )
       await queryClient.cancelQueries({ queryKey: ['libraryItems'] })
       const previousState = {
         previousItems: queryClient.getQueryData(['libraryItems']),
