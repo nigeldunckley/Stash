@@ -36,22 +36,7 @@ enum Watch {
 
   /// The YouTube id in a watch, short, embed or youtu.be link.
   static func videoID(_ item: LibraryItem) -> String? {
-    guard let url = URL(string: item.originalArticleUrl ?? item.url), let host = url.host()?.lowercased() else {
-      return nil
-    }
-    if host == "youtu.be" {
-      let id = String(url.path().dropFirst().prefix(11))
-      return id.isEmpty ? nil : id
-    }
-    guard host.hasSuffix("youtube.com") else { return nil }
-    if let v = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "v" })?.value {
-      return v
-    }
-    let parts = url.path().split(separator: "/")
-    if parts.count >= 2, ["shorts", "embed", "live", "v"].contains(String(parts[0])) {
-      return String(parts[1].prefix(11))
-    }
-    return nil
+    URL(string: item.originalArticleUrl ?? item.url).flatMap(YouTubeLink.videoID)
   }
 
   static func isVideo(_ item: LibraryItem) -> Bool {
