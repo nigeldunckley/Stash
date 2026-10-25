@@ -385,13 +385,25 @@ export async function renewPush(channelId: string, unsubscribe = false) {
   }
 }
 
+// Row-level security limits a plain query to the signed-in user's items, and
+// a background job has none, so a lookup across everyone's library runs as
+// the admin role.
+const acrossUsers = (sql: string, params: unknown[] = []) =>
+  appDataSource.transaction(async (tx) => {
+    await tx.query('SELECT omnivore.set_claims($1, $2)', [
+      '00000000-0000-0000-0000-000000000000',
+      'omnivore_admin',
+    ])
+    return tx.query(sql, params) as Promise<unknown>
+  })
+
 export async function youtubeMaintenance() {
   await expireMetadata()
   // Saved videos still missing their details: never looked up, or looked up
   // over an hour ago and still titled with their link (YouTube couldn't be
   // reached then). Without an API key the video job falls back to oEmbed and
   // the watch page, so this runs either way.
-  const legacy = (await appDataSource.query(
+  const legacy = (await acrossUsers(
     `SELECT id,user_id FROM omnivore.library_item WHERE original_url ~ '^https://(www\\.)?(youtube\\.com/(watch\\?v=|shorts/)|youtu\\.be/)' AND state<>'DELETED' AND (youtube_metadata_at IS NULL OR (youtube_metadata_at<now()-interval '1 hour' AND (title ~ '^https?://' OR title ~* '^before you continue' OR btrim(title) IN ('','YouTube video')))) LIMIT 100`
   )) as { id: string; user_id: string }[]
   for (const item of legacy)
