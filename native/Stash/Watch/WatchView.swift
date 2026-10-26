@@ -192,7 +192,9 @@ struct WatchView: View {
       LazyVStack(alignment: .leading, spacing: 26) {
         if channel == nil { WatchAddBox { Task { await reload() } } }
         if isFront { frontSections }
-        ForEach(dayGroups, id: \.label) { group in
+        ForEach(Array(dayGroups.enumerated()), id: \.element.label) { index, group in
+          // Collection shelves come after Today's videos, or first when nothing came out today.
+          if index == 0 && group.label != "Today" { shelfRows }
           VStack(alignment: .leading, spacing: 14) {
             if kind != .saved {
               HStack(spacing: 10) {
@@ -210,7 +212,9 @@ struct WatchView: View {
               }
             }
           }
+          if index == 0 && group.label == "Today" { shelfRows }
         }
+        if dayGroups.isEmpty { shelfRows }
         if list.isLoading && !list.items.isEmpty {
           ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding()
         }
@@ -269,14 +273,23 @@ struct WatchView: View {
         )
       }
     }
-    if usesGrid {
+  }
+
+  /// Latest's collection shelves (Mac and iPad).
+  @ViewBuilder
+  private var shelfRows: some View {
+    if isFront && usesGrid {
       ForEach(shelves.filter { !shelfItems($0).isEmpty }) { shelf in shelfRow(shelf) }
     }
   }
 
   /// A shelf's videos you haven't watched or moved since it loaded, at the length you picked.
+  /// Today's videos stay in Today, which comes first.
   private func shelfItems(_ shelf: Shelf) -> [LibraryItem] {
-    shelf.items.filter { list.isUnseen($0) && length.matches($0) && !gone.contains($0.id) }
+    shelf.items.filter {
+      list.isUnseen($0) && length.matches($0) && !gone.contains($0.id)
+        && dayGroup($0.publishedAt ?? $0.savedAt) != "Today"
+    }
   }
 
   /// Videos on a shelf aren't repeated in the day bands below it.
