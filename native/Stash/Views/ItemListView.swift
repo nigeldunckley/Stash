@@ -237,35 +237,54 @@ struct ItemListView<Tools: View>: View {
 
   /// iPad: the list on the left and the article on the right, each with its own toolbar.
   private var padSplit: some View {
-    NavigationSplitView {
-      listColumn
-        .navigationSplitViewColumnWidth(min: 320, ideal: 380, max: 480)
+    NavigationSplitView(columnVisibility: .constant(.all)) {
+      ScrollViewReader { proxy in
+        listColumn
+          .onChange(of: selection?.id) { _, id in
+            guard let id else { return }
+            withAnimation(reduceMotion ? nil : StashMotion.feedback) { proxy.scrollTo(id) }
+          }
+      }
+      .toolbar(removing: .sidebarToggle)
+      .navigationSplitViewColumnWidth(min: 320, ideal: 380, max: 480)
     } detail: {
       NavigationStack {
         if let selection {
-          ReaderScreen(item: selection, actions: readerActions(for: selection), perform: perform)
-            .id(selection.id)
-        } else {
-          EmptyBox(
-            title: list.visibleItems.isEmpty ? emptyTitle : "Pick an article",
-            message: list.visibleItems.isEmpty ? emptyMessage : "It opens here, beside the list.",
-            systemImage: "doc.text", boxed: false
+          ReaderScreen(
+            item: selection, actions: readerActions(for: selection), perform: perform,
+            onBack: { self.selection = nil }
           )
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .background(Color.stPage)
+          .id(selection.id)
+        } else if !list.visibleItems.isEmpty {
+          EmptyBox(message: "Pick an article. It opens here, beside the list.", systemImage: "doc.text", boxed: false)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.stPage)
+        } else {
+          Color.stPage
         }
       }
     }
     .navigationSplitViewStyle(.balanced)
     .background { splitShortcuts }
+    // The list may reload under the open article (a new filter, a refresh): keep it in step.
+    .onChange(of: list.items) { _, items in
+      guard let selected = selection else { return }
+      if let updated = items.first(where: { $0.id == selected.id }) {
+        selection = updated
+      } else if !list.isLoading && !items.isEmpty {
+        // Gone from the list for good (a new filter), not just mid-reload.
+        selection = nil
+      }
+    }
+    .toasts(toaster)
   }
 
-  /// ↓ and ↑ move through the list with the article open beside it, as on the Mac. Text fields
-  /// still get the arrow keys first.
+  /// ⌥↓ and ⌥↑ move through the list with the article open beside it. With ⌥, so the arrow keys
+  /// still scroll the article and typing a note never triggers them.
   private var splitShortcuts: some View {
     Group {
-      Button("Next Article") { move(1) }.keyboardShortcut(.downArrow, modifiers: [])
-      Button("Previous Article") { move(-1) }.keyboardShortcut(.upArrow, modifiers: [])
+      Button("Next Article") { move(1) }.keyboardShortcut(.downArrow, modifiers: .option)
+      Button("Previous Article") { move(-1) }.keyboardShortcut(.upArrow, modifiers: .option)
     }
     .opacity(0)
     .allowsHitTesting(false)
@@ -276,7 +295,7 @@ struct ItemListView<Tools: View>: View {
   private func move(_ offset: Int) {
     let items = list.visibleItems
     guard !items.isEmpty else { return }
-    let index = selection.flatMap { items.firstIndex(of: $0) }.map { $0 + offset } ?? 0
+    let index = selection.flatMap { selected in items.firstIndex { $0.id == selected.id } }.map { $0 + offset } ?? 0
     guard items.indices.contains(index) else { return }
     selection = items[index]
     open(items[index])
@@ -289,7 +308,7 @@ struct ItemListView<Tools: View>: View {
       .overlay(alignment: .top) {
         NewItemsPill(count: list.waiting.count) { withAnimation { list.showWaiting() } }
       }
-      .toasts(toaster)
+      .modifier(ListToasts(toaster: toaster, shown: !splits))
       .linkCapture(isPresented: $capturing)
       .stashPage(title, detail: detail, accentDetail: showsUnseen, folio: folio) { tools() }
       .modifier(Searchable(text: search, onSearch: onSearch))
@@ -371,7 +390,7 @@ struct ItemListView<Tools: View>: View {
       Button { selection = item; open(item) } label: {
         WireRow(
           item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item),
-          arrived: list.arrivals[item.id]
+          arrived: list.arrivals[item.id], selected: splits && selection?.id == item.id
         )
       }
       .buttonStyle(.plain)
@@ -557,6 +576,16 @@ struct ItemListView<Tools: View>: View {
 }
 
 #if os(iOS)
+/// The list's toasts, unless the iPad split shows them across both columns instead.
+private struct ListToasts: ViewModifier {
+  let toaster: Toaster
+  let shown: Bool
+
+  func body(content: Content) -> some View {
+    if shown { content.toasts(toaster) } else { content }
+  }
+}
+
 private struct Searchable: ViewModifier {
   let text: Binding<String>?
   let onSearch: () -> Void

@@ -284,6 +284,7 @@ struct MainView: View {
     .opacity(0)
     .allowsHitTesting(false)
     .accessibilityHidden(true)
+    .disabled(showingEdition || showingPlayer || capturing)
   }
 
   /// Only the page in front checks for new posts and owns the toolbar.
