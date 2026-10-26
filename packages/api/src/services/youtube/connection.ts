@@ -392,12 +392,9 @@ export async function syncSubscriptions(uid: string) {
       },
       { uid }
     )
-    for (const channel of publicChannels)
-      await queueYouTube(
-        'youtube-refresh-channel',
-        { channelId: channel.id },
-        channel.id
-      )
+    // No per-channel refresh here: this sync runs every hour, and reading
+    // every channel's uploads through the Data API each time used up the
+    // daily quota. New channels are checked by the five-minute feed sweep.
   } catch (error) {
     if (
       c &&

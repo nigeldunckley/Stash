@@ -45,7 +45,9 @@ export const refreshAllFeeds = async (db: DataSource): Promise<boolean> => {
       WHERE
         s.type = $1
         AND s.status = $2
-        AND s.youtube_channel_id IS NULL
+        -- YouTube channels are checked through their free videos.xml feed
+        -- too; only channels left out of a YouTube import are skipped
+        AND NOT s.youtube_excluded
         AND (
           s.scheduled_at <= NOW()
           OR s.scheduled_at IS NULL

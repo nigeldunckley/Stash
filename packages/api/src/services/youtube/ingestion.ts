@@ -1,7 +1,6 @@
 import axios from 'axios'
 import { randomBytes } from 'crypto'
 import { appDataSource } from '../../data_source'
-import { LibraryItem } from '../../entity/library_item'
 import { Subscription, SubscriptionStatus } from '../../entity/subscription'
 import { env } from '../../env'
 import { redisDataSource } from '../../redis_data_source'
@@ -26,6 +25,7 @@ import {
   videoDuration,
   videos,
   youtubeList,
+  YouTubeUnavailableError,
 } from './client'
 import { queueYouTube } from './connection'
 import { shouldImportVideo } from './security'
@@ -39,6 +39,18 @@ type ChannelState = {
   hub_secret?: string
   hub_requested_at?: Date
 }
+// Row-level security limits a plain query to the signed-in user's items, and
+// a background job has none, so a lookup across everyone's library runs as
+// the admin role.
+const acrossUsers = (sql: string, params: unknown[] = []) =>
+  appDataSource.transaction(async (tx) => {
+    await tx.query('SELECT omnivore.set_claims($1, $2)', [
+      '00000000-0000-0000-0000-000000000000',
+      'omnivore_admin',
+    ])
+    return tx.query(sql, params) as Promise<unknown>
+  })
+
 export async function cacheVideos(items: VideoResource[]) {
   for (const v of items)
     await appDataSource.query(
@@ -72,9 +84,13 @@ export const playbackFlags = (v?: VideoResource) => ({
 
 async function updateVideoCopies(id: string, v?: VideoResource) {
   // Public metadata updates never replace user-created notes, labels or progress.
-  const items = await appDataSource
-    .getRepository(LibraryItem)
-    .find({ where: { originalUrl: watchUrl(id) } })
+  // Background jobs have no signed-in user, so the copies are found as admin.
+  const items = (
+    (await acrossUsers(
+      "SELECT id,user_id FROM omnivore.library_item WHERE original_url=$1 AND state<>'DELETED'",
+      [watchUrl(id)]
+    )) as { id: string; user_id: string }[]
+  ).map((row) => ({ id: row.id, userId: row.user_id }))
   for (const item of items) {
     await updateLibraryItem(
       item.id,
@@ -237,15 +253,25 @@ export async function refreshChannel(
     })
     if (!subscribers.length) return
     const startedAt = new Date()
-    const channel = (await channels([channelId]))[0]
+    // A channel's details rarely change, so a week-old copy saves a call.
+    const cached = (
+      (await appDataSource.query(
+        "SELECT data FROM omnivore.youtube_channels WHERE channel_id=$1 AND fetched_at>now()-interval '7 days' AND data ? 'id'",
+        [channelId]
+      )) as { data: ChannelResource }[]
+    )[0]?.data
+    const channel = cached || (await channels([channelId]))[0]
     if (!channel) return
-    await appDataSource.query(
-      `INSERT INTO omnivore.youtube_channels(channel_id,data) VALUES($1,$2) ON CONFLICT(channel_id) DO UPDATE SET data=excluded.data,fetched_at=now()`,
-      [channelId, JSON.stringify(channel)]
-    )
+    if (!cached)
+      await appDataSource.query(
+        `INSERT INTO omnivore.youtube_channels(channel_id,data) VALUES($1,$2) ON CONFLICT(channel_id) DO UPDATE SET data=excluded.data,fetched_at=now()`,
+        [channelId, JSON.stringify(channel)]
+      )
     let found: VideoResource[] = []
-    const reconciliation =
-      !notificationVideoId || subscribers.some((s) => !s.youtubeInitializedAt)
+    // A new-video notice looks up that one video, even for a subscriber not
+    // yet started: importForSubscription then looks back a week for them.
+    // The channel feed check (refreshFeed) finds anything a notice missed.
+    const reconciliation = !notificationVideoId
     if (notificationVideoId && !reconciliation) {
       const response = await videos([notificationVideoId])
       found = response.filter((v) => v.snippet.channelId === channelId)
@@ -385,18 +411,6 @@ export async function renewPush(channelId: string, unsubscribe = false) {
   }
 }
 
-// Row-level security limits a plain query to the signed-in user's items, and
-// a background job has none, so a lookup across everyone's library runs as
-// the admin role.
-const acrossUsers = (sql: string, params: unknown[] = []) =>
-  appDataSource.transaction(async (tx) => {
-    await tx.query('SELECT omnivore.set_claims($1, $2)', [
-      '00000000-0000-0000-0000-000000000000',
-      'omnivore_admin',
-    ])
-    return tx.query(sql, params) as Promise<unknown>
-  })
-
 export async function youtubeMaintenance() {
   await expireMetadata()
   // Saved videos still missing their details: never looked up, or looked up
@@ -418,11 +432,10 @@ export async function youtubeMaintenance() {
   )) as { user_id: string }[]
   for (const c of connections)
     await queueYouTube('youtube-sync-user', { userId: c.user_id }, c.user_id)
-  const due = (await appDataSource.query(
-    `SELECT DISTINCT s.youtube_channel_id AS id FROM omnivore.subscriptions s LEFT JOIN omnivore.youtube_channels c ON c.channel_id=s.youtube_channel_id WHERE s.status='ACTIVE' AND NOT s.youtube_excluded AND s.youtube_channel_id IS NOT NULL AND (s.youtube_initialized_at IS NULL OR c.reconciled_at IS NULL OR c.reconciled_at<now()-interval '6 hours')`
-  )) as { id: string }[]
-  for (const c of due)
-    await queueYouTube('youtube-refresh-channel', { channelId: c.id }, c.id)
+  // New uploads come from each channel's free videos.xml feed, checked with
+  // the other feeds every five minutes (refreshFeed), and from YouTube's
+  // new-video notices. Reading whole upload lists through the Data API for
+  // every channel used up the daily quota, so there is no API sweep here.
   const renewals = (await appDataSource.query(
     `SELECT channel_id FROM omnivore.youtube_channels c WHERE (lease_expires_at IS NULL OR lease_expires_at<now()+interval '1 day') AND (hub_requested_at IS NULL OR hub_requested_at<now()-interval '1 hour') AND EXISTS(SELECT 1 FROM omnivore.subscriptions s WHERE s.youtube_channel_id=c.channel_id AND s.status='ACTIVE' AND NOT s.youtube_excluded)`
   )) as { channel_id: string }[]
@@ -436,8 +449,18 @@ export async function youtubeMaintenance() {
     `SELECT channel_id FROM omnivore.youtube_channels c WHERE lease_expires_at>now() AND NOT EXISTS(SELECT 1 FROM omnivore.subscriptions s WHERE s.youtube_channel_id=c.channel_id AND s.status='ACTIVE' AND NOT s.youtube_excluded)`
   )) as { channel_id: string }[]
   for (const c of unused) await renewPush(c.channel_id, true)
-  // Videos saved before Stash told Shorts apart get checked once.
-  const unchecked = (await appDataSource.query(
+  try {
+    await refreshStoredMetadata()
+  } catch (error) {
+    // Out of quota: these wait for tomorrow's, nothing else does.
+    if (!(error instanceof YouTubeUnavailableError)) throw error
+  }
+}
+
+async function refreshStoredMetadata() {
+  // Videos saved before Stash told Shorts apart, or described without the
+  // Data API while its quota was used up, get checked once.
+  const unchecked = (await acrossUsers(
     `SELECT DISTINCT substring(original_url from 'v=([\\w-]{11})') AS video_id FROM omnivore.library_item WHERE original_url ~ '^https://www\\.youtube\\.com/watch\\?v=[\\w-]{11}$' AND youtube_short IS NULL AND youtube_metadata_at IS NOT NULL AND youtube_available IS NOT FALSE AND state<>'DELETED' LIMIT 100`
   )) as { video_id: string }[]
   if (unchecked.length) {

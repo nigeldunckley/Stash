@@ -65,24 +65,35 @@ export const finishedVideo = (video: VideoResource) =>
 
 export const configuredPublic = () => !!process.env.YOUTUBE_API_KEY
 
+// Shown in Settings › YouTube. New videos keep arriving from channel feeds,
+// which cost nothing; only the extra details and subscription sync wait.
+export const QUOTA_MESSAGE =
+  "YouTube's daily quota for this server is used up. New videos still arrive from channel feeds; video details and subscription changes catch up after it resets at midnight Pacific time."
+
+const pacificDay = () =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+  }).format(new Date())
+
 // Quotas are project-wide and reset at midnight Pacific Time. Redis makes the
 // budget shared by API and workers; never log Axios errors containing credentials.
+// Google's daily quota is 10,000 units: most calls cost 1, a search costs 100,
+// so the defaults leave searches a fifth of it and stop other calls short of
+// the rest.
 async function budget(search: boolean) {
   const redis = redisDataSource.redisClient
   if (!redis)
     throw new YouTubeUnavailableError(
       'YouTube sync needs Redis. Try again later.'
     )
-  const day = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Los_Angeles',
-  }).format(new Date())
+  const day = pacificDay()
   const key = `youtube:quota:${search ? 'search' : 'data'}:${day}`
   const count = await redis.incr(key)
   if (count === 1) await redis.expire(key, 48 * 3600)
   const limit = Number(
     search
-      ? process.env.YOUTUBE_SEARCH_DAILY_LIMIT || 100
-      : process.env.YOUTUBE_DATA_DAILY_LIMIT || 10000
+      ? process.env.YOUTUBE_SEARCH_DAILY_LIMIT || 20
+      : process.env.YOUTUBE_DATA_DAILY_LIMIT || 7500
   )
   if (
     count > limit ||
@@ -91,7 +102,7 @@ async function budget(search: boolean) {
     ))
   )
     throw new YouTubeUnavailableError(
-      'YouTube daily quota reached. Sync will resume after the quota resets.'
+      QUOTA_MESSAGE
     )
 }
 
@@ -134,19 +145,17 @@ export async function youtubeList<T>(
             | undefined)
         : undefined
       if (reason === 'quotaExceeded' || reason === 'dailyLimitExceeded') {
-        const day = new Intl.DateTimeFormat('en-CA', {
-          timeZone: 'America/Los_Angeles',
-        }).format(new Date())
-        await redisDataSource.redisClient?.set(
-          `youtube:exhausted:${
-            resource === 'search' ? 'search' : 'data'
-          }:${day}`,
-          '1',
-          'EX',
-          36 * 3600
-        )
+        // Searches and other calls draw on the same project quota.
+        const day = pacificDay()
+        for (const kind of ['search', 'data'])
+          await redisDataSource.redisClient?.set(
+            `youtube:exhausted:${kind}:${day}`,
+            '1',
+            'EX',
+            36 * 3600
+          )
         throw new YouTubeUnavailableError(
-          'YouTube daily quota reached. Sync will resume after the quota resets.'
+          QUOTA_MESSAGE
         )
       }
       if (status === 401) throw new YouTubeUnavailableError('YOUTUBE_RECONNECT')
@@ -221,6 +230,7 @@ export async function searchChannels(
   const found = result.items.length
     ? await channels(result.items.map((v) => v.id.channelId))
     : []
-  await redis?.set(key, JSON.stringify(found), 'EX', 3600)
+  // A search costs a hundred times a normal call, so answers keep for a day.
+  await redis?.set(key, JSON.stringify(found), 'EX', 24 * 3600)
   return found
 }

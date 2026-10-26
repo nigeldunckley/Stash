@@ -1,4 +1,3 @@
-import { refreshChannel } from '../../services/youtube/ingestion'
 import axios from 'axios'
 import crypto from 'crypto'
 import { parseHTML } from 'linkedom'
@@ -1123,8 +1122,27 @@ export const refreshFeed = async (request: any) => {
 }
 
 // A YouTube channel's latest uploads shaped like its feed, for when YouTube
-// doesn't serve the feed itself.
+// doesn't serve the feed itself. That costs Data API quota, so a channel is
+// read this way at most once every three hours; between times the check
+// fails and is retried like any feed that couldn't be read.
+const UPLOADS_FALLBACK_INTERVAL_S = 3 * 60 * 60
 const youtubeUploadsFeed = async (feedUrl: string, channelId: string) => {
+  const redis = redisDataSource.redisClient
+  if (
+    redis &&
+    !(await redis.set(
+      `youtube:uploads-fallback:${channelId}`,
+      '1',
+      'EX',
+      UPLOADS_FALLBACK_INTERVAL_S,
+      'NX'
+    ))
+  ) {
+    logger.info('youtube: uploads read recently, waiting for the feed', {
+      channelId,
+    })
+    return undefined
+  }
   try {
     const channel = await channelUploads(channelId)
     if (!channel) {
@@ -1164,12 +1182,10 @@ const youtubeUploadsFeed = async (feedUrl: string, channelId: string) => {
   }
 }
 
+// YouTube channels are read from their free videos.xml feed like any other
+// feed. Each saved video then gets its details from one cached Data API call
+// (process-youtube-video), or from oEmbed when the daily quota is used up.
 export const _refreshFeed = async (request: RefreshFeedRequest) => {
-  const youtubeId = channelIdFromFeedUrl(request.feedUrl)
-  if (youtubeId) {
-    await refreshChannel(youtubeId)
-    return true
-  }
   const {
     feedUrl,
     subscriptionIds,
