@@ -257,6 +257,29 @@ struct ItemListView<Tools: View>: View {
       }
     }
     .navigationSplitViewStyle(.balanced)
+    .background { splitShortcuts }
+  }
+
+  /// ↓ and ↑ move through the list with the article open beside it, as on the Mac. Text fields
+  /// still get the arrow keys first.
+  private var splitShortcuts: some View {
+    Group {
+      Button("Next Article") { move(1) }.keyboardShortcut(.downArrow, modifiers: [])
+      Button("Previous Article") { move(-1) }.keyboardShortcut(.upArrow, modifiers: [])
+    }
+    .opacity(0)
+    .allowsHitTesting(false)
+    .accessibilityHidden(true)
+    .disabled(!isActivePage)
+  }
+
+  private func move(_ offset: Int) {
+    let items = list.visibleItems
+    guard !items.isEmpty else { return }
+    let index = selection.flatMap { items.firstIndex(of: $0) }.map { $0 + offset } ?? 0
+    guard items.indices.contains(index) else { return }
+    selection = items[index]
+    open(items[index])
   }
 
   private var listColumn: some View {
@@ -352,6 +375,7 @@ struct ItemListView<Tools: View>: View {
         )
       }
       .buttonStyle(.plain)
+      .hoverEffect(.highlight)
       .unfoldSource(item, in: unfold)
       #endif
     } else {
@@ -386,6 +410,7 @@ struct ItemListView<Tools: View>: View {
       )
     }
     .buttonStyle(.plain)
+    .hoverEffect(.highlight)
     .unfoldSource(item, in: unfold)
     #endif
   }
