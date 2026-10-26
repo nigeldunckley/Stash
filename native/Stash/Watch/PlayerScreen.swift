@@ -34,7 +34,7 @@ struct PlayerScreen: View {
   /// Wide enough for Up next beside the video: an iPad in portrait already is.
   private var splitWidth: CGFloat {
     #if os(iOS)
-    sizeClass == .regular ? 760 : 900
+    sizeClass == .regular && UIDevice.current.userInterfaceIdiom == .pad ? 760 : 900
     #else
     900
     #endif

@@ -27,6 +27,8 @@ struct WatchView: View {
   @State private var shelves: [Shelf] = []
   /// The grid's width, for laying out Continue watching on iPad.
   @State private var gridWidth: CGFloat = 0
+  /// Videos archived, saved or deleted from a shelf, until the shelves next load.
+  @State private var gone: Set<String> = []
   #if os(iOS)
   @Environment(\.horizontalSizeClass) private var sizeClass
   #endif
@@ -40,7 +42,8 @@ struct WatchView: View {
   /// A grid of cards (Mac, and iPad at full width) rather than iPhone's list of rows.
   private var usesGrid: Bool {
     #if os(iOS)
-    sizeClass == .regular
+    // A large iPhone held sideways is regular width too, but keeps its list.
+    sizeClass == .regular && UIDevice.current.userInterfaceIdiom == .pad
     #else
     true
     #endif
@@ -118,7 +121,7 @@ struct WatchView: View {
         collection = nil
       }
       .navigationDestination(for: LibraryItem.self) { item in
-        PlayerScreen(item: item, queue: videos, actions: actions, perform: perform)
+        PlayerScreen(item: item, queue: queue(for: item), actions: actions, perform: perform)
           .onAppear { if item.youtubeMadeForKids == false { list.markSeen(item) } }
           .pageBack(above + [title])
       }
@@ -132,6 +135,10 @@ struct WatchView: View {
       .refreshable { await reload() }
       .task(id: query) { await list.load(query) }
       .task { await loadExtras() }
+      // An iPad widened from Slide Over gets its shelves without a refresh.
+      .onChange(of: usesGrid) { _, grid in
+        if grid && shelves.isEmpty { Task { shelves = await loadShelves() } }
+      }
     }
   }
 
@@ -263,8 +270,25 @@ struct WatchView: View {
       }
     }
     if usesGrid {
-      ForEach(shelves) { shelf in shelfRow(shelf) }
+      ForEach(shelves.filter { !shelfItems($0).isEmpty }) { shelf in shelfRow(shelf) }
     }
+  }
+
+  /// A shelf's videos you haven't watched or moved since it loaded, at the length you picked.
+  private func shelfItems(_ shelf: Shelf) -> [LibraryItem] {
+    shelf.items.filter { list.isUnseen($0) && length.matches($0) && !gone.contains($0.id) }
+  }
+
+  /// Videos on a shelf aren't repeated in the day bands below it.
+  private var shelved: Set<String> {
+    guard isFront && usesGrid else { return [] }
+    return Set(shelves.flatMap { shelfItems($0).map(\.id) })
+  }
+
+  /// Up next for a video: the list it came from, or its shelf when Latest hasn't loaded it.
+  private func queue(for item: LibraryItem) -> [LibraryItem] {
+    if videos.contains(where: { $0.id == item.id }) { return videos }
+    return shelves.first { $0.items.contains { $0.id == item.id } }?.items ?? videos
   }
 
   /// The grid's width inside the page's margins.
@@ -303,7 +327,7 @@ struct WatchView: View {
       }
       ScrollView(.horizontal, showsIndicators: false) {
         LazyHStack(alignment: .top, spacing: 16) {
-          ForEach(shelf.items) { item in
+          ForEach(shelfItems(shelf)) { item in
             NavigationLink(value: item) { card(item).frame(width: 260) }
               .buttonStyle(.plain)
               .cardHover()
@@ -362,7 +386,8 @@ struct WatchView: View {
   private var dayGroups: [(label: String, items: [LibraryItem])] {
     guard kind != .saved else { return [("Saved", videos)] }
     var result: [(label: String, items: [LibraryItem])] = []
-    for item in videos {
+    let shelved = self.shelved
+    for item in videos where !shelved.contains(item.id) {
       let label = dayGroup(item.publishedAt ?? item.savedAt)
       if let index = result.firstIndex(where: { $0.label == label }) {
         result[index].items.append(item)
@@ -491,11 +516,12 @@ struct WatchView: View {
     continuing = await watching
     unseenByChannel = await counts
     shelves = await collectionShelves
+    gone = []
   }
 
   /// Up to six collections with something new, twelve videos each, in the collections' order.
   private func loadShelves() async -> [Shelf] {
-    guard usesGrid else { return [] }
+    guard usesGrid, case .channels = kind else { return [] }
     if collections.isEmpty { collections = (try? await Watch.collections()) ?? [] }
     let picked = Array(collections.prefix(6))
     let found = await withTaskGroup(of: (String, [LibraryItem]).self) { group in
@@ -544,8 +570,8 @@ struct WatchView: View {
   private func perform(_ action: ItemAction, _ item: LibraryItem) {
     runItemAction(
       action, item, toaster: toaster,
-      remove: { list.remove(item) },
-      restore: { list.restore(item) },
+      remove: { list.remove(item); gone.insert(item.id) },
+      restore: { list.restore(item); gone.remove(item.id) },
       refresh: {
         if action == .markSeen || action == .openOriginal { list.markSeen(item) } else { await list.reload(query) }
       }
