@@ -23,6 +23,31 @@ struct WatchView: View {
   @State private var continuing: [LibraryItem] = []
   @State private var unseenByChannel: [String: Int] = [:]
   @State private var path = NavigationPath()
+  /// New videos from each collection, as shelves on Latest's front page (Mac and iPad).
+  @State private var shelves: [Shelf] = []
+  /// The grid's width, for laying out Continue watching on iPad.
+  @State private var gridWidth: CGFloat = 0
+  /// Videos archived, saved or deleted from a shelf, until the shelves next load.
+  @State private var gone: Set<String> = []
+  #if os(iOS)
+  @Environment(\.horizontalSizeClass) private var sizeClass
+  #endif
+
+  struct Shelf: Identifiable {
+    let collection: WatchCollection
+    let items: [LibraryItem]
+    var id: String { collection.id }
+  }
+
+  /// A grid of cards (Mac, and iPad at full width) rather than iPhone's list of rows.
+  private var usesGrid: Bool {
+    #if os(iOS)
+    // A large iPhone held sideways is regular width too, but keeps its list.
+    sizeClass == .regular && UIDevice.current.userInterfaceIdiom == .pad
+    #else
+    true
+    #endif
+  }
 
   private enum Route: Hashable { case allChannels }
 
@@ -96,7 +121,7 @@ struct WatchView: View {
         collection = nil
       }
       .navigationDestination(for: LibraryItem.self) { item in
-        PlayerScreen(item: item, queue: videos, actions: actions, perform: perform)
+        PlayerScreen(item: item, queue: queue(for: item), actions: actions, perform: perform)
           .onAppear { if item.youtubeMadeForKids == false { list.markSeen(item) } }
           .pageBack(above + [title])
       }
@@ -110,44 +135,57 @@ struct WatchView: View {
       .refreshable { await reload() }
       .task(id: query) { await list.load(query) }
       .task { await loadExtras() }
+      // An iPad widened from Slide Over gets its shelves without a refresh.
+      .onChange(of: usesGrid) { _, grid in
+        if grid && shelves.isEmpty { Task { shelves = await loadShelves() } }
+      }
     }
   }
 
-  /// A grid on Mac; on iPhone a list, so videos swipe like everything else.
+  /// A grid on Mac and iPad; on iPhone a list, so videos swipe like everything else.
   @ViewBuilder
   private var videoList: some View {
     #if os(iOS)
-    List {
-      if channel == nil {
-        WatchAddBox { Task { await reload() } }
-          .listRowSeparator(.hidden)
-          .listRowBackground(Color.clear)
-          .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
-      }
-      if isFront {
-        Group { frontSections }
-          .listRowSeparator(.hidden)
-          .listRowBackground(Color.clear)
-          .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-      }
-      ForEach(videos) { item in
-        ZStack {
-          NavigationLink(value: item) { EmptyView() }.opacity(0)
-          card(item)
+    if usesGrid {
+      videoGrid
+    } else {
+      List {
+        if channel == nil {
+          WatchAddBox { Task { await reload() } }
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
         }
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
-        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-        .itemSwipes(item, unseen: isUnseen(item), perform: perform)
-        .itemMenu(item, unseen: isUnseen(item), perform: perform)
-        .task { await list.loadMore(after: item) }
+        if isFront {
+          Group { frontSections }
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        }
+        ForEach(videos) { item in
+          ZStack {
+            NavigationLink(value: item) { EmptyView() }.opacity(0)
+            card(item)
+          }
+          .listRowSeparator(.hidden)
+          .listRowBackground(Color.clear)
+          .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+          .itemSwipes(item, unseen: isUnseen(item), perform: perform)
+          .itemMenu(item, unseen: isUnseen(item), perform: perform)
+          .task { await list.loadMore(after: item) }
+        }
+        if list.isLoading && !list.items.isEmpty {
+          HStack { Spacer(); ProgressView(); Spacer() }.stashListRow()
+        }
       }
-      if list.isLoading && !list.items.isEmpty {
-        HStack { Spacer(); ProgressView(); Spacer() }.stashListRow()
-      }
+      .stashList()
     }
-    .stashList()
     #else
+    videoGrid
+    #endif
+  }
+
+  private var videoGrid: some View {
     // The web's grid: cards at least 232pt wide, 18pt apart, 22pt between rows, in day bands
     // for new videos.
     ScrollView {
@@ -166,6 +204,7 @@ struct WatchView: View {
               ForEach(group.items) { item in
                 NavigationLink(value: item) { card(item) }
                   .buttonStyle(.plain)
+                  .cardHover()
                   .itemMenu(item, unseen: isUnseen(item), perform: perform)
                   .task { await list.loadMore(after: item) }
               }
@@ -180,7 +219,7 @@ struct WatchView: View {
       .padding(.bottom, 40)
     }
     .scrollContentBackground(.hidden)
-    #endif
+    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
   }
 
   /// Continue watching, then your channels, at the top of Latest.
@@ -197,11 +236,16 @@ struct WatchView: View {
           }
         }
         #else
-        ScrollView(.horizontal, showsIndicators: false) {
-          HStack(alignment: .top, spacing: 14) {
-            ForEach(continuing) { item in
-              NavigationLink(value: item) { continueCard(item).frame(width: 240) }
-                .buttonStyle(.plain)
+        if usesGrid && continuing.count > 1 && contentWidth >= 820 {
+          padContinuing
+        } else {
+          ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 14) {
+              ForEach(continuing) { item in
+                NavigationLink(value: item) { continueCard(item).frame(width: usesGrid ? 300 : 240) }
+                  .buttonStyle(.plain)
+                  .cardHover()
+              }
             }
           }
         }
@@ -223,6 +267,74 @@ struct WatchView: View {
           onPick: { channel = $0 },
           onAll: { path.append(Route.allChannels) }
         )
+      }
+    }
+    if usesGrid {
+      ForEach(shelves.filter { !shelfItems($0).isEmpty }) { shelf in shelfRow(shelf) }
+    }
+  }
+
+  /// A shelf's videos you haven't watched or moved since it loaded, at the length you picked.
+  private func shelfItems(_ shelf: Shelf) -> [LibraryItem] {
+    shelf.items.filter { list.isUnseen($0) && length.matches($0) && !gone.contains($0.id) }
+  }
+
+  /// Videos on a shelf aren't repeated in the day bands below it.
+  private var shelved: Set<String> {
+    guard isFront && usesGrid else { return [] }
+    return Set(shelves.flatMap { shelfItems($0).map(\.id) })
+  }
+
+  /// Up next for a video: the list it came from, or its shelf when Latest hasn't loaded it.
+  private func queue(for item: LibraryItem) -> [LibraryItem] {
+    if videos.contains(where: { $0.id == item.id }) { return videos }
+    return shelves.first { $0.items.contains { $0.id == item.id } }?.items ?? videos
+  }
+
+  /// The grid's width inside the page's margins.
+  private var contentWidth: CGFloat { min(gridWidth - PageLayout.gutter * 2, PageLayout.maxWidth) }
+
+  /// iPad: the video you were last watching, large, with the next four beside it.
+  private var padContinuing: some View {
+    let spacing: CGFloat = 18
+    let lead = (contentWidth - spacing) * 0.56
+    return HStack(alignment: .top, spacing: spacing) {
+      if let first = continuing.first {
+        NavigationLink(value: first) { continueCard(first) }
+          .buttonStyle(.plain)
+          .cardHover()
+          .frame(width: lead)
+      }
+      LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .top), count: 2), spacing: 16) {
+        ForEach(continuing.dropFirst().prefix(4)) { item in
+          NavigationLink(value: item) { continueCard(item) }
+            .buttonStyle(.plain)
+            .cardHover()
+        }
+      }
+    }
+  }
+
+  /// A collection's newest videos in a row you scroll sideways, with a way into the whole collection.
+  private func shelfRow(_ shelf: Shelf) -> some View {
+    VStack(alignment: .leading, spacing: 12) {
+      WatchBand("New in \(shelf.collection.name)") {
+        Button { collection = shelf.collection } label: {
+          Text("See all ›").font(.stSmall).foregroundStyle(Color.stMuted)
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+      }
+      ScrollView(.horizontal, showsIndicators: false) {
+        LazyHStack(alignment: .top, spacing: 16) {
+          ForEach(shelfItems(shelf)) { item in
+            NavigationLink(value: item) { card(item).frame(width: 260) }
+              .buttonStyle(.plain)
+              .cardHover()
+              .itemMenu(item, unseen: isUnseen(item), perform: perform)
+          }
+        }
+        .padding(.vertical, 4)
       }
     }
   }
@@ -274,7 +386,8 @@ struct WatchView: View {
   private var dayGroups: [(label: String, items: [LibraryItem])] {
     guard kind != .saved else { return [("Saved", videos)] }
     var result: [(label: String, items: [LibraryItem])] = []
-    for item in videos {
+    let shelved = self.shelved
+    for item in videos where !shelved.contains(item.id) {
       let label = dayGroup(item.publishedAt ?? item.savedAt)
       if let index = result.firstIndex(where: { $0.label == label }) {
         result[index].items.append(item)
@@ -361,11 +474,11 @@ struct WatchView: View {
           Button("Try again") { Task { await reload() } }
         }
       } else if list.isLoading {
-        #if os(macOS)
-        SkeletonCards(count: 8, minWidth: 232, height: 190).pageWidth().frame(maxHeight: .infinity, alignment: .top)
-        #else
-        SkeletonRows()
-        #endif
+        if usesGrid {
+          SkeletonCards(count: 8, minWidth: 232, height: 190).pageWidth().frame(maxHeight: .infinity, alignment: .top)
+        } else {
+          SkeletonRows()
+        }
       } else if kind == .saved {
         EmptyBox(title: "No saved videos", message: "Save videos from your channels to watch them later.", systemImage: "play.rectangle.on.rectangle", boxed: false)
       } else {
@@ -399,8 +512,33 @@ struct WatchView: View {
   private func loadFront() async {
     async let watching = Watch.continueWatching()
     async let counts = Watch.unseenByChannel()
+    async let collectionShelves = loadShelves()
     continuing = await watching
     unseenByChannel = await counts
+    shelves = await collectionShelves
+    gone = []
+  }
+
+  /// Up to six collections with something new, twelve videos each, in the collections' order.
+  private func loadShelves() async -> [Shelf] {
+    guard usesGrid, case .channels = kind else { return [] }
+    if collections.isEmpty { collections = (try? await Watch.collections()) ?? [] }
+    let picked = Array(collections.prefix(6))
+    let found = await withTaskGroup(of: (String, [LibraryItem]).self) { group in
+      for collection in picked {
+        group.addTask {
+          let query = "in:following use:folders type:video collection:\(collection.id) -is:seen sort:published-desc"
+          return (collection.id, (try? await Library.search(query, first: 12).items) ?? [])
+        }
+      }
+      var result: [String: [LibraryItem]] = [:]
+      for await (id, items) in group { result[id] = items }
+      return result
+    }
+    return picked.compactMap { collection in
+      guard let items = found[collection.id], !items.isEmpty else { return nil }
+      return Shelf(collection: collection, items: items)
+    }
   }
 
   private func updateChannel(_ target: Subscription, collectionId: String? = nil, hideShortVideos: Bool? = nil) {
@@ -432,11 +570,23 @@ struct WatchView: View {
   private func perform(_ action: ItemAction, _ item: LibraryItem) {
     runItemAction(
       action, item, toaster: toaster,
-      remove: { list.remove(item) },
-      restore: { list.restore(item) },
+      remove: { list.remove(item); gone.insert(item.id) },
+      restore: { list.restore(item); gone.remove(item.id) },
       refresh: {
         if action == .markSeen || action == .openOriginal { list.markSeen(item) } else { await list.reload(query) }
       }
     )
+  }
+}
+
+private extension View {
+  /// The pointer's highlight over a card on iPad; nothing elsewhere.
+  @ViewBuilder
+  func cardHover() -> some View {
+    #if os(iOS)
+    hoverEffect(.highlight)
+    #else
+    self
+    #endif
   }
 }

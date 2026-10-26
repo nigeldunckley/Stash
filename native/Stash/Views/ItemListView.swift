@@ -47,7 +47,7 @@ struct ItemListView<Tools: View>: View {
   #else
   @Environment(\.horizontalSizeClass) private var sizeClass
   /// A full-width iPad gets the iPad layout: the article beside the list when there's room.
-  private var padLayout: Bool { sizeClass == .regular && !embedded }
+  private var padLayout: Bool { sizeClass == .regular && !embedded && UIDevice.current.userInterfaceIdiom == .pad }
   /// The iPad page's width; below 700 points (Slide Over, a narrow split) articles are pushed.
   @State private var padWidth: CGFloat = .infinity
   /// Where the open article sat in the list, to step on from once a reload has dropped it.

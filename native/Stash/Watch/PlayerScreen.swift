@@ -17,6 +17,9 @@ struct PlayerScreen: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(PlayerController.self) private var player
   @Environment(\.isActivePage) private var isActivePage
+  #if os(iOS)
+  @Environment(\.horizontalSizeClass) private var sizeClass
+  #endif
   @State private var tab: PlayerTab = .upNext
   @State private var screenID = UUID()
   @State private var opened = false
@@ -28,16 +31,25 @@ struct PlayerScreen: View {
     var id: Self { self }
   }
 
+  /// Wide enough for Up next beside the video: an iPad in portrait already is.
+  private var splitWidth: CGFloat {
+    #if os(iOS)
+    sizeClass == .regular && UIDevice.current.userInterfaceIdiom == .pad ? 760 : 900
+    #else
+    900
+    #endif
+  }
+
   /// Whatever is playing now: it changes as Up next moves on.
   private var current: LibraryItem { player.item ?? item }
 
   var body: some View {
     GeometryReader { geometry in
-      if geometry.size.width >= 900 {
+      if geometry.size.width >= splitWidth {
         HStack(spacing: 0) {
           ScrollView { mainColumn.padding(24) }
           Divider()
-          sideColumn.frame(width: 360)
+          sideColumn.frame(width: geometry.size.width >= 1000 ? 360 : 300)
         }
       } else {
         VStack(spacing: 0) {
