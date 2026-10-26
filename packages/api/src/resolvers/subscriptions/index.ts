@@ -330,6 +330,7 @@ export const subscribeResolver = authorized<
         fetchContentTypes: [updatedSubscription.fetchContentType],
         folders: [updatedSubscription.folder || DEFAULT_SUBSCRIPTION_FOLDER],
         includeShorts: [updatedSubscription.includeShorts],
+        hideShortVideos: [updatedSubscription.hideShortVideos],
       })
 
       return {
@@ -394,6 +395,7 @@ export const subscribeResolver = authorized<
       fetchContentTypes: [newSubscription.fetchContentType],
       folders: [newSubscription.folder || DEFAULT_SUBSCRIPTION_FOLDER],
       includeShorts: [newSubscription.includeShorts],
+      hideShortVideos: [input.hideShortVideos ?? false],
     })
 
     return {

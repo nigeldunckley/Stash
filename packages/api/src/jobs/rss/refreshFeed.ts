@@ -1,5 +1,7 @@
-import { refreshChannel } from '../../services/youtube/ingestion'
 import axios from 'axios'
+import { videoDuration } from '../../services/youtube/client'
+import { publicVideo } from '../../services/youtube/ingestion'
+import { shouldImportVideo } from '../../services/youtube/security'
 import crypto from 'crypto'
 import { parseHTML } from 'linkedom'
 import Parser, { Item } from 'rss-parser'
@@ -55,6 +57,9 @@ interface RefreshFeedRequest {
   // Per subscription, whether a YouTube channel's Shorts are wanted. Older
   // jobs don't carry it, which means no.
   includeShorts?: boolean[]
+  // Per subscription, whether a YouTube channel's videos under three minutes
+  // are left out (its settings, "Hide videos under 3 minutes").
+  hideShortVideos?: boolean[]
   refreshContext?: RSSRefreshContext
   priority?: 'low' | 'high'
 }
@@ -606,6 +611,30 @@ const isUnwantedShort = (
   return isShortsLink(item.link)
 }
 
+// A channel set to leave out videos under three minutes needs each new
+// video's length, which only the Data API gives: one cached call, which the
+// video job then reuses. Without it the length is unknown and the video kept.
+const tooShortForChannel = async (
+  item: RssFeedItem,
+  youtube: YouTubeFeed | undefined,
+  hideShortVideos: boolean
+) => {
+  const id = youtube && hideShortVideos && youtubeVideoId(item)
+  if (!id) {
+    return false
+  }
+  try {
+    const video = await publicVideo(id)
+    return !!video && !shouldImportVideo(videoDuration(video), true)
+  } catch (error) {
+    logger.info('youtube: length unknown, keeping video', {
+      id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return false
+  }
+}
+
 const createYouTubeVideoItem = async (
   userId: string,
   feedUrl: string,
@@ -891,7 +920,8 @@ const processSubscription = async (
   folder: FolderType,
   feed: RssFeed,
   youtube?: YouTubeFeed,
-  includeShorts = false
+  includeShorts = false,
+  hideShortVideos = false
 ) => {
   const refreshedAt = new Date()
   const scheduledAt = nextCheckAt(refreshedAt.getTime())
@@ -1033,6 +1063,11 @@ const processSubscription = async (
         continue
       }
 
+      if (await tooShortForChannel(feedItem, youtube, hideShortVideos)) {
+        logger.info(`Skipping short YouTube video ${feedItem.link}`)
+        continue
+      }
+
       const created = await createTask(
         fetchContentTasks,
         userId,
@@ -1067,6 +1102,9 @@ const processSubscription = async (
     }
 
     // the feed has never been fetched, save at least the last valid item
+    if (await tooShortForChannel(lastValidItem, youtube, hideShortVideos)) {
+      return recordCheck(updatedLastFetchedChecksum)
+    }
     const created = await createTask(
       fetchContentTasks,
       userId,
@@ -1123,8 +1161,27 @@ export const refreshFeed = async (request: any) => {
 }
 
 // A YouTube channel's latest uploads shaped like its feed, for when YouTube
-// doesn't serve the feed itself.
+// doesn't serve the feed itself. That costs Data API quota, so a channel is
+// read this way at most once every three hours; between times the check
+// fails and is retried like any feed that couldn't be read.
+const UPLOADS_FALLBACK_INTERVAL_S = 3 * 60 * 60
 const youtubeUploadsFeed = async (feedUrl: string, channelId: string) => {
+  const redis = redisDataSource.redisClient
+  if (
+    redis &&
+    !(await redis.set(
+      `youtube:uploads-fallback:${channelId}`,
+      '1',
+      'EX',
+      UPLOADS_FALLBACK_INTERVAL_S,
+      'NX'
+    ))
+  ) {
+    logger.info('youtube: uploads read recently, waiting for the feed', {
+      channelId,
+    })
+    return undefined
+  }
   try {
     const channel = await channelUploads(channelId)
     if (!channel) {
@@ -1164,12 +1221,10 @@ const youtubeUploadsFeed = async (feedUrl: string, channelId: string) => {
   }
 }
 
+// YouTube channels are read from their free videos.xml feed like any other
+// feed. Each saved video then gets its details from one cached Data API call
+// (process-youtube-video), or from oEmbed when the daily quota is used up.
 export const _refreshFeed = async (request: RefreshFeedRequest) => {
-  const youtubeId = channelIdFromFeedUrl(request.feedUrl)
-  if (youtubeId) {
-    await refreshChannel(youtubeId)
-    return true
-  }
   const {
     feedUrl,
     subscriptionIds,
@@ -1179,6 +1234,7 @@ export const _refreshFeed = async (request: RefreshFeedRequest) => {
     fetchContentTypes,
     folders,
     includeShorts,
+    hideShortVideos,
     refreshContext,
     priority,
   } = request
@@ -1289,7 +1345,10 @@ export const _refreshFeed = async (request: RefreshFeedRequest) => {
           folders[i],
           feed,
           youtube,
-          !!includeShorts?.[i]
+          // A channel's own "Hide videos under 3 minutes" setting decides
+          // about Shorts now; Settings › Watch › Hide Shorts hides the rest.
+          !!includeShorts?.[i] || !hideShortVideos?.[i],
+          !!hideShortVideos?.[i]
         )
       } catch (error) {
         logger.error('Error while processing subscription', {

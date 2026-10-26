@@ -229,6 +229,11 @@ test('migration, >50 subscriptions, overlaps, exclusions and complete-snapshot r
     assert.equal(rows.find((r) => r.name === 'Removed').status, 'UNSUBSCRIBED')
     assert.equal(rows.find((r) => r.name === 'Excluded').status, 'UNSUBSCRIBED')
     assert.equal(rows.filter((r) => r.youtube_imported).length, 55)
+    // Channels are checked by the free feed sweep, not one API refresh each.
+    assert.equal(
+      f.queued.filter((j) => j.name === 'youtube-refresh-channel').length,
+      0
+    )
     const count = rows.length
     await f.service.syncSubscriptions(uid)
     assert.equal(
@@ -400,6 +405,8 @@ test('upload backfill paginates, filters duration, deduplicates and retains chec
       '../../data_source': {
         appDataSource: {
           query: f.query,
+          // Cross-user library lookups run as admin; no library rows here.
+          transaction: async (work) => work({ query: async () => [] }),
           getRepository: (entity) =>
             entity === 'Subscription'
               ? subscriptionRepo

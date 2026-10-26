@@ -684,6 +684,7 @@ export interface RssSubscriptionGroup {
   fetchContentTypes: FetchContentType[]
   folders: string[]
   includeShorts?: boolean[]
+  hideShortVideos?: boolean[]
 }
 
 export const enqueueRssFeedFetch = async (
@@ -708,6 +709,7 @@ export const enqueueRssFeedFetch = async (
     fetchContentTypes: subscriptionGroup.fetchContentTypes,
     folders: subscriptionGroup.folders,
     includeShorts: subscriptionGroup.includeShorts,
+    hideShortVideos: subscriptionGroup.hideShortVideos,
   }
 
   let jobid = `refresh-feed_${stringToHash(

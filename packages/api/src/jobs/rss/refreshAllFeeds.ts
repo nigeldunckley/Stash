@@ -37,7 +37,8 @@ export const refreshAllFeeds = async (db: DataSource): Promise<boolean> => {
         ARRAY_AGG(s.last_fetched_checksum) AS checksums,
         JSON_AGG(s.fetch_content_type) AS "fetchContentTypes",
         ARRAY_AGG(coalesce(s.folder, $3)) AS folders,
-        ARRAY_AGG(s.include_shorts) AS "includeShorts"
+        ARRAY_AGG(s.include_shorts) AS "includeShorts",
+        ARRAY_AGG(s.hide_short_videos) AS "hideShortVideos"
       FROM
         omnivore.subscriptions s
       INNER JOIN
@@ -45,7 +46,9 @@ export const refreshAllFeeds = async (db: DataSource): Promise<boolean> => {
       WHERE
         s.type = $1
         AND s.status = $2
-        AND s.youtube_channel_id IS NULL
+        -- YouTube channels are checked through their free videos.xml feed
+        -- too; only channels left out of a YouTube import are skipped
+        AND NOT s.youtube_excluded
         AND (
           s.scheduled_at <= NOW()
           OR s.scheduled_at IS NULL
@@ -127,6 +130,7 @@ const updateSubscriptionGroup = async (
     fetchContentTypes: group.fetchContentTypes,
     folders: group.folders,
     includeShorts: group.includeShorts,
+    hideShortVideos: group.hideShortVideos,
   }
 
   await queueRSSRefreshFeedJob(jobid, payload)
