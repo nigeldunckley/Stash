@@ -69,6 +69,8 @@ struct MainView: View {
   @State private var showingPlayer = false
   /// The iPad sidebar's own arrangement, with Feeds, Saved and Latest kept in its tab bar.
   @AppStorage("padTabs") private var padCustomization = TabViewCustomization()
+  /// "Save a link", from ⌘N on an iPad keyboard.
+  @State private var capturing = false
   #endif
 
   var body: some View {
@@ -263,8 +265,26 @@ struct MainView: View {
     }
     .tabViewStyle(.sidebarAdaptable)
     .tabViewCustomization($padCustomization)
+    .background { padShortcuts }
+    .linkCapture(isPresented: $capturing)
     // Lists scroll clear of the mini player in the corner.
     .safeAreaPadding(.bottom, player.host == .mini ? 104 : 0)
+  }
+
+  /// Keyboard shortcuts for an iPad with a keyboard. Hold ⌘ to see them listed.
+  private var padShortcuts: some View {
+    Group {
+      Button("Home") { go(.home) }.keyboardShortcut("1", modifiers: .command)
+      Button("Feeds") { go(.feeds) }.keyboardShortcut("2", modifiers: .command)
+      Button("Saved") { go(.saved) }.keyboardShortcut("3", modifiers: .command)
+      Button("Watch") { go(.channels) }.keyboardShortcut("4", modifiers: .command)
+      Button("Settings") { go(.settings) }.keyboardShortcut(",", modifiers: .command)
+      Button("Save a Link") { capturing = true }.keyboardShortcut("n", modifiers: .command)
+    }
+    .opacity(0)
+    .allowsHitTesting(false)
+    .accessibilityHidden(true)
+    .disabled(showingEdition || showingPlayer || capturing)
   }
 
   /// Only the page in front checks for new posts and owns the toolbar.
