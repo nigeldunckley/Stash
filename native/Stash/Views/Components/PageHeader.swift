@@ -112,11 +112,7 @@ struct StashPage<Trailing: View>: ViewModifier {
     #else
     content
       .safeAreaInset(edge: .top, spacing: 0) {
-        if padHeaderShown {
-          // iPad: the controls sit in the page under the title, as on the Mac, rather than
-          // squeezed into one glass capsule in the navigation bar.
-          padHeader
-        } else if let folio {
+        if let folio {
           FolioView(content: folio)
             .padding(.horizontal, PageLayout.gutter)
             .padding(.vertical, 6)
@@ -125,66 +121,37 @@ struct StashPage<Trailing: View>: ViewModifier {
       }
       .background(Color.stPage)
       .navigationTitle(title)
-      .toolbar { ToolbarItemGroup(placement: .primaryAction) { if !padHeaderShown { trailing() } } }
+      .modifier(PageSubtitle(text: detail))
+      // iPad: a compact title bar, as Mail and Notes have beside their lists, not a large title
+      // with an empty band above the list.
+      .navigationBarTitleDisplayMode(sizeClass == .regular && UIDevice.current.userInterfaceIdiom == .pad ? .inline : .automatic)
+      .toolbar { ToolbarItemGroup(placement: .primaryAction) { trailing() } }
     #endif
   }
 
   #if os(iOS)
   @Environment(\.horizontalSizeClass) private var sizeClass
-
-  /// Large iPhones held sideways are regular width too, but keep the toolbar.
-  private var padHeaderShown: Bool { sizeClass == .regular && UIDevice.current.userInterfaceIdiom == .pad }
-
-  /// The count ("8 unseen") and the page's controls on one line, then the folio. When they
-  /// don't fit (the narrow list beside an article), the controls get a line of their own.
-  @ViewBuilder
-  private var padHeader: some View {
-    let hasTools = ObjectIdentifier(Trailing.self) != ObjectIdentifier(EmptyView.self)
-    if hasTools || detail != nil || folio != nil {
-      VStack(alignment: .leading, spacing: 10) {
-        if hasTools || detail != nil {
-          ViewThatFits(in: .horizontal) {
-            HStack(spacing: 12) {
-              detailText
-              Spacer(minLength: 12)
-              tools
-            }
-            VStack(alignment: .leading, spacing: 8) {
-              detailText
-              ScrollView(.horizontal, showsIndicators: false) { tools }
-                .scrollBounceBehavior(.basedOnSize)
-            }
-          }
-        }
-        if let folio { FolioView(content: folio) }
-      }
-      .padding(.horizontal, PageLayout.gutter)
-      .padding(.top, 4)
-      .padding(.bottom, 8)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(Color.stPage)
-    }
-  }
-
-  private var tools: some View {
-    HStack(spacing: 8) { trailing() }.fixedSize()
-  }
-
-  @ViewBuilder
-  private var detailText: some View {
-    if let detail {
-      Text(detail.uppercased())
-        .rolls(detail)
-        .font(.mono(11))
-        .tracking(0.66)
-        .monospacedDigit()
-        .foregroundStyle(accentDetail ? Color.stAccentText : Color.stMuted)
-        .lineLimit(1)
-        .fixedSize()
-    }
-  }
   #endif
 }
+
+#if os(iOS)
+/// The count ("12 unseen") under the title in the navigation bar, where iOS 26 has room for it.
+private struct PageSubtitle: ViewModifier {
+  let text: String?
+
+  func body(content: Content) -> some View {
+    #if compiler(>=6.2)
+    if #available(iOS 26.0, *), let text {
+      content.navigationSubtitle(text)
+    } else {
+      content
+    }
+    #else
+    content
+    #endif
+  }
+}
+#endif
 
 extension View {
   func stashPage<Trailing: View>(
