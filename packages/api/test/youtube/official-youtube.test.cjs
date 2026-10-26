@@ -627,8 +627,7 @@ test('HTTP endpoints require Stash auth and validate WebSub topic, signature and
       queueYouTube: async (...args) => queued.push(args),
     },
     '../services/youtube/ingestion': {
-      publicVideo: async () => undefined,
-      playbackFlags: () => ({ youtubeAvailable: false }),
+      playbackFlagsFor: async () => ({ youtubeAvailable: false }),
     },
     '../services/youtube/client': { YouTubeUnavailableError: Unavailable },
   })
@@ -769,4 +768,55 @@ test('successful authorization stores only encrypted credentials and reconnect r
   } finally {
     await f.db.close()
   }
+})
+
+test('playback falls back to trying the video when the Data API is out of quota', async () => {
+  let cachedRows = [],
+    savedRows = []
+  const ingest = load('ingestion', {
+    axios: {},
+    '../../data_source': {
+      appDataSource: { query: async () => cachedRows },
+    },
+    '../../entity/subscription': {
+      Subscription: 'Subscription',
+      SubscriptionStatus: { Active: 'ACTIVE' },
+    },
+    '../../env': { env: { client: { url: 'https://stash.example' } } },
+    '../../redis_data_source': { redisDataSource: {} },
+    '../library_item': {},
+    '../save_page': {},
+    '../cached_reading_position': {},
+    '../user': {},
+    '../../utils/youtubeChannel': {
+      watchUrl: (id) => `https://www.youtube.com/watch?v=${id}`,
+    },
+    '../../utils/logger': { logger: {} },
+    './connection': { queueYouTube: async () => {}, userQuery: async () => savedRows },
+    './security': security,
+    './client': {
+      YouTubeUnavailableError: Unavailable,
+      videos: async () => {
+        throw new Unavailable('quota')
+      },
+      isShortVideo: () => false,
+    },
+  })
+  assert.deepEqual(await ingest.playbackFlagsFor(uid, 'abcdefghijk'), {
+    youtubeAvailable: true,
+    youtubeEmbeddable: true,
+    youtubeMadeForKids: true,
+  })
+  savedRows = [{ youtube_made_for_kids: false }]
+  assert.equal(
+    (await ingest.playbackFlagsFor(uid, 'abcdefghijk')).youtubeMadeForKids,
+    false
+  )
+  cachedRows = [
+    { data: { status: { embeddable: false, madeForKids: false } } },
+  ]
+  assert.equal(
+    (await ingest.playbackFlagsFor(uid, 'abcdefghijk')).youtubeEmbeddable,
+    false
+  )
 })

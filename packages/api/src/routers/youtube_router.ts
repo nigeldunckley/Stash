@@ -13,7 +13,7 @@ import {
   disconnect,
   queueYouTube,
 } from '../services/youtube/connection'
-import { publicVideo, playbackFlags } from '../services/youtube/ingestion'
+import { playbackFlagsFor } from '../services/youtube/ingestion'
 import { YouTubeUnavailableError } from '../services/youtube/client'
 
 export function youtubeRouter() {
@@ -192,7 +192,7 @@ export function youtubeRouter() {
       res.sendStatus(400)
       return
     }
-    res.json(playbackFlags(await publicVideo(req.params.id)))
+    res.json(await playbackFlagsFor(res.locals.uid as string, req.params.id))
   })
   router.use(
     (
