@@ -67,6 +67,8 @@ struct MainView: View {
   @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   /// The full player, opened from the mini player.
   @State private var showingPlayer = false
+  /// The iPad sidebar's own arrangement, with Feeds, Saved and Latest kept in its tab bar.
+  @AppStorage("padTabs") private var padCustomization = TabViewCustomization()
   #endif
 
   var body: some View {
@@ -92,11 +94,14 @@ struct MainView: View {
       .onChange(of: watchPage) { _, value in watchPageKey = value.key }
       #if os(iOS)
       // iPad side by side with another app can switch between its sidebar and iPhone's tabs.
-      .onChange(of: horizontalSizeClass) { _, _ in fitSections() }
+      // Snapshots for the app switcher can flip the width for a moment, so only follow it while
+      // the app is in front.
+      .onChange(of: horizontalSizeClass) { _, _ in if scenePhase == .active { fitSections() } }
       #endif
       .onChange(of: collections) { _, current in
         #if os(iOS)
         if case .collection(let id) = watchPage, !current.contains(where: { $0.id == id }) { watchPage = .channels }
+        if case .collection(let id) = section, !current.contains(where: { $0.id == id }) { section = .channels }
         #endif
       }
       .onReceive(NotificationCenter.default.publisher(for: .stashBrowseFeeds)) { _ in go(.feeds) }
@@ -106,12 +111,24 @@ struct MainView: View {
       .onChange(of: edition.isOut) { _, out in if !out && section == .edition { section = .home } }
       .onChange(of: scenePhase) { _, phase in
         if phase == .active { LibraryChanges.shared.publish(); Task { await edition.refresh() } }
+        #if os(iOS)
+        if phase == .active { fitSections() }
+        #endif
       }
-      .task { collections = (try? await Watch.collections()) ?? [] }
       .task {
+        collections = (try? await Watch.collections()) ?? []
+        #if os(iOS)
+        // A collection restored from last time that's gone (or couldn't load) falls back to Latest.
+        if case .collection(let id) = section, !collections.contains(where: { $0.id == id }) { section = .channels }
+        #endif
+      }
+      .task {
+        let launchedInto = storedSection
         await edition.refresh()
         #if os(macOS)
-        if storedSection == "edition" && edition.isOut { section = .edition }
+        if launchedInto == "edition" && edition.isOut { section = .edition }
+        #else
+        if wide && launchedInto == "edition" && edition.isOut { section = .edition }
         #endif
       }
   }
@@ -188,48 +205,66 @@ struct MainView: View {
       Tab("Home", systemImage: "house", value: AppSection.home) {
         page(.home) { HomeView(go: go) }
       }
+      .customizationID("home")
       TabSection("Read") {
         Tab("Feeds", systemImage: "dot.radiowaves.up.forward", value: AppSection.feeds) {
           page(.feeds) { FeedsView() }
         }
+        .customizationID("feeds")
+        .defaultVisibility(.visible, for: .tabBar)
         Tab("Saved", systemImage: "bookmark", value: AppSection.saved) {
           page(.saved) { SavedView(archive: false) }
         }
+        .customizationID("saved")
+        .defaultVisibility(.visible, for: .tabBar)
         Tab("The Edition", systemImage: "newspaper", value: AppSection.edition) {
           page(.edition) { EditionView(onPutAway: { section = .feeds }) }
         }
+        .customizationID("edition")
         .hidden(!edition.isOut)
         Tab("Highlights", systemImage: "highlighter", value: AppSection.highlights) {
           page(.highlights) { HighlightsView() }
         }
+        .customizationID("highlights")
         Tab("Discover", systemImage: "safari", value: AppSection.discover) {
           page(.discover) { DiscoverView() }
         }
+        .customizationID("discover")
         Tab("Archive", systemImage: "archivebox", value: AppSection.archive) {
           page(.archive) { SavedView(archive: true) }
         }
+        .customizationID("archive")
         Tab("Trash", systemImage: "trash", value: AppSection.trash) {
           page(.trash) { SavedView(archive: false, trash: true) }
         }
+        .customizationID("trash")
       }
       TabSection("Watch") {
         Tab("Latest", systemImage: "play.rectangle", value: AppSection.channels) {
           page(.channels) { WatchView(kind: .channels) }
         }
+        .customizationID("channels")
+        .defaultVisibility(.visible, for: .tabBar)
         Tab("Saved", systemImage: "bookmark", value: AppSection.savedVideos) {
           page(.savedVideos) { WatchView(kind: .saved) }
         }
+        .customizationID("savedVideos")
         ForEach(collections) { collection in
           Tab(collection.name, systemImage: "folder", value: AppSection.collection(collection.id)) {
             page(.collection(collection.id)) { WatchView(kind: .collection(collection)) }
           }
+          .customizationID("collection-\(collection.id)")
         }
       }
       Tab("Settings", systemImage: "gearshape", value: AppSection.settings) {
         page(.settings) { SettingsView() }
       }
+      .customizationID("settings")
     }
     .tabViewStyle(.sidebarAdaptable)
+    .tabViewCustomization($padCustomization)
+    // Lists scroll clear of the mini player in the corner.
+    .safeAreaPadding(.bottom, player.host == .mini ? 104 : 0)
   }
 
   /// Only the page in front checks for new posts and owns the toolbar.
@@ -240,7 +275,7 @@ struct MainView: View {
   /// Moves between iPhone's Read and Watch tabs and iPad's separate pages when the width changes.
   private func fitSections() {
     if wide {
-      if section == .read { section = readPage }
+      if section == .read { section = readPage == .edition && !edition.isOut ? .feeds : readPage }
       if section == .watch { section = watchPage }
     } else {
       switch section {
@@ -248,7 +283,7 @@ struct MainView: View {
         readPage = section
         section = .read
       case .edition:
-        readPage = .feeds
+        readPage = edition.isOut ? .edition : .feeds
         section = .read
       case .channels, .savedVideos, .collection:
         watchPage = section
@@ -261,42 +296,50 @@ struct MainView: View {
   private var phoneTabs: some View {
     TabView(selection: $section) {
       Tab("Home", systemImage: "house", value: AppSection.home) {
-        HomeView(go: go)
+        page(.home) { HomeView(go: go) }
       }
       Tab("Read", systemImage: "text.alignleft", value: AppSection.read) {
-        PageRow(selection: $readPage, pages: [(.feeds, "Feeds"), (.saved, "Saved")], extras: [
-          (.highlights, "Highlights"), (.discover, "Discover"), (.archive, "Archive"), (.trash, "Trash"),
-        ] + (edition.isOut ? [(.edition, "The Edition")] : []), moreTitle: "More") { page in
-          switch page {
-          case .saved: SavedView(archive: false)
-          case .archive: SavedView(archive: true)
-          case .trash: SavedView(archive: false, trash: true)
-          case .edition: EditionView(onPutAway: { readPage = .feeds })
-          case .highlights: HighlightsView()
-          case .discover: DiscoverView()
-          default: FeedsView()
-          }
-        }
+        readRow.environment(\.isActivePage, section == .read)
       }
       Tab("Watch", systemImage: "play.rectangle", value: AppSection.watch) {
-        PageRow(selection: $watchPage, pages: [(.channels, "Latest"), (.savedVideos, "Saved")], extras: Array(watchPages.dropFirst(2)), moreTitle: "Collections") { page in
-          switch page {
-          case .savedVideos: WatchView(kind: .saved)
-          case .collection(let id):
-            if let collection = collections.first(where: { $0.id == id }) {
-              WatchView(kind: .collection(collection))
-            } else {
-              WatchView(kind: .channels)
-            }
-          default: WatchView(kind: .channels)
-          }
-        }
+        watchRow.environment(\.isActivePage, section == .watch)
       }
       Tab("Settings", systemImage: "gearshape", value: AppSection.settings) {
-        SettingsView()
+        page(.settings) { SettingsView() }
       }
     }
     .tabViewStyle(.sidebarAdaptable)
+  }
+
+  private var readRow: some View {
+    PageRow(selection: $readPage, pages: [(.feeds, "Feeds"), (.saved, "Saved")], extras: [
+      (.highlights, "Highlights"), (.discover, "Discover"), (.archive, "Archive"), (.trash, "Trash"),
+    ] + (edition.isOut ? [(.edition, "The Edition")] : []), moreTitle: "More") { page in
+      switch page {
+      case .saved: SavedView(archive: false)
+      case .archive: SavedView(archive: true)
+      case .trash: SavedView(archive: false, trash: true)
+      case .edition: EditionView(onPutAway: { readPage = .feeds })
+      case .highlights: HighlightsView()
+      case .discover: DiscoverView()
+      default: FeedsView()
+      }
+    }
+  }
+
+  private var watchRow: some View {
+    PageRow(selection: $watchPage, pages: [(.channels, "Latest"), (.savedVideos, "Saved")], extras: Array(watchPages.dropFirst(2)), moreTitle: "Collections") { page in
+      switch page {
+      case .savedVideos: WatchView(kind: .saved)
+      case .collection(let id):
+        if let collection = collections.first(where: { $0.id == id }) {
+          WatchView(kind: .collection(collection))
+        } else {
+          WatchView(kind: .channels)
+        }
+      default: WatchView(kind: .channels)
+      }
+    }
   }
   #endif
 
@@ -340,6 +383,7 @@ struct MainView: View {
 #if os(iOS)
 /// A row of pages along the top of a tab, as on the web app's iPhone layout.
 struct PageRow<Content: View>: View {
+  @Environment(\.isActivePage) private var tabActive
   @Binding var selection: AppSection
   let pages: [(AppSection, String)]
   var extras: [(AppSection, String)] = []
@@ -356,7 +400,7 @@ struct PageRow<Content: View>: View {
           .allowsHitTesting(active)
           .disabled(!active)
           .accessibilityHidden(!active)
-          .environment(\.isActivePage, active)
+          .environment(\.isActivePage, active && tabActive)
           .zIndex(active ? 1 : 0)
       }
     }
