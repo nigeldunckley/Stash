@@ -44,6 +44,10 @@ struct ItemListView<Tools: View>: View {
   @FocusState private var listFocused: Bool
   @SceneStorage("readerFocus") private var readerFocus = false
   @AppStorage("readerListWidth") private var listWidth = 340.0
+  #else
+  @Environment(\.horizontalSizeClass) private var sizeClass
+  /// A full-width iPad shows the article beside the list, as on the Mac, rather than pushing it.
+  private var splits: Bool { sizeClass == .regular && !embedded }
   #endif
 
   private var detail: String? {
@@ -122,6 +126,8 @@ struct ItemListView<Tools: View>: View {
     #else
     if embedded {
       pushingList
+    } else if splits {
+      padSplit
     } else {
       NavigationStack { pushingList }
     }
@@ -222,6 +228,38 @@ struct ItemListView<Tools: View>: View {
 
   #if os(iOS)
   private var pushingList: some View {
+    listColumn
+      .navigationDestination(item: $selection) { item in
+        ReaderScreen(item: item, actions: readerActions(for: item), perform: perform)
+          .unfoldDestination(item, in: unfold)
+      }
+  }
+
+  /// iPad: the list on the left and the article on the right, each with its own toolbar.
+  private var padSplit: some View {
+    NavigationSplitView {
+      listColumn
+        .navigationSplitViewColumnWidth(min: 320, ideal: 380, max: 480)
+    } detail: {
+      NavigationStack {
+        if let selection {
+          ReaderScreen(item: selection, actions: readerActions(for: selection), perform: perform)
+            .id(selection.id)
+        } else {
+          EmptyBox(
+            title: list.visibleItems.isEmpty ? emptyTitle : "Pick an article",
+            message: list.visibleItems.isEmpty ? emptyMessage : "It opens here, beside the list.",
+            systemImage: "doc.text", boxed: false
+          )
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .background(Color.stPage)
+        }
+      }
+    }
+    .navigationSplitViewStyle(.balanced)
+  }
+
+  private var listColumn: some View {
     List { rows }
       .stashList()
       .overlay { if list.visibleItems.isEmpty { emptyState } }
@@ -236,10 +274,6 @@ struct ItemListView<Tools: View>: View {
       .task(id: query) { await list.load(query) }
       .task(id: watchKey) { await watchForNew() }
       .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await checkNow() } } }
-      .navigationDestination(item: $selection) { item in
-        ReaderScreen(item: item, actions: readerActions(for: item), perform: perform)
-          .unfoldDestination(item, in: unfold)
-      }
   }
   #endif
 
@@ -346,7 +380,10 @@ struct ItemListView<Tools: View>: View {
     .accessibilityAction { selection = item }
     #else
     Button { selection = item; open(item) } label: {
-      ItemRow(item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item))
+      ItemRow(
+        item: item, subscriptionName: subscriptionName(item), unseen: showsUnseen && list.isUnseen(item),
+        selected: splits && selection?.id == item.id
+      )
     }
     .buttonStyle(.plain)
     .unfoldSource(item, in: unfold)
@@ -451,13 +488,16 @@ struct ItemListView<Tools: View>: View {
     let items = list.visibleItems
     if action.removesItem && selection?.id == item.id {
       #if os(macOS)
-      if let index = items.firstIndex(of: item) {
+      let next = true
+      #else
+      let next = splits
+      #endif
+      if next, let index = items.firstIndex(of: item) {
         let rest = items.dropFirst(index + 1)
         selection = rest.first ?? items.prefix(index).last
+      } else {
+        selection = nil
       }
-      #else
-      selection = nil
-      #endif
     }
     runItemAction(
       action, item, toaster: toaster,
