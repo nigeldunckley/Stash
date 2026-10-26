@@ -46,8 +46,14 @@ struct ItemListView<Tools: View>: View {
   @AppStorage("readerListWidth") private var listWidth = 340.0
   #else
   @Environment(\.horizontalSizeClass) private var sizeClass
-  /// A full-width iPad shows the article beside the list, as on the Mac, rather than pushing it.
-  private var splits: Bool { sizeClass == .regular && !embedded }
+  /// A full-width iPad gets the iPad layout: the article beside the list when there's room.
+  private var padLayout: Bool { sizeClass == .regular && !embedded }
+  /// The iPad page's width; below 700 points (Slide Over, a narrow split) articles are pushed.
+  @State private var padWidth: CGFloat = .infinity
+  /// Where the open article sat in the list, to step on from once a reload has dropped it.
+  @State private var selectedIndex = 0
+  /// The article opens beside the list, as on the Mac, rather than being pushed.
+  private var splits: Bool { padLayout && padWidth >= 700 }
   #endif
 
   private var detail: String? {
@@ -126,7 +132,7 @@ struct ItemListView<Tools: View>: View {
     #else
     if embedded {
       pushingList
-    } else if splits {
+    } else if padLayout {
       padSplit
     } else {
       NavigationStack { pushingList }
@@ -235,48 +241,61 @@ struct ItemListView<Tools: View>: View {
       }
   }
 
-  /// iPad: the list on the left and the article on the right, each with its own toolbar.
+  /// iPad: the list on the left and the article on the right, each with its own toolbar. Built
+  /// from two stacks side by side rather than a NavigationSplitView, which inside the app's own
+  /// sidebar can collapse to the list alone and never show the article.
   private var padSplit: some View {
-    NavigationSplitView(columnVisibility: .constant(.all)) {
-      ScrollViewReader { proxy in
-        listColumn
-          .onChange(of: selection?.id) { _, id in
-            guard let id else { return }
-            withAnimation(reduceMotion ? nil : StashMotion.feedback) { proxy.scrollTo(id) }
+    Group {
+      if splits {
+        HStack(spacing: 0) {
+          NavigationStack {
+            ScrollViewReader { proxy in
+              listColumn
+                .onChange(of: selection?.id) { _, id in
+                  guard let id else { return }
+                  withAnimation(reduceMotion ? nil : StashMotion.feedback) { proxy.scrollTo(id) }
+                }
+            }
           }
-      }
-      .toolbar(removing: .sidebarToggle)
-      .navigationSplitViewColumnWidth(min: 320, ideal: 380, max: 480)
-    } detail: {
-      NavigationStack {
-        if let selection {
-          ReaderScreen(
-            item: selection, actions: readerActions(for: selection), perform: perform,
-            onBack: { self.selection = nil }
-          )
-          .id(selection.id)
-        } else if !list.visibleItems.isEmpty {
-          EmptyBox(message: "Pick an article. It opens here, beside the list.", systemImage: "doc.text", boxed: false)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.stPage)
-        } else {
-          Color.stPage
+          .frame(width: min(max(padWidth * 0.4, 320), 440))
+          Rectangle().fill(Color.stLine).frame(width: 1).ignoresSafeArea()
+          NavigationStack { padReader }
+            .frame(maxWidth: .infinity)
         }
+      } else {
+        NavigationStack { pushingList }
       }
     }
-    .navigationSplitViewStyle(.balanced)
+    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { padWidth = $0 }
     .background { splitShortcuts }
-    // The list may reload under the open article (a new filter, a refresh): keep it in step.
+    // The list may reload under the open article: keep it in step. An article that drops out
+    // of the list (seen, in Unseen) stays open; a different list or filter closes it.
     .onChange(of: list.items) { _, items in
-      guard let selected = selection else { return }
-      if let updated = items.first(where: { $0.id == selected.id }) {
-        selection = updated
-      } else if !list.isLoading && !items.isEmpty {
-        // Gone from the list for good (a new filter), not just mid-reload.
-        selection = nil
-      }
+      if let selected = selection, let updated = items.first(where: { $0.id == selected.id }) { selection = updated }
     }
-    .toasts(toaster)
+    .onChange(of: query) { _, _ in if splits { selection = nil } }
+    .onChange(of: selection?.id) { _, id in
+      if let id, let index = list.visibleItems.firstIndex(where: { $0.id == id }) { selectedIndex = index }
+    }
+    .modifier(ListToasts(toaster: toaster, shown: splits))
+  }
+
+  /// The open article beside the list, or a prompt to pick one.
+  @ViewBuilder
+  private var padReader: some View {
+    if let selection {
+      ReaderScreen(
+        item: selection, actions: readerActions(for: selection), perform: perform,
+        onBack: { self.selection = nil }
+      )
+      .id(selection.id)
+    } else if !list.visibleItems.isEmpty {
+      EmptyBox(message: "Pick an article. It opens here, beside the list.", systemImage: "doc.text", boxed: false)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.stPage)
+    } else {
+      Color.stPage
+    }
   }
 
   /// ⌥↓ and ⌥↑ move through the list with the article open beside it. With ⌥, so the arrow keys
@@ -289,13 +308,21 @@ struct ItemListView<Tools: View>: View {
     .opacity(0)
     .allowsHitTesting(false)
     .accessibilityHidden(true)
-    .disabled(!isActivePage)
+    .disabled(!isActivePage || !splits)
   }
 
   private func move(_ offset: Int) {
     let items = list.visibleItems
     guard !items.isEmpty else { return }
-    let index = selection.flatMap { selected in items.firstIndex { $0.id == selected.id } }.map { $0 + offset } ?? 0
+    let index: Int
+    if let selected = selection, let current = items.firstIndex(where: { $0.id == selected.id }) {
+      index = current + offset
+    } else if selection != nil {
+      // The open article has left the list, so the one after it now sits in its place.
+      index = min(offset > 0 ? selectedIndex : selectedIndex - 1, items.count - 1)
+    } else {
+      index = 0
+    }
     guard items.indices.contains(index) else { return }
     selection = items[index]
     open(items[index])
