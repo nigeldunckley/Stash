@@ -156,10 +156,8 @@ struct MiniPlayer: View {
       .padding(8)
       progress.padding(.horizontal, 8).padding(.bottom, 6)
     }
-    .background(Color.stPanel)
-    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
-    .shadow(color: .black.opacity(0.14), radius: 12, y: 6)
+    .stashGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous), interactive: true)
+    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     .contentShape(Rectangle())
     .onTapGesture(perform: onExpand)
   }

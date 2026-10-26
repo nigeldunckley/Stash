@@ -21,8 +21,7 @@ struct NewItemsPill: View {
         .foregroundStyle(Color.stOnAccent)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Color.stAccent, in: Capsule())
-        .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+        .stashGlass(in: Capsule(), tint: .stAccent, interactive: true, fallback: .stAccent, border: false, shadow: 8)
         .contentShape(Capsule())
       }
       .buttonStyle(.plain)
