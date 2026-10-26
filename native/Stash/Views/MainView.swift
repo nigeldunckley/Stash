@@ -46,8 +46,9 @@ enum AppSection: Hashable {
   }
 }
 
-/// A sidebar on Mac, grouped into Read and Watch like the web app. On iPhone, tabs for Home,
-/// Read, Watch and Settings. The Edition opens from Home or Read’s More menu.
+/// A sidebar on Mac, grouped into Read and Watch like the web app. On iPad, the system sidebar
+/// with the same groups (a tab bar along the top when it's tucked away). On iPhone, tabs for
+/// Home, Read, Watch and Settings. The Edition opens from Home or Read’s More menu.
 struct MainView: View {
   @Environment(EditionModel.self) private var edition
   @Environment(\.scenePhase) private var scenePhase
@@ -81,6 +82,7 @@ struct MainView: View {
         watchPage = savedWatch == .savedVideos ? .savedVideos : .channels
         if case .collection = savedWatch { watchPage = savedWatch }
         if restored == .edition { section = .home } else { go(restored) }
+        if wide { fitSections() }
         #else
         section = restored == .edition && !edition.isOut ? .home : restored
         #endif
@@ -88,6 +90,10 @@ struct MainView: View {
       .onChange(of: section) { _, value in storedSection = value.key }
       .onChange(of: readPage) { _, value in readPageKey = value.key }
       .onChange(of: watchPage) { _, value in watchPageKey = value.key }
+      #if os(iOS)
+      // iPad side by side with another app can switch between its sidebar and iPhone's tabs.
+      .onChange(of: horizontalSizeClass) { _, _ in fitSections() }
+      #endif
       .onChange(of: collections) { _, current in
         #if os(iOS)
         if case .collection(let id) = watchPage, !current.contains(where: { $0.id == id }) { watchPage = .channels }
@@ -134,7 +140,125 @@ struct MainView: View {
     return CGRect(x: x - 12, y: frame.maxY - 42, width: 24, height: 24)
   }
 
+  /// A full-width iPad: every page in the sidebar rather than a row of pages in each tab.
+  private var wide: Bool { horizontalSizeClass == .regular }
+
   private var shell: some View {
+    Group {
+      if wide { padTabs } else { phoneTabs }
+    }
+    // The video you left, just above the tab bar (on iPad, in the corner).
+    .overlay(alignment: wide ? .bottomTrailing : .bottom) {
+      if player.host == .mini {
+        MiniPlayer(onExpand: { showingPlayer = true })
+          .frame(maxWidth: wide ? 460 : nil)
+          .padding(.horizontal, wide ? 20 : 10)
+          .padding(.bottom, wide ? 20 : 58)
+          .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+      }
+    }
+    .animation(reduceMotion ? StashMotion.fade : StashMotion.player, value: player.host == .mini)
+    .sheet(isPresented: $showingEdition) {
+      NavigationStack {
+        EditionView(onPutAway: { showingEdition = false })
+          .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { showingEdition = false } } }
+      }
+    }
+    // A saved or archived item moving to its tab.
+    .overlay { flightLayer }
+    .sheet(isPresented: $showingPlayer) {
+      if let item = player.item {
+        NavigationStack {
+          PlayerScreen(item: item, queue: player.queue, actions: [], perform: { _, _ in }, resumePlayback: false, onMini: { showingPlayer = false })
+            .toolbar {
+              ToolbarItem(placement: .cancellationAction) {
+                Button("Done") { showingPlayer = false }
+              }
+            }
+        }
+      }
+    }
+  }
+
+  /// iPad: Read and Watch as groups in the system sidebar, as on the Mac and the web, so every
+  /// page is one tap away. The sidebar and tab bar are the system's, so they take on Liquid
+  /// Glass on iPadOS 26.
+  private var padTabs: some View {
+    TabView(selection: $section) {
+      Tab("Home", systemImage: "house", value: AppSection.home) {
+        page(.home) { HomeView(go: go) }
+      }
+      TabSection("Read") {
+        Tab("Feeds", systemImage: "dot.radiowaves.up.forward", value: AppSection.feeds) {
+          page(.feeds) { FeedsView() }
+        }
+        Tab("Saved", systemImage: "bookmark", value: AppSection.saved) {
+          page(.saved) { SavedView(archive: false) }
+        }
+        Tab("The Edition", systemImage: "newspaper", value: AppSection.edition) {
+          page(.edition) { EditionView(onPutAway: { section = .feeds }) }
+        }
+        .hidden(!edition.isOut)
+        Tab("Highlights", systemImage: "highlighter", value: AppSection.highlights) {
+          page(.highlights) { HighlightsView() }
+        }
+        Tab("Discover", systemImage: "safari", value: AppSection.discover) {
+          page(.discover) { DiscoverView() }
+        }
+        Tab("Archive", systemImage: "archivebox", value: AppSection.archive) {
+          page(.archive) { SavedView(archive: true) }
+        }
+        Tab("Trash", systemImage: "trash", value: AppSection.trash) {
+          page(.trash) { SavedView(archive: false, trash: true) }
+        }
+      }
+      TabSection("Watch") {
+        Tab("Latest", systemImage: "play.rectangle", value: AppSection.channels) {
+          page(.channels) { WatchView(kind: .channels) }
+        }
+        Tab("Saved", systemImage: "bookmark", value: AppSection.savedVideos) {
+          page(.savedVideos) { WatchView(kind: .saved) }
+        }
+        ForEach(collections) { collection in
+          Tab(collection.name, systemImage: "folder", value: AppSection.collection(collection.id)) {
+            page(.collection(collection.id)) { WatchView(kind: .collection(collection)) }
+          }
+        }
+      }
+      Tab("Settings", systemImage: "gearshape", value: AppSection.settings) {
+        page(.settings) { SettingsView() }
+      }
+    }
+    .tabViewStyle(.sidebarAdaptable)
+  }
+
+  /// Only the page in front checks for new posts and owns the toolbar.
+  private func page<Content: View>(_ value: AppSection, @ViewBuilder _ content: () -> Content) -> some View {
+    content().environment(\.isActivePage, section == value)
+  }
+
+  /// Moves between iPhone's Read and Watch tabs and iPad's separate pages when the width changes.
+  private func fitSections() {
+    if wide {
+      if section == .read { section = readPage }
+      if section == .watch { section = watchPage }
+    } else {
+      switch section {
+      case .feeds, .saved, .highlights, .discover, .archive, .trash:
+        readPage = section
+        section = .read
+      case .edition:
+        readPage = .feeds
+        section = .read
+      case .channels, .savedVideos, .collection:
+        watchPage = section
+        section = .watch
+      default: break
+      }
+    }
+  }
+
+  private var phoneTabs: some View {
     TabView(selection: $section) {
       Tab("Home", systemImage: "house", value: AppSection.home) {
         HomeView(go: go)
@@ -173,36 +297,6 @@ struct MainView: View {
       }
     }
     .tabViewStyle(.sidebarAdaptable)
-    // The video you left, just above the tab bar.
-    .overlay(alignment: .bottom) {
-      if player.host == .mini {
-        MiniPlayer(onExpand: { showingPlayer = true })
-          .padding(.horizontal, 10)
-          .padding(.bottom, 58)
-          .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
-      }
-    }
-    .animation(reduceMotion ? StashMotion.fade : StashMotion.player, value: player.host == .mini)
-    .sheet(isPresented: $showingEdition) {
-      NavigationStack {
-        EditionView(onPutAway: { showingEdition = false })
-          .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { showingEdition = false } } }
-      }
-    }
-    // A saved or archived item moving to its tab.
-    .overlay { flightLayer }
-    .sheet(isPresented: $showingPlayer) {
-      if let item = player.item {
-        NavigationStack {
-          PlayerScreen(item: item, queue: player.queue, actions: [], perform: { _, _ in }, resumePlayback: false, onMini: { showingPlayer = false })
-            .toolbar {
-              ToolbarItem(placement: .cancellationAction) {
-                Button("Done") { showingPlayer = false }
-              }
-            }
-        }
-      }
-    }
   }
   #endif
 
@@ -214,6 +308,16 @@ struct MainView: View {
   /// Goes to a part of the app. On iPhone, pages inside Read and Watch open their tab.
   private func go(_ target: AppSection) {
     #if os(iOS)
+    if wide {
+      // On iPad every page has its own place in the sidebar.
+      if target == .edition && !edition.isOut { showingEdition = true; return }
+      switch target {
+      case .read: section = readPage
+      case .watch: section = watchPage
+      default: section = target
+      }
+      return
+    }
     switch target {
     case .edition:
       showingEdition = true

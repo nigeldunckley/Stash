@@ -144,9 +144,7 @@ struct ToastOverlay: ViewModifier {
           .padding(.horizontal, 14)
           .padding(.vertical, 9)
           .foregroundStyle(Color.stInk)
-          .background(Color.stPanel, in: RoundedRectangle(cornerRadius: Radius.item, style: .continuous))
-          .overlay(RoundedRectangle(cornerRadius: Radius.item, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
-          .shadow(color: .black.opacity(0.12), radius: 16, y: 8)
+          .stashGlass(in: RoundedRectangle(cornerRadius: Radius.item, style: .continuous), shadow: 16)
           .padding(.bottom, 16)
           .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
       }
