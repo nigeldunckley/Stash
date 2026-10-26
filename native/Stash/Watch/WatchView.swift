@@ -419,6 +419,9 @@ struct WatchView: View {
       } label: {
         Label(length.title, systemImage: "clock")
       }
+      .menuStyle(.button)
+      .buttonStyle(.text)
+      .fixedSize()
       #endif
       StashSegmented(selection: $showAll, [.init("New", false), .init("All", true)])
 
