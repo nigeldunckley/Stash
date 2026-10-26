@@ -37,7 +37,8 @@ export const refreshAllFeeds = async (db: DataSource): Promise<boolean> => {
         ARRAY_AGG(s.last_fetched_checksum) AS checksums,
         JSON_AGG(s.fetch_content_type) AS "fetchContentTypes",
         ARRAY_AGG(coalesce(s.folder, $3)) AS folders,
-        ARRAY_AGG(s.include_shorts) AS "includeShorts"
+        ARRAY_AGG(s.include_shorts) AS "includeShorts",
+        ARRAY_AGG(s.hide_short_videos) AS "hideShortVideos"
       FROM
         omnivore.subscriptions s
       INNER JOIN
@@ -129,6 +130,7 @@ const updateSubscriptionGroup = async (
     fetchContentTypes: group.fetchContentTypes,
     folders: group.folders,
     includeShorts: group.includeShorts,
+    hideShortVideos: group.hideShortVideos,
   }
 
   await queueRSSRefreshFeedJob(jobid, payload)
