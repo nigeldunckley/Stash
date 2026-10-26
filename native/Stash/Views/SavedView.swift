@@ -52,10 +52,24 @@ struct SavedView: View {
       folio: folio
     ) {
       if !isArchive && !trash {
+        #if os(iOS)
+        Menu {
+          Picker("Show", selection: $filter) {
+            Text("All").tag(Filter.all)
+            Text("Unread").tag(Filter.unread)
+            Text("In progress").tag(Filter.reading)
+          }
+          .pickerStyle(.inline)
+        } label: {
+          Label("Filter", systemImage: filter == .all ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+        }
+        Button { isAddingLink = true } label: { Label("Add link", systemImage: "plus") }
+        #else
         StashSegmented(selection: $filter, [.init("All", Filter.all), .init("Unread", Filter.unread), .init("In progress", Filter.reading)])
         Button { isAddingLink = true } label: { Label("Add link", systemImage: "plus") }
           .buttonStyle(.text)
           .help("Save a link")
+        #endif
       }
     }
     .onChange(of: searchText) { _, text in if text.isEmpty { submittedSearch = "" } }

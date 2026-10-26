@@ -49,6 +49,27 @@ struct FeedsView: View {
         right: showAll ? nil : list.total.map { "\($0) UNSEEN" }
       )
     ) {
+      #if os(iOS)
+      // One filter button in the toolbar, as Mail has: what to show, and from which feed.
+      Menu {
+        Picker("Show", selection: $showAll) {
+          Text("Unseen").tag(false)
+          Text("All posts").tag(true)
+        }
+        .pickerStyle(.inline)
+        Picker(selection: $source) {
+          Text("All feeds").tag(Subscription?.none)
+          ForEach(subscriptions.filter { !$0.isYouTube }) { subscription in
+            Text(subscription.name).tag(Optional(subscription))
+          }
+        } label: {
+          Label(source?.name ?? "All feeds", systemImage: "dot.radiowaves.up.forward")
+        }
+        .pickerStyle(.menu)
+      } label: {
+        Label("Filter", systemImage: source == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+      }
+      #else
       StashSegmented(selection: $showAll, [.init("Unseen", false), .init("All", true)])
 
       Menu {
@@ -66,6 +87,7 @@ struct FeedsView: View {
       .buttonStyle(.text)
       .fixedSize()
       .help("Choose a feed")
+      #endif
       Menu {
         Picker("Layout", selection: $wire) {
           Text("Cards").tag(false)
@@ -77,7 +99,9 @@ struct FeedsView: View {
         Button("Mark all seen", systemImage: "checkmark") { markAllSeen() }
           .disabled(markTask != nil || list.visibleItems.isEmpty)
       } label: { Label("More", systemImage: "ellipsis") }
+      #if os(macOS)
       .buttonStyle(.text)
+      #endif
       .help("Change the layout or act on this feed")
     }
     .toasts(toaster)

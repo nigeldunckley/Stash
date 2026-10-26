@@ -411,52 +411,10 @@ struct WatchView: View {
     if kind != .saved {
       #if os(macOS)
       StashSegmented(selection: $length, LengthFilter.allCases.map { StashSegmented<LengthFilter>.Option($0.title, $0) })
-      #else
-      Menu {
-        Picker("Length", selection: $length) {
-          ForEach(LengthFilter.allCases) { Text($0.title).tag($0) }
-        }
-      } label: {
-        Label(length.title, systemImage: "clock")
-      }
-      .menuStyle(.button)
-      .buttonStyle(.text)
-      .fixedSize()
-      #endif
       StashSegmented(selection: $showAll, [.init("New", false), .init("All", true)])
-
       Menu {
-        Picker("Channel", selection: $channel) {
-          Text("All channels").tag(Subscription?.none)
-          ForEach(channels) { Text($0.name).tag(Optional($0)) }
-        }
-        .pickerStyle(.inline)
-        if case .channels = kind, !collections.isEmpty {
-          Picker("Collection", selection: $collection) {
-            Text("Every collection").tag(WatchCollection?.none)
-            ForEach(collections) { Text($0.name).tag(Optional($0)) }
-          }
-          .pickerStyle(.inline)
-        }
-        if let channel {
-          Section(channel.name) {
-            Toggle("Hide videos under 3 minutes", isOn: Binding(
-              get: { channel.hideShortVideos ?? false },
-              set: { value in updateChannel(channel, hideShortVideos: value) }
-            ))
-            Text("Also hides short regular videos. Applies to future imports, not Saved videos.").font(.stSmall)
-            if !collections.isEmpty {
-              Picker("Collection", selection: Binding(
-                get: { channel.collectionId ?? "" },
-                set: { value in updateChannel(channel, collectionId: value) }
-              )) {
-                Text("No collection").tag("")
-                ForEach(collections) { Text($0.name).tag($0.id) }
-              }
-            }
-            Button("Unfollow \(channel.name)", role: .destructive) { unfollow(channel) }
-          }
-        }
+        channelPickers(inline: true)
+        channelSettings
       } label: {
         Label(channel?.name ?? collection?.name ?? "All channels", systemImage: "line.3.horizontal.decrease")
       }
@@ -464,6 +422,91 @@ struct WatchView: View {
       .buttonStyle(.text)
       .fixedSize()
       .help("Choose a channel or collection")
+      #else
+      // One filter button in the toolbar, as Mail has: what to show, how long, and from where.
+      Menu {
+        Picker("Show", selection: $showAll) {
+          Text("New").tag(false)
+          Text("All videos").tag(true)
+        }
+        .pickerStyle(.inline)
+        Picker(selection: $length) {
+          ForEach(LengthFilter.allCases) { Text($0.title).tag($0) }
+        } label: {
+          Label(length.title, systemImage: "clock")
+        }
+        .pickerStyle(.menu)
+        channelPickers(inline: false)
+        channelSettings
+      } label: {
+        Label("Filter", systemImage: isFiltered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+      }
+      #endif
+    }
+  }
+
+  /// Narrowed to a length, channel or collection beyond the page itself.
+  private var isFiltered: Bool {
+    length != .any || channel != nil || (kind == .channels && collection != nil)
+  }
+
+  @ViewBuilder
+  private func channelPickers(inline: Bool) -> some View {
+    if inline {
+      Picker("Channel", selection: $channel) { channelOptions }
+        .pickerStyle(.inline)
+    } else {
+      Picker(selection: $channel) { channelOptions } label: {
+        Label(channel?.name ?? "All channels", systemImage: "person.crop.square")
+      }
+      .pickerStyle(.menu)
+    }
+    if case .channels = kind, !collections.isEmpty {
+      if inline {
+        Picker("Collection", selection: $collection) { collectionOptions }
+          .pickerStyle(.inline)
+      } else {
+        Picker(selection: $collection) { collectionOptions } label: {
+          Label(collection?.name ?? "Every collection", systemImage: "square.stack")
+        }
+        .pickerStyle(.menu)
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var channelOptions: some View {
+    Text("All channels").tag(Subscription?.none)
+    ForEach(channels) { Text($0.name).tag(Optional($0)) }
+  }
+
+  @ViewBuilder
+  private var collectionOptions: some View {
+    Text("Every collection").tag(WatchCollection?.none)
+    ForEach(collections) { Text($0.name).tag(Optional($0)) }
+  }
+
+  /// The picked channel's own settings.
+  @ViewBuilder
+  private var channelSettings: some View {
+    if let channel {
+      Section(channel.name) {
+        Toggle("Hide videos under 3 minutes", isOn: Binding(
+          get: { channel.hideShortVideos ?? false },
+          set: { value in updateChannel(channel, hideShortVideos: value) }
+        ))
+        Text("Also hides short regular videos. Applies to future imports, not Saved videos.").font(.stSmall)
+        if !collections.isEmpty {
+          Picker("Collection", selection: Binding(
+            get: { channel.collectionId ?? "" },
+            set: { value in updateChannel(channel, collectionId: value) }
+          )) {
+            Text("No collection").tag("")
+            ForEach(collections) { Text($0.name).tag($0.id) }
+          }
+        }
+        Button("Unfollow \(channel.name)", role: .destructive) { unfollow(channel) }
+      }
     }
   }
 
