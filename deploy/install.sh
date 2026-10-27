@@ -4,6 +4,7 @@
 #   sudo ./install.sh lock                 turn off new sign-ups
 #   sudo ./install.sh update               pull new images and restart
 #   sudo ./install.sh proxy [port]         run behind an existing web server
+#   sudo ./install.sh tunnel <token|off>   serve through Cloudflare Tunnel
 #   sudo ./install.sh autoupdate [off]     update by itself after each merge
 #   sudo ./install.sh backup [now|off]     back up every night (on by default)
 #   sudo ./install.sh reset-password       choose a new password for an account
@@ -237,6 +238,40 @@ reset_password() {
   echo "Done. Sign in at https://$(grep '^DOMAIN=' .env | cut -d= -f2) with your new password."
 }
 
+# Serves Stash through Cloudflare Tunnel, so it needs no VPS, open port or
+# HTTPS certificate of its own. Caddy keeps answering on 127.0.0.1 (for the
+# watchdog and local checks) and the tunnel carries the public traffic.
+setup_tunnel() {
+  local token=$1 files
+  files=$(grep '^COMPOSE_FILE=' .env | cut -d= -f2 || true)
+  files=${files:-docker-compose.yml}
+  if [ -z "$token" ]; then
+    echo "Usage: sudo ./install.sh tunnel <token>   (or: tunnel off)" >&2
+    echo "The token is on the tunnel's page in the Cloudflare dashboard." >&2
+    exit 1
+  fi
+  sed -i '/^COMPOSE_FILE=/d; /^TUNNEL_TOKEN=/d' .env
+  if [ "$token" = off ]; then
+    files=$(echo "$files" | sed 's/:docker-compose.tunnel.yml//g')
+    echo "COMPOSE_FILE=${files}" >> .env
+    compose up -d --remove-orphans
+    echo "Cloudflare Tunnel is off."
+    return
+  fi
+  # Behind the tunnel Caddy serves plain HTTP on localhost, as in proxy mode.
+  case ":$files:" in *:docker-compose.proxy.yml:*) ;; *) files="$files:docker-compose.proxy.yml" ;; esac
+  case ":$files:" in *:docker-compose.tunnel.yml:*) ;; *) files="$files:docker-compose.tunnel.yml" ;; esac
+  grep -q '^CADDY_SITE=' .env || echo "CADDY_SITE=:80" >> .env
+  {
+    echo "COMPOSE_FILE=${files}"
+    echo "TUNNEL_TOKEN=${token}"
+  } >> .env
+  compose up -d --remove-orphans
+  echo
+  echo "Cloudflare Tunnel is on. In the Cloudflare dashboard, give the tunnel the"
+  echo "public hostname $(grep '^DOMAIN=' .env | cut -d= -f2) with service http://caddy:80."
+}
+
 case "${1:-}" in
   reset-password)
     reset_password
@@ -269,6 +304,9 @@ case "${1:-}" in
     echo "Stash is listening on http://127.0.0.1:${port}."
     echo "Point your existing web server's $(grep '^DOMAIN=' .env | cut -d= -f2) site at it."
     ;;
+  tunnel)
+    setup_tunnel "${2:-}"
+    ;;
   update)
     git -C .. pull --ff-only
     add_new_images
@@ -280,7 +318,7 @@ case "${1:-}" in
     ./status.sh update full
     ;;
   ""|-h|--help)
-    sed -n 2,7p "$0"
+    sed -n 2,10p "$0"
     exit 1
     ;;
   *)
