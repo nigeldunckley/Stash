@@ -99,6 +99,25 @@ sudo ./install.sh backup copy-to off   # stop copying
 
 The copy keeps the same number of backups as the server.
 
+### Watchdog for a Mac mini (OrbStack)
+
+When Stash runs in an OrbStack machine, the machine can stop (OrbStack
+quitting, an update, the Mac restarting), and after it comes back
+Tailscale or name lookups may not. The watchdog checks every five minutes
+from the Mac itself: it starts the machine if it isn't running, resets
+name lookups to public resolvers if they fail, restarts Tailscale if it
+isn't connected, and brings Stash's containers back up if Stash doesn't
+answer. Run this in the Mac's own Terminal:
+
+```bash
+orb -m stash cat /opt/stash/deploy/mac/install-watchdog.sh | bash          # turn it on
+orb -m stash cat /opt/stash/deploy/mac/install-watchdog.sh | bash -s off   # turn it off
+tail ~/Library/Logs/stash-watchdog.log                                     # what it fixed
+```
+
+Run the first line again after a change to `deploy/mac/stash-watchdog.sh`
+to update the Mac's copy.
+
 To restore a database backup, stop the app, load the dump, and start it
 again (replace the folder name):
 
