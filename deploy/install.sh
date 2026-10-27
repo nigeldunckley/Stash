@@ -64,12 +64,12 @@ write_env() {
   chmod 600 .env
 }
 
-# Copies image settings that were added to env.template after .env was
-# written, such as the Stash API image.
+# Copies settings that were added to env.template after .env was written,
+# such as the Stash API image or the queue's Redis address.
 add_new_images() {
   local line
   [ -n "$(tail -c1 .env)" ] && echo >> .env
-  grep -E '^[A-Z_]+_IMAGE=' env.template | while read -r line; do
+  grep -E '^([A-Z_]+_IMAGE|MQ_REDIS_URL)=' env.template | while read -r line; do
     if ! grep -q "^${line%%=*}=" .env; then
       echo "Adding ${line} to .env"
       echo "$line" >> .env
