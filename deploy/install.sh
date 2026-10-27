@@ -243,7 +243,7 @@ reset_password() {
 # watchdog and local checks) and the tunnel carries the public traffic.
 setup_tunnel() {
   local token=$1 files
-  files=$(grep '^COMPOSE_FILE=' .env | cut -d= -f2)
+  files=$(grep '^COMPOSE_FILE=' .env | cut -d= -f2 || true)
   files=${files:-docker-compose.yml}
   if [ -z "$token" ]; then
     echo "Usage: sudo ./install.sh tunnel <token>   (or: tunnel off)" >&2
