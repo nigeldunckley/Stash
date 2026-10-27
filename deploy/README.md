@@ -99,11 +99,40 @@ sudo ./install.sh backup copy-to off   # stop copying
 
 The copy keeps the same number of backups as the server.
 
+## Serving through Cloudflare Tunnel (no VPS)
+
+Cloudflare Tunnel lets a machine at home, such as the Mac mini, serve
+Stash's domain with nothing in front of it: no VPS, no Tailscale, no open
+port on the router. A small `cloudflared` container connects out to
+Cloudflare, and Cloudflare handles HTTPS. It is free.
+
+1. In a free Cloudflare account, add `nigeldunckley.com`. Check that every
+   existing DNS record (especially email: MX, SPF, DKIM) was copied, then
+   change the domain's nameservers to Cloudflare's where the domain was
+   bought. Wait until Cloudflare says the domain is active.
+2. In Cloudflare, open **Zero Trust → Networks → Tunnels → Create a
+   tunnel**, choose **Cloudflared**, name it `stash`, and copy the token
+   from the install command it shows (the long string after `--token`).
+3. On the machine running Stash:
+
+   ```bash
+   cd /opt/stash/deploy && sudo ./install.sh tunnel <token>
+   ```
+
+4. Back in Cloudflare, give the tunnel a **public hostname**:
+   subdomain `stash`, domain `nigeldunckley.com`, service type `HTTP`,
+   URL `caddy:80`. Cloudflare replaces the old `stash` DNS record with one
+   for the tunnel.
+
+Stash keeps answering on `127.0.0.1:8088` on the machine itself, so the
+watchdog still works. Turn the tunnel off with
+`sudo ./install.sh tunnel off`.
+
 ### Watchdog for a Mac mini (OrbStack)
 
 When Stash runs in an OrbStack machine, the machine can stop (OrbStack
 quitting, an update, the Mac restarting), and after it comes back
-Tailscale or name lookups may not. The watchdog checks every five minutes
+Tailscale (if Stash is reached through it) or name lookups may not. The watchdog checks every five minutes
 from the Mac itself: it starts the machine if it isn't running, resets
 name lookups to public resolvers if they fail, restarts Tailscale if it
 isn't connected, and brings Stash's containers back up if Stash doesn't

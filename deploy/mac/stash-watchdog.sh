@@ -46,8 +46,8 @@ if ! getent hosts github.com > /dev/null 2>&1; then
   sleep 30
 fi
 
-# 3. Tailscale: the VPS forwards stash.nigeldunckley.com to this machine's
-#    Tailscale address.
+# 3. Tailscale, when the VPS forwards stash.nigeldunckley.com to this
+#    machine's Tailscale address. Behind Cloudflare Tunnel it isn't needed.
 if command -v tailscale > /dev/null &&
   ! tailscale status --json 2> /dev/null | grep -q '"BackendState": *"Running"'; then
   systemctl restart tailscaled
