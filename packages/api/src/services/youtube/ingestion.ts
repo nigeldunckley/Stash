@@ -27,7 +27,7 @@ import {
   youtubeList,
   YouTubeUnavailableError,
 } from './client'
-import { queueYouTube } from './connection'
+import { queueYouTube, userQuery } from './connection'
 import { shouldImportVideo } from './security'
 
 type ChannelState = {
@@ -81,6 +81,38 @@ export const playbackFlags = (v?: VideoResource) => ({
   // Kept as it was when YouTube can't say, so a vanished Short stays hidden.
   ...(v ? { youtubeShort: isShortVideo(v) } : {}),
 })
+
+// What the player needs to know before it plays a video. When the Data API
+// can't answer (quota used up, not configured), an older lookup is used, and
+// failing that the video is simply tried: YouTube's own player shows its
+// message if it can't play. Unknown made-for-kids status counts as yes, so
+// nothing is tracked, unless the saved copy already says otherwise.
+export async function playbackFlagsFor(uid: string, id: string) {
+  try {
+    return playbackFlags(await publicVideo(id))
+  } catch (error) {
+    if (!(error instanceof YouTubeUnavailableError)) throw error
+  }
+  const cached = (
+    (await appDataSource.query(
+      'SELECT data FROM omnivore.youtube_videos WHERE video_id=$1',
+      [id]
+    )) as { data: VideoResource }[]
+  )[0]
+  if (cached) return playbackFlags(cached.data)
+  const saved = (
+    await userQuery<{ youtube_made_for_kids: boolean | null }>(
+      uid,
+      "SELECT youtube_made_for_kids FROM omnivore.library_item WHERE user_id=$1 AND original_url=$2 AND state<>'DELETED' LIMIT 1",
+      [uid, watchUrl(id)]
+    )
+  )[0]
+  return {
+    youtubeAvailable: true,
+    youtubeEmbeddable: true,
+    youtubeMadeForKids: saved?.youtube_made_for_kids ?? true,
+  }
+}
 
 async function updateVideoCopies(id: string, v?: VideoResource) {
   // Public metadata updates never replace user-created notes, labels or progress.
