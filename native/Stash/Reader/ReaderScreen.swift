@@ -28,6 +28,8 @@ struct ReaderScreen: View {
   @AppStorage("readerFontSize") private var fontSize = 20
   @AppStorage("readerFont") private var fontFamily = "Newsreader"
   @AppStorage("readerWidth") private var lineWidth = 640
+  @AppStorage("padReaderContentsVisible") private var showsContents = true
+  @State private var availableWidth: CGFloat = 0
   private var toaster: Toaster { Toaster.shared }
 
   private static let fonts = ["Newsreader", "Literata", "Geist"]
@@ -35,15 +37,19 @@ struct ReaderScreen: View {
   var body: some View {
     Group {
       if let reader {
-        article(reader)
+        readingArea(reader)
       } else {
         ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
       }
     }
     .background(Color.stPage)
+    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
     .modifier(ScreenChrome(embedded: embedded, title: current.source) { toolbar })
     .safeAreaInset(edge: .top, spacing: 0) {
       if paneControls { paneToolbar }
+    }
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+      if phoneReadingBar { bottomToolbar }
     }
     .task(id: current.id) { await load() }
     .onAppear { onScreen = true }
@@ -61,9 +67,91 @@ struct ReaderScreen: View {
     .onChange(of: lineWidth) { _, width in reader?.send("stashReaderWidth", ["width": width]) }
   }
 
+  private var phoneReadingBar: Bool {
+    #if os(iOS)
+    !embedded && !paneControls && UIDevice.current.userInterfaceIdiom == .phone
+    #else
+    false
+    #endif
+  }
+
+  @ViewBuilder
+  private func readingArea(_ reader: ReaderController) -> some View {
+    #if os(iOS)
+    if paneControls && UIDevice.current.userInterfaceIdiom == .pad && availableWidth >= 760 && showsContents {
+      HStack(spacing: 0) {
+        article(reader)
+        Rectangle().fill(Color.stLine).frame(width: 1)
+        contentsInspector(reader).frame(width: 228)
+      }
+    } else {
+      article(reader)
+    }
+    #else
+    article(reader)
+    #endif
+  }
+
+  private func contentsInspector(_ reader: ReaderController) -> some View {
+    VStack(alignment: .leading, spacing: 18) {
+      Kicker("In this article", accent: true)
+      Text(current.title)
+        .font(.reading(21, .medium, relativeTo: .title3))
+        .foregroundStyle(Color.stInk)
+      if let line = reader.sections?.line {
+        Text(line).font(.stDetail).foregroundStyle(Color.stMuted)
+      }
+      ProgressView(value: reader.progress)
+        .tint(Color.stAccent)
+        .accessibilityLabel("Reading progress")
+      Text("\(Int(reader.progress * 100))% read")
+        .font(.stDetail).foregroundStyle(Color.stMuted)
+      Button { reader.openContents() } label: { Label("Show contents", systemImage: "list.bullet") }
+        .buttonStyle(.text)
+        .disabled((reader.sections?.count ?? 0) < 2)
+      Spacer()
+    }
+    .padding(20)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .background(Color.stSurface)
+  }
+
+  private var bottomToolbar: some View {
+    HStack {
+      Button { reader?.openContents() } label: { bottomLabel("Contents", icon: "list.bullet") }
+        .disabled((reader?.sections?.count ?? 0) < 2)
+      Spacer()
+      ReaderTextButton(verticalLabel: true)
+      Spacer()
+      if let action = currentActions.first(where: { $0 != .delete }) {
+        Button { perform(action, current) } label: {
+          bottomLabel(action.title(for: current), icon: action.systemImage)
+        }
+      }
+      if let url = current.originalURL {
+        Spacer()
+        ShareLink(item: url) { bottomLabel("Share", icon: "square.and.arrow.up") }
+      }
+    }
+    .buttonStyle(.plain)
+    .foregroundStyle(Color.stInk)
+    .padding(.horizontal, 22)
+    .padding(.vertical, 5)
+    .background(Color.stPage)
+    .overlay(alignment: .top) { Rectangle().fill(Color.stLine).frame(height: 1) }
+  }
+
+  private func bottomLabel(_ title: String, icon: String) -> some View {
+    VStack(spacing: 4) {
+      Image(systemName: icon).font(.ui(19))
+      Text(title).font(.ui(11)).lineLimit(1)
+    }
+    .frame(minWidth: 52, minHeight: 48)
+    .accessibilityLabel(title)
+  }
+
   private func article(_ reader: ReaderController) -> some View {
     ReaderWebView(webView: reader.webView)
-      .ignoresSafeArea(edges: .bottom)
       .opacity(reader.isReady ? 1 : 0)
       .animation(StashMotion.fade, value: reader.isReady)
       .overlay { placeholder(reader) }
@@ -110,6 +198,12 @@ struct ReaderScreen: View {
         }
         Spacer(minLength: 4)
         ReaderTextButton()
+        #if os(iOS)
+        if UIDevice.current.userInterfaceIdiom == .pad {
+          Button { showsContents.toggle() } label: { Label(showsContents ? "Hide inspector" : "Show inspector", systemImage: "sidebar.right") }
+            .help(showsContents ? "Hide contents inspector" : "Show contents inspector")
+        }
+        #endif
         if let url = current.originalURL { ShareLink(item: url); Link(destination: url) { Label("Open original", systemImage: "safari") }.help("Open original") }
         if currentActions.contains(.delete) {
           Menu {
@@ -181,21 +275,29 @@ struct ReaderScreen: View {
     }
     #endif
     ToolbarItemGroup(placement: .primaryAction) {
-      ForEach(currentActions, id: \.self) { action in
-        Button(role: action == .delete ? .destructive : nil) {
-          perform(action, current)
-        } label: {
-          Label(action.title, systemImage: action.systemImage)
+      if phoneReadingBar {
+        Menu {
+          ForEach(currentActions, id: \.self) { action in
+            Button(role: action == .delete ? .destructive : nil) { perform(action, current) } label: {
+              Label(action.title(for: current), systemImage: action.systemImage)
+            }
+          }
+          if let url = current.originalURL { Link("Open original", destination: url) }
+        } label: { Label("More", systemImage: "ellipsis") }
+      } else {
+        ForEach(currentActions, id: \.self) { action in
+          Button(role: action == .delete ? .destructive : nil) {
+            perform(action, current)
+          } label: {
+            Label(action.title, systemImage: action.systemImage)
+          }
+          .help(action.title)
         }
-        .help(action.title)
-      }
-
-      ReaderTextButton()
-
-      if let url = current.originalURL {
-        ShareLink(item: url)
-        Link(destination: url) { Label("Open original", systemImage: "safari") }.help("Open original")
-          .help("Open original")
+        ReaderTextButton()
+        if let url = current.originalURL {
+          ShareLink(item: url)
+          Link(destination: url) { Label("Open original", systemImage: "safari") }.help("Open original")
+        }
       }
     }
   }

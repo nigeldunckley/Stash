@@ -27,11 +27,9 @@ struct WatchView: View {
   @State private var shelves: [Shelf] = []
   /// The grid's width, for laying out Continue watching on iPad.
   @State private var gridWidth: CGFloat = 0
+  @State private var layoutWidth: CGFloat = 0
   /// Videos archived, saved or deleted from a shelf, until the shelves next load.
   @State private var gone: Set<String> = []
-  #if os(iOS)
-  @Environment(\.horizontalSizeClass) private var sizeClass
-  #endif
 
   struct Shelf: Identifiable {
     let collection: WatchCollection
@@ -42,8 +40,7 @@ struct WatchView: View {
   /// A grid of cards (Mac, and iPad at full width) rather than iPhone's list of rows.
   private var usesGrid: Bool {
     #if os(iOS)
-    // A large iPhone held sideways is regular width too, but keeps its list.
-    sizeClass == .regular && UIDevice.current.userInterfaceIdiom == .pad
+    UIDevice.current.userInterfaceIdiom == .pad && layoutWidth >= 640
     #else
     true
     #endif
@@ -140,6 +137,7 @@ struct WatchView: View {
         if grid && shelves.isEmpty { Task { shelves = await loadShelves() } }
       }
     }
+    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { layoutWidth = $0 }
   }
 
   /// A grid on Mac and iPad; on iPhone a list, so videos swipe like everything else.

@@ -2,8 +2,8 @@ import SwiftUI
 import WebKit
 import UniformTypeIdentifiers
 
-/// The player page: the video, its controls, and Up next and About beside
-/// it on a Mac or underneath on iPhone.
+/// The player page: a stable video stage with context beside it in wide windows,
+/// or below it on iPhone and narrow iPad windows.
 struct PlayerScreen: View {
   let item: LibraryItem
   let queue: [LibraryItem]
@@ -17,24 +17,27 @@ struct PlayerScreen: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(PlayerController.self) private var player
   @Environment(\.isActivePage) private var isActivePage
-  #if os(iOS)
-  @Environment(\.horizontalSizeClass) private var sizeClass
-  #endif
   @State private var tab: PlayerTab = .upNext
+  @State private var showsContext = true
+  @State private var transcript: [TranscriptLine] = []
+  @State private var transcriptVideoID: String?
+  @State private var transcriptError: String?
+  @State private var transcriptSearch = ""
+  @State private var scrubbingTime: Double?
   @State private var screenID = UUID()
   @State private var opened = false
   @State private var draggingID: String?
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private enum PlayerTab: String, CaseIterable, Identifiable {
-    case upNext = "Up next", about = "About"
+    case upNext = "Up next", chapters = "Chapters", transcript = "Transcript", about = "About"
     var id: Self { self }
   }
 
-  /// Wide enough for Up next beside the video: an iPad in portrait already is.
+  /// A wide iPad window keeps context beside the stage; narrower windows put it below.
   private var splitWidth: CGFloat {
     #if os(iOS)
-    sizeClass == .regular && UIDevice.current.userInterfaceIdiom == .pad ? 760 : 900
+    UIDevice.current.userInterfaceIdiom == .pad ? 900 : .infinity
     #else
     900
     #endif
@@ -48,12 +51,16 @@ struct PlayerScreen: View {
       if geometry.size.width >= splitWidth {
         HStack(spacing: 0) {
           ScrollView { mainColumn.padding(24) }
-          Divider()
-          sideColumn.frame(width: geometry.size.width >= 1000 ? 360 : 300)
+          if showsContext {
+            Divider()
+            sideColumn.frame(width: geometry.size.width >= 1100 ? 370 : 320)
+          }
         }
       } else {
         VStack(spacing: 0) {
           video
+          playbackTimeline.padding(.horizontal, 16).padding(.top, 10)
+          controls.padding(.horizontal, 16).padding(.top, 6)
           ScrollView {
             VStack(alignment: .leading, spacing: 16) {
               details
@@ -66,6 +73,10 @@ struct PlayerScreen: View {
     }
     .background(Color.stPage)
     .modifier(ScreenChrome(embedded: embedded, title: current.source) { toolbar })
+    .task(id: "\(current.id)|\(tab.rawValue)") {
+      if tab == .transcript { await loadTranscript() }
+    }
+    .onChange(of: current.id) { _, _ in scrubbingTime = nil }
     .onAppear {
       guard isActivePage else { return }
       if !opened {
@@ -100,7 +111,21 @@ struct PlayerScreen: View {
 
   private var mainColumn: some View {
     VStack(alignment: .leading, spacing: 18) {
+      #if os(iOS)
+      if UIDevice.current.userInterfaceIdiom == .pad {
+        HStack {
+          Spacer()
+          Button { showsContext.toggle() } label: {
+            Label(showsContext ? "Hide context" : "Show context", systemImage: "sidebar.right")
+          }
+          .buttonStyle(.text)
+          .accessibilityLabel(showsContext ? "Hide video context" : "Show video context")
+        }
+      }
+      #endif
       video.clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+      playbackTimeline
+      controls
       details
     }
     .frame(maxWidth: 1100)
@@ -137,7 +162,7 @@ struct PlayerScreen: View {
   private var details: some View {
     VStack(alignment: .leading, spacing: 10) {
       Text(current.title)
-        .font(.reading(24, .medium, relativeTo: .title2))
+        .font(.reading(28, .medium, relativeTo: .title2))
         .foregroundStyle(Color.stInk)
       HStack(spacing: 8) {
         Text(current.author ?? current.source)
@@ -150,8 +175,23 @@ struct PlayerScreen: View {
       }
       .font(.stDetail)
       .foregroundStyle(Color.stMuted)
-      controls
     }
+  }
+
+  private var playbackTimeline: some View {
+    Slider(value: Binding(
+      get: { min(scrubbingTime ?? player.time, max(player.duration, 1)) },
+      set: { scrubbingTime = $0 }
+    ), in: 0...max(player.duration, 1), onEditingChanged: { editing in
+      if !editing, let time = scrubbingTime {
+        player.seek(to: time)
+        scrubbingTime = nil
+      }
+    })
+      .tint(Color.stAccent)
+      .disabled(player.duration <= 0)
+      .accessibilityLabel("Playback position")
+      .accessibilityValue("\(Watch.timecode(scrubbingTime ?? player.time)) of \(Watch.timecode(player.duration))")
   }
 
   private var controls: some View {
@@ -175,7 +215,7 @@ struct PlayerScreen: View {
   }
 
   private var playbackTime: some View {
-    Text("\(Watch.timecode(player.time)) / \(Watch.timecode(player.duration))")
+    Text("\(Watch.timecode(scrubbingTime ?? player.time)) / \(Watch.timecode(player.duration))")
       .font(.stDetail).foregroundStyle(Color.stMuted).monospacedDigit().fixedSize()
   }
 
@@ -224,13 +264,18 @@ struct PlayerScreen: View {
   }
 
   private var tabPicker: some View {
-    StashSegmented(selection: $tab, PlayerTab.allCases.map { StashSegmented<PlayerTab>.Option($0.rawValue, $0) })
+    ScrollView(.horizontal) {
+      StashSegmented(selection: $tab, PlayerTab.allCases.map { StashSegmented<PlayerTab>.Option($0.rawValue, $0) })
+    }
+    .scrollIndicators(.hidden)
   }
 
   @ViewBuilder
   private var tabContent: some View {
     switch tab {
     case .upNext: upNext
+    case .chapters: chapters
+    case .transcript: transcriptContent
     case .about: about
     }
   }
@@ -274,38 +319,102 @@ struct PlayerScreen: View {
     }
   }
 
+  // MARK: Context
+
+  private var chapters: some View {
+    let chapters = Watch.chapters(current.description)
+    return VStack(alignment: .leading, spacing: 8) {
+      if chapters.isEmpty {
+        Text("No chapters for this video.").font(.stSmall).foregroundStyle(Color.stMuted)
+      }
+      ForEach(chapters, id: \.self) { chapter in
+        Button { player.seek(to: chapter.start) } label: {
+          HStack(spacing: 10) {
+            Text(Watch.timecode(chapter.start))
+              .font(.stDetail)
+              .foregroundStyle(Color.stAccentText)
+              .frame(width: 52, alignment: .leading)
+            Text(chapter.title).font(.ui(13)).foregroundStyle(Color.stInk)
+            Spacer()
+          }
+          .padding(.vertical, 6)
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var transcriptContent: some View {
+    if transcriptVideoID != current.id {
+      ProgressView().frame(maxWidth: .infinity).padding(24)
+    } else if let transcriptError {
+      EmptyBox(title: "Transcript unavailable", message: transcriptError, systemImage: "text.bubble", boxed: false) {
+        Button("Try again") { Task { await loadTranscript() } }
+      }
+    } else if transcript.isEmpty {
+      Text("No transcript for this video.").font(.stSmall).foregroundStyle(Color.stMuted)
+    } else {
+      VStack(alignment: .leading, spacing: 10) {
+        TextField("Search transcript", text: $transcriptSearch)
+          .textFieldStyle(.roundedBorder)
+        let lines = transcript.filter { transcriptSearch.isEmpty || $0.text.localizedCaseInsensitiveContains(transcriptSearch) }
+        if lines.isEmpty {
+          Text("No matching lines.").font(.stSmall).foregroundStyle(Color.stMuted)
+        }
+        ForEach(lines, id: \.self) { line in
+          Button { player.seek(to: line.start) } label: {
+            HStack(alignment: .top, spacing: 10) {
+              Text(Watch.timecode(line.start))
+                .font(.stDetail)
+                .foregroundStyle(Color.stAccentText)
+                .frame(width: 52, alignment: .leading)
+              Text(line.text).font(.ui(13)).foregroundStyle(Color.stInk)
+                .multilineTextAlignment(.leading)
+              Spacer(minLength: 0)
+            }
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+        }
+      }
+    }
+  }
+
+  private func loadTranscript() async {
+    guard let videoID = Watch.videoID(current) else {
+      transcriptVideoID = current.id
+      transcriptError = "This video has no transcript."
+      return
+    }
+    let itemID = current.id
+    transcriptVideoID = nil
+    transcriptError = nil
+    do {
+      let lines = try await Watch.transcript(videoID)
+      guard !Task.isCancelled, current.id == itemID else { return }
+      transcript = lines
+      transcriptVideoID = itemID
+    } catch {
+      guard !Task.isCancelled, current.id == itemID else { return }
+      transcriptError = error.localizedDescription
+      transcriptVideoID = itemID
+    }
+  }
+
   // MARK: About
 
   private var about: some View {
-    let chapters = Watch.chapters(current.description)
     return VStack(alignment: .leading, spacing: 14) {
       Text("Captions are available through the YouTube player’s controls.").font(.stSmall).foregroundStyle(Color.stMuted)
-      if !chapters.isEmpty {
-        VStack(alignment: .leading, spacing: 2) {
-          Text("Chapters").font(.stSection)
-          ForEach(chapters, id: \.self) { chapter in
-            Button { player.seek(to: chapter.start) } label: {
-              HStack(spacing: 10) {
-                Text(Watch.timecode(chapter.start))
-                  .font(.stDetail)
-                  .foregroundStyle(Color.stAccentText)
-                  .frame(width: 52, alignment: .leading)
-                Text(chapter.title).font(.ui(13)).foregroundStyle(Color.stInk)
-                Spacer()
-              }
-              .padding(.vertical, 4)
-              .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-          }
-        }
-      }
       if let description = current.description, !description.isEmpty {
         Text(description)
           .font(.ui(13))
           .foregroundStyle(Color.stInk)
           .textSelection(.enabled)
-      } else if chapters.isEmpty {
+      } else {
         Text("No description.").font(.ui(13)).foregroundStyle(Color.stMuted)
       }
     }

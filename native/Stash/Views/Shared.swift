@@ -34,7 +34,6 @@ struct ScreenChrome<Bar: ToolbarContent>: ViewModifier {
   @AppStorage("sidebarHidden") private var sidebarHidden = false
   @Environment(\.autoHiddenSidebar) private var autoHiddenSidebar
   #else
-  @Environment(\.horizontalSizeClass) private var sizeClass
   #endif
 
   func body(content: Content) -> some View {
@@ -60,7 +59,7 @@ struct ScreenChrome<Bar: ToolbarContent>: ViewModifier {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         // iPhone gives the reader the whole screen; iPad keeps its sidebar and tab bar.
-        .toolbar(sizeClass == .compact ? .hidden : .automatic, for: .tabBar)
+        .toolbar(UIDevice.current.userInterfaceIdiom == .phone ? .hidden : .automatic, for: .tabBar)
         #endif
         .toolbar {
           if isActive { toolbar() }

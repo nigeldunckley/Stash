@@ -1,13 +1,24 @@
 import SwiftUI
 
 struct ReaderTextButton: View {
+  var verticalLabel = false
   @AppStorage("readerFontSize") private var size = 20
   @AppStorage("readerFont") private var font = "Newsreader"
   @AppStorage("readerWidth") private var width = 640
   @State private var showing = false
 
   var body: some View {
-    Button { showing.toggle() } label: { Label("Text", systemImage: "textformat.size") }
+    Button { showing.toggle() } label: {
+      if verticalLabel {
+        VStack(spacing: 4) {
+          Image(systemName: "textformat.size").font(.ui(19))
+          Text("Text").font(.ui(11))
+        }
+        .frame(minWidth: 52, minHeight: 48)
+      } else {
+        Label("Text", systemImage: "textformat.size")
+      }
+    }
       .help("Reading appearance")
       .popover(isPresented: $showing) {
         VStack(alignment: .leading, spacing: 18) {

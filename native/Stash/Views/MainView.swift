@@ -64,7 +64,6 @@ struct MainView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   #if os(iOS)
   @Environment(PlayerController.self) private var player
-  @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   /// The full player, opened from the mini player.
   @State private var showingPlayer = false
   /// The iPad sidebar's own arrangement, with Feeds, Saved and Latest kept in its tab bar.
@@ -94,12 +93,6 @@ struct MainView: View {
       .onChange(of: section) { _, value in storedSection = value.key }
       .onChange(of: readPage) { _, value in readPageKey = value.key }
       .onChange(of: watchPage) { _, value in watchPageKey = value.key }
-      #if os(iOS)
-      // iPad side by side with another app can switch between its sidebar and iPhone's tabs.
-      // Snapshots for the app switcher can flip the width for a moment, so only follow it while
-      // the app is in front.
-      .onChange(of: horizontalSizeClass) { _, _ in if scenePhase == .active { fitSections() } }
-      #endif
       .onChange(of: collections) { _, current in
         #if os(iOS)
         if case .collection(let id) = watchPage, !current.contains(where: { $0.id == id }) { watchPage = .channels }
@@ -144,7 +137,7 @@ struct MainView: View {
   private var flightLayer: some View {
     GeometryReader { geometry in
       // iPad shows its tabs at the top or in a sidebar, so only iPhone's bottom bar is aimed at.
-      let moment = horizontalSizeClass == .compact ? Moments.shared.current : nil
+      let moment = !wide ? Moments.shared.current : nil
       MomentFlight(moment: moment, target: moment.map { tabTarget($0.kind, in: geometry.frame(in: .global)) })
     }
     .allowsHitTesting(false)
@@ -159,8 +152,8 @@ struct MainView: View {
     return CGRect(x: x - 12, y: frame.maxY - 42, width: 24, height: 24)
   }
 
-  /// A full-width iPad: every page in the sidebar rather than a row of pages in each tab.
-  private var wide: Bool { horizontalSizeClass == .regular }
+  /// Keep the iPad's destinations when its window narrows; the system adapts the sidebar.
+  private var wide: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
   private var shell: some View {
     Group {
@@ -292,7 +285,7 @@ struct MainView: View {
     content().environment(\.isActivePage, section == value)
   }
 
-  /// Moves between iPhone's Read and Watch tabs and iPad's separate pages when the width changes.
+  /// Normalises restored destinations for iPhone tabs and the iPad sidebar.
   private func fitSections() {
     if wide {
       if section == .read { section = readPage == .edition && !edition.isOut ? .feeds : readPage }

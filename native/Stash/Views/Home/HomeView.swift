@@ -652,16 +652,28 @@ struct HomeView: View {
   }
   #endif
 
-  // MARK: iPhone layout
+  // MARK: iOS layouts
 
   #if os(iOS)
-  /// A List, so rows swipe: right to save, left to archive.
+  @ViewBuilder
   private var content: some View {
+    if UIDevice.current.userInterfaceIdiom == .pad && contentWidth >= 640 {
+      padHome
+    } else {
+      phoneHome
+    }
+  }
+
+  /// A List, so rows swipe: right to save, left to archive.
+  private var phoneHome: some View {
     ScrollViewReader { proxy in
       List {
         FolioView(content: Self.folio).plainListRow(top: 8)
         iPhoneHeader.plainListRow(top: 12)
         continuationSection.plainListRow(top: 18)
+        if let lead = feedItems.first {
+          featuredStory(lead, large: false).plainListRow(top: 22)
+        }
         if showsEditionStrip {
           editionStrip
             .editionDelivery(date: edition.status?.date, fresh: edition.isFresh)
@@ -679,7 +691,7 @@ struct HomeView: View {
         if items.isEmpty {
           feedsEmpty.plainListRow()
         } else {
-          ForEach(groups(items), id: \.label) { group in
+          ForEach(groups(Array(items.dropFirst())), id: \.label) { group in
             DayBand(label: group.label).stashListRow()
             ForEach(group.items) { item in
               Button { open(item, from: .feeds) } label: {
@@ -708,6 +720,107 @@ struct HomeView: View {
         withAnimation(reduceMotion ? nil : StashMotion.change) { proxy.scrollTo(Self.topID, anchor: .top) }
       }
     }
+  }
+
+  private var padHome: some View {
+    ScrollViewReader { proxy in
+      ScrollView {
+        VStack(alignment: .leading, spacing: 24) {
+          FolioView(content: Self.folio)
+            .id(Self.topID)
+          iPhoneHeader
+          continuationSection
+          if showsEditionStrip {
+            editionStrip.editionDelivery(date: edition.status?.date, fresh: edition.isFresh)
+          }
+          let items = feedItems
+          if let lead = items.first {
+            SectionHeading(title: dayGroup(lead.date) == "Today" ? "Today's stories" : "From your feeds") {
+              Button("All feeds") { go(.feeds) }.buttonStyle(.text)
+            }
+            let editorial: AnyLayout = contentWidth >= 1000
+              ? AnyLayout(HStackLayout(alignment: .top, spacing: 24))
+              : AnyLayout(VStackLayout(alignment: .leading, spacing: 20))
+            editorial {
+              featuredStory(lead, large: true)
+              VStack(alignment: .leading, spacing: 18) {
+                if let second = items.dropFirst().first { featuredStory(second, large: false) }
+                if let video = videos.first {
+                  SectionHeading(title: "Watch") { Button("See all") { go(.channels) }.buttonStyle(.text) }
+                  Button { open(video, from: .videos) } label: { VideoRow(item: video) }
+                    .buttonStyle(.plain)
+                    .itemMenu(video, unseen: true, perform: perform)
+                }
+              }
+              .frame(maxWidth: contentWidth >= 1000 ? 350 : .infinity, alignment: .leading)
+            }
+          }
+          if !upNext.isEmpty { savedSuggestions }
+          feedsHeading
+          if items.isEmpty {
+            feedsEmpty
+          } else {
+            ForEach(groups(Array(items.dropFirst(2))), id: \.label) { group in
+              DayBand(label: group.label)
+              ListBox {
+                ForEach(group.items) { item in
+                  Button { open(item, from: .feeds) } label: {
+                    ItemRow(item: item, subscriptionName: channelName(item), unseen: feeds.isUnseen(item))
+                  }
+                  .buttonStyle(.plain)
+                  .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
+                }
+              }
+            }
+            if (feeds.total ?? 0) > items.count { moreRow(items.count) }
+          }
+        }
+        .padding(.horizontal, contentWidth >= 1000 ? 36 : 24)
+        .padding(.top, 12)
+        .padding(.bottom, 56)
+        .frame(maxWidth: Self.maxWidth)
+        .frame(maxWidth: .infinity)
+      }
+      .scrollContentBackground(.hidden)
+      .refreshable { await reload() }
+      .onScrollGeometryChange(for: Bool.self) { Self.isAtTop($0) } action: { _, top in atTop = top }
+      .onScrollPhaseChange { _, phase in scrolling = phase != .idle }
+      .onChange(of: scrollTopTick) {
+        withAnimation(reduceMotion ? nil : StashMotion.change) { proxy.scrollTo(Self.topID, anchor: .top) }
+      }
+    }
+  }
+
+  private func featuredStory(_ item: LibraryItem, large: Bool) -> some View {
+    Button { open(item, from: .feeds) } label: {
+      VStack(alignment: .leading, spacing: 11) {
+        ItemCover(item: item)
+          .frame(maxWidth: .infinity)
+          .frame(height: large ? 300 : 200)
+          .clipped()
+          .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
+          .overlay(RoundedRectangle(cornerRadius: Radius.sm).strokeBorder(Color.stLine, lineWidth: 1))
+        Kicker(channelName(item) ?? item.source, accent: true)
+        Text(item.title)
+          .font(.reading(large ? 32 : 27, .medium, relativeTo: .title))
+          .foregroundStyle(Color.stInk)
+          .multilineTextAlignment(.leading)
+          .lineLimit(3)
+        HStack(spacing: 8) {
+          Text(item.author ?? item.source)
+          Text("·")
+          Text(shortAge(item.publishedAt ?? item.savedAt))
+          if let minutes = item.readingMinutes { Text("· \(minutes) min read") }
+        }
+        .font(.stDetail)
+        .foregroundStyle(Color.stMuted)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
+    .accessibilityLabel("Read (item.title)")
   }
 
   /// "Home" with a + for saving a link, and the date under it.
@@ -752,17 +865,42 @@ struct HomeView: View {
     if article != nil || video != nil {
       VStack(alignment: .leading, spacing: 12) {
         SectionHeading(title: "Pick up where you left off")
-        let layout = continuationSideBySide
-          ? AnyLayout(HStackLayout(alignment: .top, spacing: 20))
-          : AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
-        layout {
-          if let article {
-            ContinuationCard(item: article, watching: false) { open(article, from: .upNext) }
+        #if os(iOS)
+        if UIDevice.current.userInterfaceIdiom == .phone && article != nil && video != nil {
+          ScrollView(.horizontal) {
+            HStack(spacing: 12) {
+              if let article {
+                ContinuationCard(item: article, watching: false) { open(article, from: .upNext) }
+                  .frame(width: min(contentWidth - 50, 340))
+              }
+              if let video {
+                ContinuationCard(item: video, watching: true) { open(video, from: .continuing) }
+                  .frame(width: min(contentWidth - 50, 340))
+              }
+            }
           }
-          if let video {
-            ContinuationCard(item: video, watching: true) { open(video, from: .continuing) }
-          }
+          .scrollIndicators(.hidden)
+          .accessibilityLabel("Continue reading and watching")
+        } else {
+          continuationCards(article: article, video: video)
         }
+        #else
+        continuationCards(article: article, video: video)
+        #endif
+      }
+    }
+  }
+
+  private func continuationCards(article: LibraryItem?, video: LibraryItem?) -> some View {
+    let layout = continuationSideBySide
+      ? AnyLayout(HStackLayout(alignment: .top, spacing: 20))
+      : AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
+    return layout {
+      if let article {
+        ContinuationCard(item: article, watching: false) { open(article, from: .upNext) }
+      }
+      if let video {
+        ContinuationCard(item: video, watching: true) { open(video, from: .continuing) }
       }
     }
   }
