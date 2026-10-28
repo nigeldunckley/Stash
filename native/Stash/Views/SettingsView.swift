@@ -9,6 +9,9 @@ struct SettingsView: View {
   @AppStorage("sounds") private var sounds = false
   @AppStorage("watchOnLeave") private var onLeave = "mini"
   @AppStorage("watchOnSwitch") private var onSwitch = "float"
+  #if os(iOS)
+  @AppStorage("mobileAppearance") private var mobileAppearance = "dark"
+  #endif
   /// Kept with your account (watch.hideShorts), so the server leaves Shorts out everywhere.
   @State private var hideShorts = true
   @State private var shortsLoaded = false
@@ -56,6 +59,16 @@ struct SettingsView: View {
           }
 
           SettingsGroup("This device", footer: "A soft paper slip when you save and a drawer closing when you archive.") {
+            #if os(iOS)
+            SettingsRow("Appearance") {
+              Picker("Appearance", selection: $mobileAppearance) {
+                Text("Dark").tag("dark")
+                Text("Light").tag("light")
+                Text("System").tag("system")
+              }
+              .settingsPicker()
+            }
+            #endif
             SettingsRow("Sounds", divider: false) {
               Toggle("Sounds", isOn: $sounds)
                 .labelsHidden()

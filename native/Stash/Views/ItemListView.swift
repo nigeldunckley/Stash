@@ -49,13 +49,13 @@ struct ItemListView<Tools: View>: View {
   private var padLayout: Bool { !embedded && UIDevice.current.userInterfaceIdiom == .pad }
   /// The iPad page's width; below 700 points (Slide Over, a narrow split) articles are pushed.
   @State private var padWidth: CGFloat = .infinity
-  @AppStorage("padArticleListWidth") private var padListWidth = 360.0
+  @AppStorage("padArticleListWidth") private var padListWidth = 310.0
   @State private var padDragStart: CGFloat?
   /// Where the open article sat in the list, to step on from once a reload has dropped it.
   @State private var selectedIndex = 0
   /// The article opens beside the list, as on the Mac, rather than being pushed.
   private var splits: Bool { padLayout && padWidth >= 700 }
-  private var effectivePadListWidth: CGFloat { min(max(CGFloat(padListWidth), 300), min(440, padWidth - 400)) }
+  private var effectivePadListWidth: CGFloat { min(max(CGFloat(padListWidth), 280), min(400, padWidth - 390)) }
   #endif
 
   private var detail: String? {
@@ -266,12 +266,12 @@ struct ItemListView<Tools: View>: View {
             .gesture(DragGesture(minimumDistance: 0)
               .onChanged { value in
                 if padDragStart == nil { padDragStart = effectivePadListWidth }
-                padListWidth = Double(min(max((padDragStart ?? effectivePadListWidth) + value.translation.width, 300), min(440, padWidth - 400)))
+                padListWidth = Double(min(max((padDragStart ?? effectivePadListWidth) + value.translation.width, 280), min(400, padWidth - 390)))
               }
               .onEnded { _ in padDragStart = nil })
             .accessibilityLabel("Article list width")
             .accessibilityAdjustableAction { direction in
-              padListWidth = Double(min(max(effectivePadListWidth + (direction == .increment ? 20 : -20), 300), min(440, padWidth - 400)))
+              padListWidth = Double(min(max(effectivePadListWidth + (direction == .increment ? 20 : -20), 280), min(400, padWidth - 390)))
             }
           NavigationStack { padReader }
             .frame(maxWidth: .infinity)

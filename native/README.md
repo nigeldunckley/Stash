@@ -113,6 +113,7 @@ accessible divider adjustment, save validation/correction/success, archive and U
 and Feeds controls. Checked that Up next stops at the end, that returning to Watch
 keeps the current video and position, and that expanding a paused video stays paused.
 
-The iOS Simulator release target compiles. An iPhone runtime check is still needed:
-the installed Xcode bundle does not contain Simulator.app. These checks used sample
-library data, not the signed-in personal library.
+The iOS Simulator release target compiles. The 28 October 2026 redesign was also
+built and launched on iPhone 17 Pro and iPad Pro 13-inch simulators with isolated
+fixture data. The visual check used sample library data, not the signed-in personal
+library; articles without image URLs show typographic covers rather than photography.

@@ -668,18 +668,18 @@ struct HomeView: View {
   private var phoneHome: some View {
     ScrollViewReader { proxy in
       List {
-        FolioView(content: Self.folio).plainListRow(top: 8)
-        iPhoneHeader.plainListRow(top: 12)
-        continuationSection.plainListRow(top: 18)
-        if let lead = feedItems.first {
-          featuredStory(lead, large: false).plainListRow(top: 22)
+        phoneBrandBar.plainListRow(top: 4, bottom: 8)
+        homeMasthead(showActions: false).plainListRow(top: 8, bottom: 14)
+        continuationSection.plainListRow(top: 2, bottom: 12)
+        if let lead = featuredLead {
+          featuredStory(lead, large: false).plainListRow(top: 2, bottom: 14)
         }
+        if let video = videos.first { watchPreview(video).plainListRow(top: 4, bottom: 20) }
         if showsEditionStrip {
           editionStrip
             .editionDelivery(date: edition.status?.date, fresh: edition.isFresh)
             .plainListRow(top: 18)
         }
-        if !videos.isEmpty { latestVideos.plainListRow(top: 20) }
         if !upNext.isEmpty { savedSuggestions.plainListRow(top: 20) }
         feedsHeading
           .id(Self.topID)
@@ -691,7 +691,7 @@ struct HomeView: View {
         if items.isEmpty {
           feedsEmpty.plainListRow()
         } else {
-          ForEach(groups(Array(items.dropFirst())), id: \.label) { group in
+          ForEach(groups(items.filter { $0.id != featuredLead?.id }), id: \.label) { group in
             DayBand(label: group.label).stashListRow()
             ForEach(group.items) { item in
               Button { open(item, from: .feeds) } label: {
@@ -725,42 +725,41 @@ struct HomeView: View {
   private var padHome: some View {
     ScrollViewReader { proxy in
       ScrollView {
-        VStack(alignment: .leading, spacing: 24) {
-          FolioView(content: Self.folio)
+        VStack(alignment: .leading, spacing: 0) {
+          homeMasthead(showActions: true)
             .id(Self.topID)
-          iPhoneHeader
+            .padding(.bottom, 22)
           continuationSection
+            .padding(.bottom, 24)
           if showsEditionStrip {
             editionStrip.editionDelivery(date: edition.status?.date, fresh: edition.isFresh)
+              .padding(.bottom, 24)
           }
           let items = feedItems
-          if let lead = items.first {
-            SectionHeading(title: dayGroup(lead.date) == "Today" ? "Today's stories" : "From your feeds") {
-              Button("All feeds") { go(.feeds) }.buttonStyle(.text)
-            }
-            let editorial: AnyLayout = contentWidth >= 1000
-              ? AnyLayout(HStackLayout(alignment: .top, spacing: 24))
-              : AnyLayout(VStackLayout(alignment: .leading, spacing: 20))
+          if let lead = featuredLead {
+            let editorial: AnyLayout = contentWidth >= 760
+              ? AnyLayout(HStackLayout(alignment: .top, spacing: 28))
+              : AnyLayout(VStackLayout(alignment: .leading, spacing: 28))
             editorial {
               featuredStory(lead, large: true)
-              VStack(alignment: .leading, spacing: 18) {
-                if let second = items.dropFirst().first { featuredStory(second, large: false) }
+                .frame(maxWidth: .infinity, alignment: .leading)
+              VStack(alignment: .leading, spacing: 26) {
                 if let video = videos.first {
-                  SectionHeading(title: "Watch") { Button("See all") { go(.channels) }.buttonStyle(.text) }
-                  Button { open(video, from: .videos) } label: { VideoRow(item: video) }
-                    .buttonStyle(.plain)
-                    .itemMenu(video, unseen: true, perform: perform)
+                  editorialVideo(video)
                 }
+                if let second = items.first(where: { $0.id != lead.id }) { secondaryStory(second) }
               }
-              .frame(maxWidth: contentWidth >= 1000 ? 350 : .infinity, alignment: .leading)
+              .frame(maxWidth: contentWidth >= 760 ? 365 : .infinity, alignment: .leading)
             }
+            .padding(.bottom, 34)
           }
-          if !upNext.isEmpty { savedSuggestions }
+          if !upNext.isEmpty { savedSuggestions.padding(.bottom, 26) }
           feedsHeading
+            .padding(.bottom, 10)
           if items.isEmpty {
             feedsEmpty
           } else {
-            ForEach(groups(Array(items.dropFirst(2))), id: \.label) { group in
+            ForEach(groups(items.filter { $0.id != featuredLead?.id && $0.id != items.first(where: { $0.id != featuredLead?.id })?.id }), id: \.label) { group in
               DayBand(label: group.label)
               ListBox {
                 ForEach(group.items) { item in
@@ -775,8 +774,8 @@ struct HomeView: View {
             if (feeds.total ?? 0) > items.count { moreRow(items.count) }
           }
         }
-        .padding(.horizontal, contentWidth >= 1000 ? 36 : 24)
-        .padding(.top, 12)
+        .padding(.horizontal, contentWidth >= 900 ? 34 : 24)
+        .padding(.top, 26)
         .padding(.bottom, 56)
         .frame(maxWidth: Self.maxWidth)
         .frame(maxWidth: .infinity)
@@ -791,134 +790,250 @@ struct HomeView: View {
     }
   }
 
+  private var featuredLead: LibraryItem? {
+    feedItems.first(where: { $0.imageURL != nil }) ?? feedItems.first
+  }
+
   private func featuredStory(_ item: LibraryItem, large: Bool) -> some View {
     Button { open(item, from: .feeds) } label: {
-      VStack(alignment: .leading, spacing: 11) {
+      VStack(alignment: .leading, spacing: 12) {
         ItemCover(item: item)
           .frame(maxWidth: .infinity)
-          .frame(height: large ? 300 : 200)
+          .frame(height: large ? 285 : 185)
           .clipped()
           .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
-          .overlay(RoundedRectangle(cornerRadius: Radius.sm).strokeBorder(Color.stLine, lineWidth: 1))
-        Kicker(channelName(item) ?? item.source, accent: true)
+        HStack(spacing: 8) {
+          Circle().fill(Color.stAccent).frame(width: 6, height: 6)
+          Text(channelName(item) ?? item.source).foregroundStyle(Color.stInk2)
+          if let minutes = item.readingMinutes {
+            Text("·  \(minutes) min read").foregroundStyle(Color.stMuted)
+          }
+        }
+        .font(.ui(12))
         Text(item.title)
-          .font(.reading(large ? 32 : 27, .medium, relativeTo: .title))
+          .font(.reading(large ? 39 : 33, .medium, relativeTo: .largeTitle))
           .foregroundStyle(Color.stInk)
           .multilineTextAlignment(.leading)
           .lineLimit(3)
-        HStack(spacing: 8) {
-          Text(item.author ?? item.source)
-          Text("·")
-          Text(shortAge(item.publishedAt ?? item.savedAt))
-          if let minutes = item.readingMinutes { Text("· \(minutes) min read") }
+        if let excerpt = item.description?.trimmingCharacters(in: .whitespacesAndNewlines), !excerpt.isEmpty {
+          Text(excerpt)
+            .font(.reading(large ? 22 : 18, relativeTo: .title3))
+            .foregroundStyle(Color.stInk2)
+            .lineLimit(large ? 3 : 2)
+            .multilineTextAlignment(.leading)
         }
-        .font(.stDetail)
-        .foregroundStyle(Color.stMuted)
+        if large {
+          Label("Read story", systemImage: "arrow.right")
+            .font(.ui(14, .medium))
+            .foregroundStyle(Color.stAccentText)
+            .padding(.top, 3)
+        }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     .itemMenu(item, unseen: feeds.isUnseen(item), perform: perform)
-    .accessibilityLabel("Read (item.title)")
+    .accessibilityLabel("Read \(item.title)")
   }
 
-  /// "Home" with a + for saving a link, and the date under it.
-  private var iPhoneHeader: some View {
-    VStack(alignment: .leading, spacing: 2) {
-      HStack(spacing: 10) {
-        Text("Home")
-          .font(.ui(30, .semibold, relativeTo: .largeTitle))
-          .tracking(-0.84)
+  private var phoneBrandBar: some View {
+    HStack(spacing: 9) {
+      Image("Mark").resizable().frame(width: 26, height: 26)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+      Text("Stash").font(.ui(19, .semibold)).foregroundStyle(Color.stInk)
+      Spacer()
+      Button { searching = true } label: {
+        Image(systemName: "magnifyingglass").frame(width: 44, height: 44)
+      }
+      .accessibilityLabel("Search Stash")
+      Button { capturing = true } label: {
+        Image(systemName: "plus").frame(width: 44, height: 44)
+      }
+      .accessibilityLabel("Save a link")
+    }
+    .buttonStyle(.plain)
+    .frame(height: 48)
+    .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
+  }
+
+  private func homeMasthead(showActions: Bool) -> some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(alignment: .center) {
+        (Text("Home") + Text(".").foregroundColor(Color.stAccent))
+          .font(.ui(showActions ? 42 : 39, .semibold, relativeTo: .largeTitle))
+          .tracking(-1.3)
           .foregroundStyle(Color.stInk)
-        Spacer(minLength: 0)
+        Spacer()
+        if showActions {
         Button { searching = true } label: {
           Image(systemName: "magnifyingglass").frame(width: 44, height: 44)
         }
         .buttonStyle(.plain).accessibilityLabel("Search Stash")
         Button { capturing = true } label: {
-          Image(systemName: "plus")
-            .font(.ui(15, .medium))
-            .foregroundStyle(Color.stInk)
-            .frame(width: 44, height: 44)
-            .background(Color.stSurface, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
+          Label("Save a link", systemImage: "plus")
+            .font(.ui(13, .medium))
+            .padding(.horizontal, 14)
+            .frame(height: 42)
+            .overlay(RoundedRectangle(cornerRadius: Radius.sm).strokeBorder(Color.stLine, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Save a link")
+        }
       }
-      Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased())
+      Text("\(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased())  ·  YOUR FRONT PAGE")
         .font(.mono(11))
         .tracking(0.66)
         .foregroundStyle(Color.stMuted)
     }
+    .padding(.bottom, 15)
+    .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
+  }
+
+  private func watchPreview(_ item: LibraryItem) -> some View {
+    VStack(alignment: .leading, spacing: 12) {
+      HStack(spacing: 5) {
+        Text("Watch").foregroundStyle(Color.stInk)
+        Text("something").foregroundStyle(Color.stMuted)
+      }
+      .font(.ui(16, .semibold))
+      Button { open(item, from: .videos) } label: {
+        HStack(spacing: 14) {
+          VideoThumbnail(item: item).frame(width: 150)
+          VStack(alignment: .leading, spacing: 7) {
+            Text(item.title)
+              .font(.reading(21, .medium, relativeTo: .title3))
+              .foregroundStyle(Color.stInk)
+              .lineLimit(3)
+            Text(item.author ?? item.source)
+              .font(.stSmall).foregroundStyle(Color.stMuted)
+          }
+          Spacer(minLength: 0)
+        }
+      }
+      .buttonStyle(.plain)
+    }
+    .padding(.top, 18)
+    .overlay(alignment: .top) { Rectangle().fill(Color.stLine).frame(height: 1) }
+  }
+
+  private func editorialVideo(_ item: LibraryItem) -> some View {
+    Button { open(item, from: .videos) } label: {
+      VStack(alignment: .leading, spacing: 10) {
+        VideoThumbnail(item: item)
+        Kicker(item.author ?? item.source, accent: true)
+        Text(item.title)
+          .font(.reading(27, .medium, relativeTo: .title))
+          .foregroundStyle(Color.stInk)
+          .multilineTextAlignment(.leading)
+        if let excerpt = item.description, !excerpt.isEmpty {
+          Text(excerpt).font(.ui(13)).foregroundStyle(Color.stMuted).lineLimit(2)
+        }
+      }
+    }
+    .buttonStyle(.plain)
+    .itemMenu(item, unseen: true, perform: perform)
+  }
+
+  private func secondaryStory(_ item: LibraryItem) -> some View {
+    Button { open(item, from: .feeds) } label: {
+      VStack(alignment: .leading, spacing: 8) {
+        Kicker(channelName(item) ?? item.source, accent: true)
+        Text(item.title)
+          .font(.reading(25, .medium, relativeTo: .title3))
+          .foregroundStyle(Color.stInk)
+          .multilineTextAlignment(.leading)
+        if let excerpt = item.description, !excerpt.isEmpty {
+          Text(excerpt).font(.ui(13)).foregroundStyle(Color.stMuted).lineLimit(2)
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .buttonStyle(.plain)
+    .padding(.top, 20)
+    .overlay(alignment: .top) { Rectangle().fill(Color.stLine).frame(height: 1) }
   }
 
   #endif
 
   // MARK: Shared pieces
 
+  #if os(iOS)
   @ViewBuilder
   private var continuationSection: some View {
     let article = upNext.first { $0.progress >= 0.02 }
     let video = continuingVideos.first
     if article != nil || video != nil {
-      VStack(alignment: .leading, spacing: 12) {
-        SectionHeading(title: "Pick up where you left off")
-        #if os(iOS)
-        if UIDevice.current.userInterfaceIdiom == .phone && article != nil && video != nil {
-          ScrollView(.horizontal) {
-            HStack(spacing: 12) {
-              if let article {
-                ContinuationCard(item: article, watching: false) { open(article, from: .upNext) }
-                  .frame(width: min(contentWidth - 50, 340))
-              }
-              if let video {
-                ContinuationCard(item: video, watching: true) { open(video, from: .continuing) }
-                  .frame(width: min(contentWidth - 50, 340))
-              }
-            }
+      if UIDevice.current.userInterfaceIdiom == .phone || contentWidth < 760 {
+        VStack(alignment: .leading, spacing: 16) {
+          (Text("Pick up ").foregroundColor(Color.stInk) + Text("where you left off").foregroundColor(Color.stMuted))
+            .font(.ui(16, .semibold))
+          if let article {
+            continuationRow(article, watching: false)
+          } else if let video {
+            continuationRow(video, watching: true)
           }
-          .scrollIndicators(.hidden)
-          .accessibilityLabel("Continue reading and watching")
-        } else {
-          continuationCards(article: article, video: video)
         }
-        #else
-        continuationCards(article: article, video: video)
-        #endif
-      }
-    }
-  }
-
-  private func continuationCards(article: LibraryItem?, video: LibraryItem?) -> some View {
-    let layout = continuationSideBySide
-      ? AnyLayout(HStackLayout(alignment: .top, spacing: 20))
-      : AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
-    return layout {
-      if let article {
-        ContinuationCard(item: article, watching: false) { open(article, from: .upNext) }
-      }
-      if let video {
-        ContinuationCard(item: video, watching: true) { open(video, from: .continuing) }
-      }
-    }
-  }
-
-  private var latestVideos: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      SectionHeading(title: "New videos") { Button("See all") { go(.channels) }.buttonStyle(.text) }
-      ListBox {
-        ForEach(videos.prefix(3)) { item in
-          Button { open(item, from: .videos) } label: {
-            VideoRow(item: item, divider: item.id != videos.prefix(3).last?.id)
+      } else {
+        HStack(alignment: .center, spacing: 22) {
+          VStack(alignment: .leading, spacing: 2) {
+            Text("Pick up").font(.ui(16, .semibold)).foregroundStyle(Color.stInk)
+            Text("where you left off").font(.ui(13)).foregroundStyle(Color.stMuted)
           }
-          .buttonStyle(.plain)
-          .itemMenu(item, unseen: true, perform: perform)
+          .frame(width: 140, alignment: .leading)
+          if let article {
+            continuationRow(article, watching: false)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          }
+          if article != nil && video != nil { Rectangle().fill(Color.stLine).frame(width: 1, height: 80) }
+          if let video {
+            continuationRow(video, watching: true)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          }
         }
       }
     }
   }
+
+  private func continuationRow(_ item: LibraryItem, watching: Bool) -> some View {
+    let phone = UIDevice.current.userInterfaceIdiom == .phone
+    return Button { open(item, from: watching ? .continuing : .upNext) } label: {
+      HStack(spacing: 14) {
+        ItemCover(item: item)
+          .frame(width: phone ? 82 : 76, height: phone ? 82 : 68)
+          .clipped()
+          .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
+        VStack(alignment: .leading, spacing: 7) {
+          Text(item.title)
+            .font(.reading(phone ? 21 : 18, .medium, relativeTo: .title3))
+            .foregroundStyle(Color.stInk)
+            .lineLimit(2)
+            .multilineTextAlignment(.leading)
+          if !watching {
+            ProgressView(value: item.progress)
+              .tint(Color.stAccent)
+              .frame(maxWidth: 150)
+              .accessibilityLabel("Reading progress")
+          }
+          Text(watching ? "Continue watching" : (readingLabel(item) ?? "Continue reading"))
+            .font(.stSmall)
+            .foregroundStyle(Color.stMuted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        if phone {
+          Image(systemName: "chevron.right")
+            .font(.ui(15, .semibold))
+            .foregroundStyle(Color.stOnAccent)
+            .frame(width: 38, height: 38)
+            .background(Color.stAccent, in: Circle())
+        }
+      }
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel("Continue \(watching ? "watching" : "reading") \(item.title)")
+  }
+  #endif
 
   @ViewBuilder
   private var savedSuggestions: some View {
@@ -939,15 +1054,6 @@ struct HomeView: View {
         Button("Try again") { Task { await loadUpNext() } }.buttonStyle(.text)
       }
     }
-  }
-
-  /// The two "pick up" cards side by side, when there's room and they aren't in Mac's side column.
-  private var continuationSideBySide: Bool {
-    #if os(macOS)
-    !wide && contentWidth >= 700
-    #else
-    contentWidth >= 900
-    #endif
   }
 
   /// The Edition's strip stacks its two halves in Mac's shelf band.

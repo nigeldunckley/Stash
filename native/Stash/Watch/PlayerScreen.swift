@@ -45,6 +45,13 @@ struct PlayerScreen: View {
 
   /// Whatever is playing now: it changes as Up next moves on.
   private var current: LibraryItem { player.item ?? item }
+  private var phonePlayer: Bool {
+    #if os(iOS)
+    UIDevice.current.userInterfaceIdiom == .phone
+    #else
+    false
+    #endif
+  }
 
   var body: some View {
     GeometryReader { geometry in
@@ -72,7 +79,7 @@ struct PlayerScreen: View {
       }
     }
     .background(Color.stPage)
-    .modifier(ScreenChrome(embedded: embedded, title: current.source) { toolbar })
+    .modifier(ScreenChrome(embedded: embedded, title: phonePlayer ? "Watch" : current.source) { toolbar })
     .task(id: "\(current.id)|\(tab.rawValue)") {
       if tab == .transcript { await loadTranscript() }
     }
@@ -160,9 +167,9 @@ struct PlayerScreen: View {
   }
 
   private var details: some View {
-    VStack(alignment: .leading, spacing: 10) {
+    VStack(alignment: .leading, spacing: 13) {
       Text(current.title)
-        .font(.reading(28, .medium, relativeTo: .title2))
+        .font(.reading(phonePlayer ? 34 : 30, .medium, relativeTo: .largeTitle))
         .foregroundStyle(Color.stInk)
       HStack(spacing: 8) {
         Text(current.author ?? current.source)
@@ -175,6 +182,21 @@ struct PlayerScreen: View {
       }
       .font(.stDetail)
       .foregroundStyle(Color.stMuted)
+      #if os(iOS)
+      HStack(spacing: 24) {
+        if let action = actions.first(where: { $0 == .save || $0 == .archive || $0 == .unarchive }) {
+          Button { perform(action, current) } label: {
+            Label(action.title(for: current), systemImage: action.systemImage)
+          }
+        }
+        if let url = current.originalURL {
+          ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
+        }
+      }
+      .font(.ui(14))
+      .buttonStyle(.plain)
+      .padding(.top, 13)
+      #endif
     }
   }
 
@@ -264,10 +286,30 @@ struct PlayerScreen: View {
   }
 
   private var tabPicker: some View {
+    #if os(iOS)
     ScrollView(.horizontal) {
-      StashSegmented(selection: $tab, PlayerTab.allCases.map { StashSegmented<PlayerTab>.Option($0.rawValue, $0) })
+      HStack(spacing: 25) {
+        ForEach(PlayerTab.allCases) { option in
+          Button {
+            withAnimation(reduceMotion ? nil : StashMotion.feedback) { tab = option }
+          } label: {
+            Text(option.rawValue)
+              .font(.ui(14, tab == option ? .semibold : .regular))
+              .foregroundStyle(tab == option ? Color.stInk : Color.stMuted)
+              .padding(.vertical, 13)
+              .overlay(alignment: .bottom) {
+                if tab == option { Rectangle().fill(Color.stAccent).frame(height: 2) }
+              }
+          }
+          .buttonStyle(.plain)
+          .accessibilityAddTraits(tab == option ? .isSelected : [])
+        }
+      }
     }
     .scrollIndicators(.hidden)
+    #else
+    StashSegmented(selection: $tab, PlayerTab.allCases.map { StashSegmented<PlayerTab>.Option($0.rawValue, $0) })
+    #endif
   }
 
   @ViewBuilder
@@ -283,31 +325,50 @@ struct PlayerScreen: View {
   // MARK: Up next
 
   private var upNext: some View {
-    VStack(alignment: .leading, spacing: 4) {
+    VStack(alignment: .leading, spacing: 8) {
+      #if os(iOS)
+      HStack {
+        Text(phonePlayer ? "Next in this session" : "Up next")
+          .font(.ui(13, .medium)).foregroundStyle(Color.stMuted)
+        Spacer()
+        Text("\(player.upNext.count) videos")
+          .font(.stDetail).foregroundStyle(Color.stMuted)
+      }
+      .padding(.bottom, 6)
+      #else
       Toggle("Play the next video automatically", isOn: Binding(
         get: { player.autoplay }, set: { player.autoplay = $0 }
       ))
       .font(.ui(13))
       .padding(.bottom, 8)
+      #endif
       if player.upNext.isEmpty {
         Text("Nothing else in this list.")
           .font(.ui(13))
           .foregroundStyle(Color.stMuted)
       }
+      #if os(macOS)
       if !player.upNext.isEmpty {
         Text("Plays in this order").font(.stDetail).foregroundStyle(Color.stMuted).padding(.vertical, 8)
       }
+      #endif
       ForEach(Array(player.upNext.prefix(30).enumerated()), id: \.element.id) { index, next in
-        QueueRow(
-          item: next,
-          position: index + 1,
-          onPlay: { player.play(next) },
-          onMove: index == 0 && index == player.upNext.count - 1 ? nil : { step in
-            withAnimation(reduceMotion ? nil : StashMotion.change) { player.moveUpcoming(next.id, by: step) }
-          },
-          canMoveUp: index > 0,
-          canMoveDown: index < player.upNext.count - 1
-        )
+        Group {
+          #if os(iOS)
+          playerQueueRow(next, index: index)
+          #else
+          QueueRow(
+            item: next,
+            position: index + 1,
+            onPlay: { player.play(next) },
+            onMove: index == 0 && index == player.upNext.count - 1 ? nil : { step in
+              withAnimation(reduceMotion ? nil : StashMotion.change) { player.moveUpcoming(next.id, by: step) }
+            },
+            canMoveUp: index > 0,
+            canMoveDown: index < player.upNext.count - 1
+          )
+          #endif
+        }
         .onDrag { draggingID = next.id; return NSItemProvider(object: next.id as NSString) }
         .onDrop(of: [UTType.text], isTargeted: nil) { _ in
           guard let id = draggingID, let source = player.upNext.firstIndex(where: { $0.id == id }), source != index else { return false }
@@ -318,6 +379,44 @@ struct PlayerScreen: View {
       }
     }
   }
+
+  #if os(iOS)
+  private func playerQueueRow(_ next: LibraryItem, index: Int) -> some View {
+    HStack(alignment: .center, spacing: 12) {
+      Button { player.play(next) } label: {
+        HStack(spacing: 12) {
+          VideoThumbnail(item: next)
+            .frame(width: phonePlayer ? 135 : 98)
+          VStack(alignment: .leading, spacing: 6) {
+            Text(next.title)
+              .font(.reading(phonePlayer ? 20 : 17, .medium, relativeTo: .title3))
+              .foregroundStyle(Color.stInk)
+              .lineLimit(2)
+              .multilineTextAlignment(.leading)
+            Text(next.author ?? next.source)
+              .font(.stSmall)
+              .foregroundStyle(Color.stMuted)
+              .lineLimit(1)
+          }
+          Spacer(minLength: 0)
+        }
+      }
+      .buttonStyle(.plain)
+      Menu {
+        Button("Play now") { player.play(next) }
+        Button("Move up") { player.moveUpcoming(next.id, by: -1) }.disabled(index == 0)
+        Button("Move down") { player.moveUpcoming(next.id, by: 1) }.disabled(index >= player.upNext.count - 1)
+      } label: {
+        Image(systemName: "ellipsis")
+          .foregroundStyle(Color.stMuted)
+          .frame(width: 44, height: 44)
+      }
+      .accessibilityLabel("More for \(next.title)")
+    }
+    .padding(.vertical, 8)
+    .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
+  }
+  #endif
 
   // MARK: Context
 
@@ -408,6 +507,12 @@ struct PlayerScreen: View {
 
   private var about: some View {
     return VStack(alignment: .leading, spacing: 14) {
+      #if os(iOS)
+      Toggle("Play the next video automatically", isOn: Binding(
+        get: { player.autoplay }, set: { player.autoplay = $0 }
+      ))
+      .font(.ui(13))
+      #endif
       Text("Captions are available through the YouTube player’s controls.").font(.stSmall).foregroundStyle(Color.stMuted)
       if let description = current.description, !description.isEmpty {
         Text(description)
@@ -425,6 +530,16 @@ struct PlayerScreen: View {
   @ToolbarContentBuilder
   private var toolbar: some ToolbarContent {
     ToolbarItemGroup(placement: .primaryAction) {
+      if phonePlayer {
+        Menu {
+          ForEach(actions, id: \.self) { action in
+            Button(role: action == .delete ? .destructive : nil) { perform(action, current) } label: {
+              Label(action.title(for: current), systemImage: action.systemImage)
+            }
+          }
+          if let url = current.originalURL { Link("Open on YouTube", destination: url) }
+        } label: { Label("More", systemImage: "ellipsis") }
+      } else {
       ForEach(actions, id: \.self) { action in
         Button(role: action == .delete ? .destructive : nil) {
           perform(action, current)
@@ -437,6 +552,7 @@ struct PlayerScreen: View {
         ShareLink(item: url)
         Link(destination: url) { Label("Open on YouTube", systemImage: "play.rectangle") }
           .help("Open on YouTube")
+      }
       }
     }
   }

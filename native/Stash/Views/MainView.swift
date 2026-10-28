@@ -46,9 +46,7 @@ enum AppSection: Hashable {
   }
 }
 
-/// A sidebar on Mac, grouped into Read and Watch like the web app. On iPad, the system sidebar
-/// with the same groups (a tab bar along the top when it's tucked away). On iPhone, tabs for
-/// Home, Read, Watch and Settings. The Edition opens from Home or Read’s More menu.
+/// A sidebar on Mac and iPad, and four tabs on iPhone. The Edition opens from Home or Read’s More menu.
 struct MainView: View {
   @Environment(EditionModel.self) private var edition
   @Environment(\.scenePhase) private var scenePhase
@@ -66,8 +64,6 @@ struct MainView: View {
   @Environment(PlayerController.self) private var player
   /// The full player, opened from the mini player.
   @State private var showingPlayer = false
-  /// The iPad sidebar's own arrangement, with Feeds, Saved and Latest kept in its tab bar.
-  @AppStorage("padTabs") private var padCustomization = TabViewCustomization()
   /// "Save a link", from ⌘N on an iPad keyboard.
   @State private var capturing = false
   #endif
@@ -136,7 +132,7 @@ struct MainView: View {
   #else
   private var flightLayer: some View {
     GeometryReader { geometry in
-      // iPad shows its tabs at the top or in a sidebar, so only iPhone's bottom bar is aimed at.
+      // Only iPhone's bottom tab bar is aimed at.
       let moment = !wide ? Moments.shared.current : nil
       MomentFlight(moment: moment, target: moment.map { tabTarget($0.kind, in: geometry.frame(in: .global)) })
     }
@@ -152,7 +148,7 @@ struct MainView: View {
     return CGRect(x: x - 12, y: frame.maxY - 42, width: 24, height: 24)
   }
 
-  /// Keep the iPad's destinations when its window narrows; the system adapts the sidebar.
+  /// Keep the iPad's destinations when its window narrows.
   private var wide: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
   private var shell: some View {
@@ -192,76 +188,150 @@ struct MainView: View {
     }
   }
 
-  /// iPad: Read and Watch as groups in the system sidebar, as on the Mac and the web, so every
-  /// page is one tap away. The sidebar and tab bar are the system's, so they take on Liquid
-  /// Glass on iPadOS 26.
+  /// A persistent editorial sidebar at full iPad widths, and a compact destination menu when
+  /// the window is too narrow to keep a reader and the sidebar comfortably side by side.
   private var padTabs: some View {
-    TabView(selection: $section) {
-      Tab("Home", systemImage: "house", value: AppSection.home) {
-        page(.home) { HomeView(go: go) }
-      }
-      .customizationID("home")
-      TabSection("Read") {
-        Tab("Feeds", systemImage: "dot.radiowaves.up.forward", value: AppSection.feeds) {
-          page(.feeds) { FeedsView() }
-        }
-        .customizationID("feeds")
-        .defaultVisibility(.visible, for: .tabBar)
-        Tab("Saved", systemImage: "bookmark", value: AppSection.saved) {
-          page(.saved) { SavedView(archive: false) }
-        }
-        .customizationID("saved")
-        .defaultVisibility(.visible, for: .tabBar)
-        Tab("The Edition", systemImage: "newspaper", value: AppSection.edition) {
-          page(.edition) { EditionView(onPutAway: { section = .feeds }) }
-        }
-        .customizationID("edition")
-        .hidden(!edition.isOut)
-        Tab("Highlights", systemImage: "highlighter", value: AppSection.highlights) {
-          page(.highlights) { HighlightsView() }
-        }
-        .customizationID("highlights")
-        Tab("Discover", systemImage: "safari", value: AppSection.discover) {
-          page(.discover) { DiscoverView() }
-        }
-        .customizationID("discover")
-        Tab("Archive", systemImage: "archivebox", value: AppSection.archive) {
-          page(.archive) { SavedView(archive: true) }
-        }
-        .customizationID("archive")
-        Tab("Trash", systemImage: "trash", value: AppSection.trash) {
-          page(.trash) { SavedView(archive: false, trash: true) }
-        }
-        .customizationID("trash")
-      }
-      TabSection("Watch") {
-        Tab("Latest", systemImage: "play.rectangle", value: AppSection.channels) {
-          page(.channels) { WatchView(kind: .channels) }
-        }
-        .customizationID("channels")
-        .defaultVisibility(.visible, for: .tabBar)
-        Tab("Saved", systemImage: "bookmark", value: AppSection.savedVideos) {
-          page(.savedVideos) { WatchView(kind: .saved) }
-        }
-        .customizationID("savedVideos")
-        ForEach(collections) { collection in
-          Tab(collection.name, systemImage: "folder", value: AppSection.collection(collection.id)) {
-            page(.collection(collection.id)) { WatchView(kind: .collection(collection)) }
-          }
-          .customizationID("collection-\(collection.id)")
+    GeometryReader { geometry in
+      let compact = geometry.size.width < 900
+      HStack(spacing: 0) {
+        padSidebar
+          .frame(width: compact ? 0 : 194)
+          .clipped()
+          .allowsHitTesting(!compact)
+          .accessibilityHidden(compact)
+        Rectangle().fill(Color.stLine).frame(width: compact ? 0 : 1)
+        VStack(spacing: 0) {
+          padCompactBar
+            .frame(height: compact ? 54 : 0)
+            .clipped()
+            .allowsHitTesting(compact)
+            .accessibilityHidden(!compact)
+          padPage
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
       }
-      Tab("Settings", systemImage: "gearshape", value: AppSection.settings) {
-        page(.settings) { SettingsView() }
-      }
-      .customizationID("settings")
     }
-    .tabViewStyle(.sidebarAdaptable)
-    .tabViewCustomization($padCustomization)
+    .background(Color.stPage)
     .background { padShortcuts }
     .linkCapture(isPresented: $capturing)
-    // Lists scroll clear of the mini player in the corner.
     .safeAreaPadding(.bottom, player.host == .mini ? 104 : 0)
+  }
+
+  private var padSidebar: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(spacing: 9) {
+        Image("Mark").resizable().frame(width: 28, height: 28)
+          .clipShape(RoundedRectangle(cornerRadius: 6))
+        Text("Stash").font(.ui(19, .semibold)).foregroundStyle(Color.stInk)
+      }
+      .padding(.horizontal, 18)
+      .frame(height: 68)
+      VStack(alignment: .leading, spacing: 5) {
+        padSidebarButton("Home", icon: "house", target: .home)
+        padSidebarButton("Read", icon: "text.alignleft", target: .feeds)
+        padSidebarButton("Saved", icon: "bookmark", target: .saved)
+        padSidebarButton("Watch", icon: "play.rectangle", target: .channels)
+        Menu {
+          if edition.isOut { Button("The Edition", systemImage: "newspaper") { go(.edition) } }
+          Button("Highlights", systemImage: "highlighter") { go(.highlights) }
+          Button("Discover", systemImage: "safari") { go(.discover) }
+          Button("Archive", systemImage: "archivebox") { go(.archive) }
+          Button("Trash", systemImage: "trash") { go(.trash) }
+          Button("Saved videos", systemImage: "bookmark") { go(.savedVideos) }
+          ForEach(collections) { collection in
+            Button(collection.name, systemImage: "folder") { go(.collection(collection.id)) }
+          }
+        } label: {
+          Label("More", systemImage: "ellipsis")
+            .font(.ui(14))
+            .foregroundStyle(Color.stMuted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 15)
+            .frame(height: 44)
+        }
+        .buttonStyle(.plain)
+      }
+      .padding(.horizontal, 10)
+      Spacer()
+      padSidebarButton("Settings", icon: "gearshape", target: .settings)
+        .padding(.horizontal, 10)
+        .padding(.bottom, 18)
+    }
+    .background(Color.stSurface)
+  }
+
+  private func padSidebarButton(_ title: String, icon: String, target: AppSection) -> some View {
+    Button { go(target) } label: {
+      Label(title, systemImage: icon)
+        .font(.ui(14, section == target ? .semibold : .regular))
+        .foregroundStyle(section == target ? Color.stAccentText : Color.stInk2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 15)
+        .frame(height: 44)
+        .background(section == target ? Color.stSelected : Color.clear,
+                    in: RoundedRectangle(cornerRadius: Radius.sm))
+    }
+    .buttonStyle(.plain)
+    .accessibilityAddTraits(section == target ? .isSelected : [])
+  }
+
+  private var padCompactBar: some View {
+    HStack {
+      Menu {
+        Button("Home", systemImage: "house") { go(.home) }
+        Button("Read", systemImage: "text.alignleft") { go(.feeds) }
+        Button("Saved", systemImage: "bookmark") { go(.saved) }
+        Button("Watch", systemImage: "play.rectangle") { go(.channels) }
+        Button("Settings", systemImage: "gearshape") { go(.settings) }
+        Divider()
+        if edition.isOut { Button("The Edition") { go(.edition) } }
+        Button("Highlights") { go(.highlights) }
+        Button("Discover") { go(.discover) }
+        Button("Archive") { go(.archive) }
+        Button("Trash") { go(.trash) }
+        Button("Saved videos") { go(.savedVideos) }
+        ForEach(collections) { collection in Button(collection.name) { go(.collection(collection.id)) } }
+      } label: {
+        HStack(spacing: 9) {
+          Image("Mark").resizable().frame(width: 26, height: 26)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+          Text("Stash").font(.ui(18, .semibold))
+          Image(systemName: "chevron.down").font(.ui(10))
+        }
+      }
+      .accessibilityLabel("Choose section")
+      Spacer()
+      Button { capturing = true } label: { Label("Save a link", systemImage: "plus") }
+        .labelStyle(.iconOnly)
+    }
+    .buttonStyle(.plain)
+    .padding(.horizontal, 22)
+    .frame(height: 54)
+    .background(Color.stSurface)
+    .overlay(alignment: .bottom) { Rectangle().fill(Color.stLine).frame(height: 1) }
+  }
+
+  @ViewBuilder
+  private var padPage: some View {
+    switch section {
+    case .home: page(.home) { HomeView(go: go) }
+    case .feeds, .read: page(section) { FeedsView() }
+    case .saved: page(.saved) { SavedView(archive: false) }
+    case .edition: page(.edition) { EditionView(onPutAway: { section = .feeds }) }
+    case .highlights: page(.highlights) { HighlightsView() }
+    case .discover: page(.discover) { DiscoverView() }
+    case .archive: page(.archive) { SavedView(archive: true) }
+    case .trash: page(.trash) { SavedView(archive: false, trash: true) }
+    case .channels, .watch: page(section) { WatchView(kind: .channels) }
+    case .savedVideos: page(.savedVideos) { WatchView(kind: .saved) }
+    case .collection(let id):
+      if let collection = collections.first(where: { $0.id == id }) {
+        page(section) { WatchView(kind: .collection(collection)) }
+      } else {
+        page(section) { WatchView(kind: .channels) }
+      }
+    case .settings: page(.settings) { SettingsView() }
+    }
   }
 
   /// Keyboard shortcuts for an iPad with a keyboard. Hold ⌘ to see them listed.

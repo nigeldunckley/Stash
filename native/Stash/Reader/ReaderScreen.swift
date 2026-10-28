@@ -78,11 +78,11 @@ struct ReaderScreen: View {
   @ViewBuilder
   private func readingArea(_ reader: ReaderController) -> some View {
     #if os(iOS)
-    if paneControls && UIDevice.current.userInterfaceIdiom == .pad && availableWidth >= 760 && showsContents {
+    if paneControls && UIDevice.current.userInterfaceIdiom == .pad && availableWidth >= 600 && showsContents {
       HStack(spacing: 0) {
         article(reader)
         Rectangle().fill(Color.stLine).frame(width: 1)
-        contentsInspector(reader).frame(width: 228)
+        contentsInspector(reader).frame(width: 194)
       }
     } else {
       article(reader)
@@ -94,19 +94,24 @@ struct ReaderScreen: View {
 
   private func contentsInspector(_ reader: ReaderController) -> some View {
     VStack(alignment: .leading, spacing: 18) {
-      Kicker("In this article", accent: true)
+      Text("Contents")
+        .font(.ui(15, .semibold))
+        .foregroundStyle(Color.stInk)
       Text(current.title)
         .font(.reading(21, .medium, relativeTo: .title3))
         .foregroundStyle(Color.stInk)
       if let line = reader.sections?.line {
-        Text(line).font(.stDetail).foregroundStyle(Color.stMuted)
+        HStack(alignment: .top, spacing: 7) {
+          Circle().fill(Color.stAccent).frame(width: 6, height: 6).padding(.top, 5)
+          Text(line).font(.ui(12)).foregroundStyle(Color.stAccentText)
+        }
       }
       ProgressView(value: reader.progress)
         .tint(Color.stAccent)
         .accessibilityLabel("Reading progress")
       Text("\(Int(reader.progress * 100))% read")
         .font(.stDetail).foregroundStyle(Color.stMuted)
-      Button { reader.openContents() } label: { Label("Show contents", systemImage: "list.bullet") }
+      Button { reader.openContents() } label: { Label("Open full contents", systemImage: "list.bullet") }
         .buttonStyle(.text)
         .disabled((reader.sections?.count ?? 0) < 2)
       Spacer()
@@ -117,28 +122,32 @@ struct ReaderScreen: View {
   }
 
   private var bottomToolbar: some View {
-    HStack {
+    HStack(spacing: 0) {
       Button { reader?.openContents() } label: { bottomLabel("Contents", icon: "list.bullet") }
         .disabled((reader?.sections?.count ?? 0) < 2)
-      Spacer()
+      Divider().frame(height: 38)
       ReaderTextButton(verticalLabel: true)
-      Spacer()
+        .frame(maxWidth: .infinity)
+      Divider().frame(height: 38)
       if let action = currentActions.first(where: { $0 != .delete }) {
         Button { perform(action, current) } label: {
           bottomLabel(action.title(for: current), icon: action.systemImage)
         }
       }
       if let url = current.originalURL {
-        Spacer()
+        Divider().frame(height: 38)
         ShareLink(item: url) { bottomLabel("Share", icon: "square.and.arrow.up") }
       }
     }
     .buttonStyle(.plain)
     .foregroundStyle(Color.stInk)
-    .padding(.horizontal, 22)
+    .padding(.horizontal, 10)
     .padding(.vertical, 5)
-    .background(Color.stPage)
-    .overlay(alignment: .top) { Rectangle().fill(Color.stLine).frame(height: 1) }
+    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
+    .overlay(RoundedRectangle(cornerRadius: 25, style: .continuous).strokeBorder(Color.stLine, lineWidth: 1))
+    .shadow(color: .black.opacity(0.3), radius: 14, y: 7)
+    .padding(.horizontal, 16)
+    .padding(.bottom, 6)
   }
 
   private func bottomLabel(_ title: String, icon: String) -> some View {
@@ -146,7 +155,7 @@ struct ReaderScreen: View {
       Image(systemName: icon).font(.ui(19))
       Text(title).font(.ui(11)).lineLimit(1)
     }
-    .frame(minWidth: 52, minHeight: 48)
+    .frame(maxWidth: .infinity, minHeight: 48)
     .accessibilityLabel(title)
   }
 

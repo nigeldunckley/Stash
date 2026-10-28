@@ -7,6 +7,9 @@ struct StashApp: App {
   @State private var player = PlayerController()
   /// The Edition's state, so the sidebar knows when an issue is out.
   @State private var edition = EditionModel()
+  #if os(iOS)
+  @AppStorage("mobileAppearance") private var mobileAppearance = "dark"
+  #endif
   #if os(macOS)
   /// Shared with the Mac sidebar, so ⌃⌘S and its strip button stay in step.
   @AppStorage("sidebarHidden") private var sidebarHidden = false
@@ -25,6 +28,9 @@ struct StashApp: App {
         .font(.stBody)
         .foregroundStyle(Color.stInk)
         .tint(.stAccent)
+        #if os(iOS)
+        .preferredColorScheme(mobileAppearance == "system" ? nil : mobileAppearance == "light" ? .light : .dark)
+        #endif
     }
     #if os(macOS)
     .defaultSize(width: 1240, height: 820)
